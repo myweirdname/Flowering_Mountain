@@ -18,6 +18,8 @@ export const LOPEN = {
   sprongBuffer: 0.12,       // te vroeg drukken telt toch, als je kort daarna landt
   grondKleef: 0.35,         // bergaf lopen blijft aan de grond plakken tot dit hoogteverschil
 
+  lijfStraal: 0.32,        // hoe dik het figuurtje is om tegen stammen te botsen
+
   maxHelling: 45,           // graden: steiler is niet beloopbaar, je glijdt eraf
   glijVersnelling: 14,
   glijControle: 0.25,       // hoeveel je nog kan sturen tijdens het glijden

@@ -1,0 +1,347 @@
+// Het tegelsysteem in het beeld (TP 5.4, 7):
+// - grof landschap voor de verte, fijne terreintegels rond de speler (gespreid geladen, geen haperingen);
+// - elke plantsoort is één tekenopdracht (instancing), met per afstand een rijkere of eenvoudigere vorm;
+// - bomen ver weg worden kruinbollen; struiken, bloemen en gras staan alleen dichtbij;
+// - wat ver achter de camera staat, wordt niet getekend.
+import * as THREE from 'three';
+import { WERELD } from '../data/wereld.js';
+import { FLORA } from '../data/flora.js';
+import { maakWillekeur } from '../kern/willekeur.js';
+import { maakGrondkleur, maakTegelTerrein, maakGrofTerrein } from './terrein.js';
+import { maakPlantMateriaal } from './wind.js';
+import { maakBladplant } from './maak/blad.js';
+import { maakBloemplant } from './maak/bloem.js';
+import { maakPalm } from './maak/palm.js';
+import { maakBoom, maakKruinbol } from './maak/boom.js';
+import { maakGras, maakRots } from './maak/klein.js';
+
+/**
+ * @param {THREE.Scene} scene
+ * @param {ReturnType<typeof import('../sim/spel.js').maakSim>} sim
+ * @param {typeof import('../data/kwaliteit.js').KWALITEIT.laag} K
+ */
+export function maakWereldbeeld(scene, sim, K) {
+  const T = WERELD.tegelGrootte;
+  const vorm = sim.wereld.vorm;
+  const begroeiing = sim.wereld.begroeiing;
+  const flora = begroeiing.flora;
+  const d = K.detail;
+  const verStraal = K.mist[1] + 8; // verder dan de mist hoeft niets getekend te worden
+
+  // --- Terrein ---
+  const grondMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const kleurOp = maakGrondkleur(vorm, WERELD.kleuren);
+  const grof = maakGrofTerrein(vorm, WERELD, kleurOp, grondMat);
+  grof.mesh.receiveShadow = K.schaduw;
+  scene.add(grof.mesh);
+
+  // --- Plantsoorten ---
+  const toeval = maakWillekeur(flora.vormZaad).getal;
+  const gewoon = maakPlantMateriaal({ gloed: 0x0c160c });
+  const bloemMat = maakPlantMateriaal({ gloed: 0x2a1f24 });
+  const rotsMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const kl = new THREE.Color();
+
+  /**
+   * @typedef {{ geo: THREE.BufferGeometry, straal: number, mat: THREE.Material, schaduw?: boolean,
+   *             mesh?: THREE.InstancedMesh, cap?: number }} Band
+   * @typedef {{ naam: string, bron: 'boom'|'palm'|'rots'|'struik'|'bloem'|'gras', laag: 'grote'|'kleine',
+   *             filter: (p: any) => boolean, schaal: (p: any) => number, kleur: (p: any, c: THREE.Color) => void,
+   *             zak?: number, banden: Band[] }} Soort
+   */
+  /** @type {Soort[]} */
+  const soorten = [];
+  const wit = (p, c) => c.setRGB(1, 1, 1);
+
+  soorten.push({
+    naam: 'boom', bron: 'boom', laag: 'grote', filter: () => true, schaal: (p) => p.schaal, zak: 0.2,
+    kleur: (p, c) => c.setRGB(0.9 + 0.1 * p.tint, 1, 0.92 + 0.08 * (1 - p.tint)),
+    banden: [
+      { geo: maakBoom(FLORA.boom, flora.kruinKleuren, d, toeval), straal: K.dichtbij, mat: gewoon, schaduw: true },
+      { geo: maakBoom(FLORA.boom, flora.kruinKleuren, -1, toeval), straal: K.tegelStraal, mat: gewoon },
+      { geo: maakKruinbol(FLORA.boom, flora.kruinKleuren, d), straal: verStraal, mat: gewoon },
+    ],
+  });
+  soorten.push({
+    naam: 'palm', bron: 'palm', laag: 'grote', filter: () => true, schaal: (p) => p.schaal, zak: 0.1,
+    kleur: (p, c) => c.setRGB(0.93 + 0.07 * p.tint, 1, 0.94),
+    banden: [
+      { geo: maakPalm(FLORA.palm, d, toeval), straal: K.dichtbij, mat: gewoon, schaduw: true },
+      { geo: maakPalm(FLORA.palm, -1, toeval), straal: verStraal, mat: gewoon },
+    ],
+  });
+  soorten.push({
+    naam: 'rots', bron: 'rots', laag: 'grote', filter: () => true, zak: 0,
+    schaal: (p) => FLORA.rots.grootte[0] + p.schaal * (FLORA.rots.grootte[1] - FLORA.rots.grootte[0]),
+    kleur: (p, c) => c.set(FLORA.rots.kleuren[Math.floor(p.tint * FLORA.rots.kleuren.length) % FLORA.rots.kleuren.length]),
+    banden: [{ geo: maakRots(d), straal: Math.min(K.tegelStraal, 70), mat: rotsMat, schaduw: true }],
+  });
+  flora.struikNamen.forEach((naam, i) => {
+    const P = FLORA.bladplanten[naam];
+    const mat = P.gaten ? maakPlantMateriaal({ gaten: P.gaten, gloed: 0x0c160c }) : gewoon;
+    soorten.push({
+      naam, bron: 'struik', laag: 'kleine', filter: (p) => p.soort === i && p.kans < K.struiken, zak: 0.05,
+      schaal: (p) => P.grootte[0] + p.schaal * (P.grootte[1] - P.grootte[0]),
+      kleur: (p, c) => c.setScalar(0.88 + 0.12 * p.tint),
+      banden: d
+        ? [
+            { geo: maakBladplant(P, 1, toeval), straal: K.dichtbijKlein, mat },
+            { geo: maakBladplant(P, 0, toeval), straal: K.struikStraal, mat },
+          ]
+        : [{ geo: maakBladplant(P, 0, toeval), straal: K.struikStraal, mat }],
+    });
+  });
+  flora.bloemen.forEach((gen, i) => {
+    soorten.push({
+      naam: 'bloem' + i, bron: 'bloem', laag: 'kleine', filter: (p) => p.soort === i && p.kans < K.bloemen, zak: 0.02,
+      schaal: (p) => 0.85 + 0.4 * p.schaal, kleur: wit,
+      banden: d
+        ? [
+            { geo: maakBloemplant(gen, FLORA, 1, maakWillekeur(gen.zaad).getal), straal: K.dichtbijKlein, mat: bloemMat },
+            { geo: maakBloemplant(gen, FLORA, 0, maakWillekeur(gen.zaad).getal), straal: K.bloemStraal, mat: bloemMat },
+          ]
+        : [{ geo: maakBloemplant(gen, FLORA, 0, maakWillekeur(gen.zaad).getal), straal: K.bloemStraal, mat: bloemMat }],
+    });
+  });
+  soorten.push({
+    naam: 'gras', bron: 'gras', laag: 'kleine', filter: (p) => p.kans < K.gras, zak: 0.02,
+    schaal: (p) => 0.7 + 0.6 * p.schaal, kleur: (p, c) => c.setRGB(0.88 + 0.12 * p.tint, 1, 0.9),
+    banden: [{ geo: maakGras(FLORA.gras, d), straal: K.grasStraal, mat: gewoon }],
+  });
+
+  for (const s of soorten) {
+    for (const b of s.banden) {
+      b.cap = 0;
+      maakBandMesh(b, 64);
+    }
+  }
+
+  function maakBandMesh(b, cap) {
+    if (b.mesh) {
+      scene.remove(b.mesh);
+      b.mesh.dispose();
+    }
+    b.cap = cap;
+    b.mesh = new THREE.InstancedMesh(b.geo, b.mat, cap);
+    b.mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(cap * 3), 3);
+    b.mesh.count = 0;
+    b.mesh.frustumCulled = false;
+    b.mesh.castShadow = K.schaduw && !!b.schaduw;
+    b.mesh.receiveShadow = K.schaduw;
+    scene.add(b.mesh);
+  }
+
+  // --- Tegels ---
+  /** @typedef {{ tx:number, tz:number, terrein?: THREE.Mesh, inst: Map<string, { m: Float32Array, c: Float32Array, n: number }> }} Tegel */
+  /** @type {Map<number, Tegel>} */
+  const tegels = new Map();
+  const sleutel = (tx, tz) => (tx + 4096) * 8192 + (tz + 4096);
+  const half = WERELD.verGebied;
+  const minT = Math.floor(-half / T);
+  const maxT = Math.floor((half - 1) / T);
+
+  function tegel(tx, tz) {
+    const k = sleutel(tx, tz);
+    let t = tegels.get(k);
+    if (!t) {
+      t = { tx, tz, inst: new Map() };
+      tegels.set(k, t);
+    }
+    return t;
+  }
+
+  const mat4 = new THREE.Matrix4();
+  const quat = new THREE.Quaternion();
+  const as = new THREE.Vector3(0, 1, 0);
+  const plek = new THREE.Vector3();
+  const sch = new THREE.Vector3();
+
+  /** De instance-gegevens van soort s in tegel t (één keer berekend, daarna bewaard). */
+  function instData(t, s) {
+    let data = t.inst.get(s.naam);
+    if (data) return data;
+    const lagen = s.laag === 'grote' ? begroeiing.grote(t.tx, t.tz) : begroeiing.kleine(t.tx, t.tz);
+    const lijst = lagen[s.bron].filter(s.filter);
+    const m = new Float32Array(lijst.length * 16);
+    const c = new Float32Array(lijst.length * 3);
+    lijst.forEach((p, i) => {
+      quat.setFromAxisAngle(as, p.draai);
+      const f = s.schaal(p);
+      mat4.compose(plek.set(p.x, p.y - (s.zak ?? 0) * f, p.z), quat, sch.set(f, f, f));
+      mat4.toArray(m, i * 16);
+      s.kleur(p, kl);
+      c[i * 3] = kl.r;
+      c[i * 3 + 1] = kl.g;
+      c[i * 3 + 2] = kl.b;
+    });
+    data = { m, c, n: lijst.length };
+    t.inst.set(s.naam, data);
+    return data;
+  }
+
+  /** Afstand van (x, z) tot de dichtstbijzijnde rand van tegel (tx, tz). */
+  function afstand(tx, tz, x, z) {
+    const dx = Math.max(tx * T - x, 0, x - (tx + 1) * T);
+    const dz = Math.max(tz * T - z, 0, z - (tz + 1) * T);
+    return Math.hypot(dx, dz);
+  }
+
+  // --- Bijwerken, elk beeld ---
+  let laatsteTegelX = 1e9;
+  let laatsteTegelZ = 1e9;
+  let laatsteHoek = 1e9;
+  let laatsteX = 1e9;
+  let laatsteZ = 1e9;
+  let moetHerbouwen = true;
+  let wachtrij = [];
+  const geladen = new Set();
+  const voor = new THREE.Vector3();
+  const stats = { tegels: 0, wachtrij: 0, instanties: 0 };
+
+  function laadTerrein(t) {
+    const r = sim.wereld.raster.tegel(t.tx, t.tz);
+    t.terrein = maakTegelTerrein(r, vorm.hoogte, kleurOp, grondMat);
+    t.terrein.receiveShadow = K.schaduw;
+    scene.add(t.terrein);
+    geladen.add(sleutel(t.tx, t.tz));
+  }
+
+  function geefTerreinVrij(t) {
+    scene.remove(t.terrein);
+    t.terrein.geometry.dispose();
+    t.terrein = undefined;
+    geladen.delete(sleutel(t.tx, t.tz));
+    // Kleine planten van verre tegels vergeten (die komen terug als je weer dichtbij bent).
+    for (const s of soorten) if (s.laag === 'kleine') t.inst.delete(s.naam);
+  }
+
+  function herbouw(x, z, camera) {
+    camera.getWorldDirection(voor);
+    voor.y = 0;
+    voor.normalize();
+    // Halve horizontale kijkhoek, plus speling omdat pas na wat draaien opnieuw gebouwd wordt.
+    const halfZicht = Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * camera.aspect) + 0.4;
+    let totaal = 0;
+    for (const s of soorten) {
+      for (let bi = 0; bi < s.banden.length; bi++) {
+        const b = s.banden[bi];
+        const binnen = bi === 0 ? 0 : s.banden[bi - 1].straal;
+        // Welke tegels horen bij deze band?
+        const lijst = [];
+        let n = 0;
+        const r = Math.ceil(b.straal / T) + 1;
+        const cx = Math.floor(x / T);
+        const cz = Math.floor(z / T);
+        for (let tz = cz - r; tz <= cz + r; tz++) {
+          for (let tx = cx - r; tx <= cx + r; tx++) {
+            if (tx < minT || tx > maxT || tz < minT || tz > maxT) continue;
+            const a = afstand(tx, tz, x, z);
+            if (a >= b.straal || a < binnen) continue;
+            if (s.laag === 'kleine' && !geladen.has(sleutel(tx, tz))) continue;
+            // Buiten beeld (naast of achter de camera): overslaan.
+            if (a > 12) {
+              const mx = (tx + 0.5) * T - x;
+              const mz = (tz + 0.5) * T - z;
+              const l = Math.hypot(mx, mz);
+              const hoek = Math.acos(Math.min(1, Math.max(-1, (mx * voor.x + mz * voor.z) / l)));
+              if (hoek - Math.atan((T * 0.71) / l) > halfZicht) continue;
+            }
+            const data = instData(tegel(tx, tz), s);
+            if (data.n === 0) continue;
+            lijst.push(data);
+            n += data.n;
+          }
+        }
+        if (n > b.cap) maakBandMesh(b, Math.ceil(n * 1.3));
+        const mesh = b.mesh;
+        const mArr = mesh.instanceMatrix.array;
+        const cArr = mesh.instanceColor.array;
+        const b2 = b.straal * b.straal;
+        const i2 = binnen * binnen;
+        let o = 0;
+        for (const data of lijst) {
+          // Per plant de afstand bekijken: zo krijgt alleen wat echt dichtbij staat de rijke vorm.
+          for (let i = 0; i < data.n; i++) {
+            const dx = data.m[i * 16 + 12] - x;
+            const dz = data.m[i * 16 + 14] - z;
+            const a2 = dx * dx + dz * dz;
+            if (a2 >= b2 || a2 < i2) continue;
+            mArr.set(data.m.subarray(i * 16, i * 16 + 16), o * 16);
+            cArr.set(data.c.subarray(i * 3, i * 3 + 3), o * 3);
+            o++;
+          }
+        }
+        n = o;
+        mesh.count = n;
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.needsUpdate = true;
+        totaal += n;
+      }
+    }
+    stats.instanties = totaal;
+  }
+
+  return {
+    stats,
+    soorten,
+    /**
+     * @param {number} x @param {number} z waar de speler is
+     * @param {THREE.Camera} camera
+     * @param {boolean} alles alles meteen laden (bij de start)
+     */
+    werkBij(x, z, camera, alles = false) {
+      const tx = Math.floor(x / T);
+      const tz = Math.floor(z / T);
+      if (tx !== laatsteTegelX || tz !== laatsteTegelZ || alles) {
+        laatsteTegelX = tx;
+        laatsteTegelZ = tz;
+        // Tegels vrijgeven die te ver zijn (met wat speling, zodat ze niet heen en weer springen).
+        for (const t of tegels.values()) {
+          if (t.terrein && afstand(t.tx, t.tz, x, z) > K.tegelStraal + 16) geefTerreinVrij(t);
+        }
+        // Nieuwe tegels in de wachtrij, de dichtste eerst.
+        const r = Math.ceil(K.tegelStraal / T) + 1;
+        wachtrij = [];
+        for (let j = tz - r; j <= tz + r; j++) {
+          for (let i = tx - r; i <= tx + r; i++) {
+            if (i < minT || i > maxT || j < minT || j > maxT) continue;
+            const a = afstand(i, j, x, z);
+            if (a < K.tegelStraal && !geladen.has(sleutel(i, j))) wachtrij.push({ i, j, a });
+          }
+        }
+        wachtrij.sort((p, q) => p.a - q.a);
+        moetHerbouwen = true;
+      }
+      // Gespreid laden: enkele tegels per beeld.
+      let veranderd = false;
+      const per = alles ? Infinity : K.tegelsPerBeeld;
+      for (let k = 0; k < per && wachtrij.length; k++) {
+        const { i, j } = wachtrij.shift();
+        laadTerrein(tegel(i, j));
+        veranderd = true;
+      }
+      if (veranderd || alles) {
+        // Speling van 40 m: het grove vlak wordt pas bij een nieuwe tegel opnieuw bijgesneden.
+        grof.verberg((i, j) => geladen.has(sleutel(i, j)), x, z, K.mist[1] + 40);
+        moetHerbouwen = true;
+      }
+      // Ook herbouwen als de camera ver genoeg gedraaid is.
+      camera.getWorldDirection(voor);
+      const hoek = Math.atan2(voor.x, voor.z);
+      let dh = hoek - laatsteHoek;
+      dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+      if (Math.abs(dh) > 0.3) moetHerbouwen = true;
+      // En als je een paar meter verder bent (de afstandsbanden schuiven mee).
+      if (Math.hypot(x - laatsteX, z - laatsteZ) > 4) moetHerbouwen = true;
+      if (moetHerbouwen) {
+        laatsteHoek = hoek;
+        laatsteX = x;
+        laatsteZ = z;
+        herbouw(x, z, camera);
+        moetHerbouwen = false;
+      }
+      stats.tegels = geladen.size;
+      stats.wachtrij = wachtrij.length;
+    },
+  };
+}

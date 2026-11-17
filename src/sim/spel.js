@@ -1,18 +1,29 @@
 // De simulatie: de hele speltoestand en één stap vooruit. Importeert nooit Three.js of de DOM.
 import { maakZaadje } from '../kern/willekeur.js';
-import { maakHoogtefunctie } from './wereld/hoogte.js';
-import { maakRaster } from './wereld/raster.js';
+import { maakWereldvorm } from './wereld/hoogte.js';
+import { maakTegelwereld } from './wereld/tegels.js';
+import { maakBegroeiing } from './wereld/begroeiing.js';
 import { maakSpeler, legeIntentie } from './wezens/speler.js';
 import { stapLopen } from './modi/lopen.js';
-import { TERREIN } from '../data/terrein.js';
+import { WERELD } from '../data/wereld.js';
+import { FLORA } from '../data/flora.js';
 import { LOPEN } from '../data/beweging.js';
 
 /** @param {string|number} berg bergcode of zaadje */
 export function maakSim(berg) {
   const zaadje = maakZaadje(berg);
-  const hoogte = maakHoogtefunctie(zaadje, TERREIN);
-  const raster = maakRaster(hoogte, TERREIN.grootte, TERREIN.rasterStap);
-  const wereld = { raster, grens: TERREIN.grootte / 2 - TERREIN.rand };
+  const vorm = maakWereldvorm(zaadje, WERELD);
+  const hoogte = vorm.hoogte;
+  const raster = maakTegelwereld(hoogte, WERELD.tegelGrootte, WERELD.rasterStap);
+  const begroeiing = maakBegroeiing(vorm, FLORA, zaadje, WERELD.tegelGrootte);
+  const wereld = {
+    raster,       // hoogteOp / hellingOp over alle tegels
+    vorm,         // de hoogtefunctie en wat er ligt (zand, gras, bos, lagune)
+    begroeiing,   // waar de planten staan
+    grens: WERELD.speelGrens,
+    maxDiepte: WERELD.waterDiepteMax,
+    stammen: begroeiing.stammen,
+  };
 
   /** @type {import('./wezens/speler.js').Speler[]} */
   const spelers = [];
@@ -29,7 +40,9 @@ export function maakSim(berg) {
     spelers,
 
     voegSpelerToe(id) {
-      const s = maakSpeler(id, 0, raster.hoogteOp(0, 0), 0);
+      const x = vorm.kamp.x;
+      const z = vorm.kamp.z + 3;
+      const s = maakSpeler(id, x, raster.hoogteOp(x, z), z);
       spelers.push(s);
       return s;
     },

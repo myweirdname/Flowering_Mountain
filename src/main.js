@@ -1,9 +1,11 @@
 // Start van het spel: koppelt simulatie, invoer en beeld aan elkaar.
 import * as THREE from 'three';
-import { INSTELLINGEN, MAX_PIXELVERHOUDING } from './kern/instellingen.js';
+import { INSTELLINGEN } from './kern/instellingen.js';
 import { maakSpellus } from './kern/spellus.js';
 import { SCENE } from './data/scene.js';
-import { TERREIN } from './data/terrein.js';
+import { WERELD } from './data/wereld.js';
+import { FLORA } from './data/flora.js';
+import { KWALITEIT } from './data/kwaliteit.js';
 import { LOPEN } from './data/beweging.js';
 import { CAMERA } from './data/camera.js';
 import { TESTFIGUUR } from './data/figuur.js';
@@ -13,14 +15,18 @@ import { naarIntentie, voegSamen } from './invoer/intentie.js';
 import { maakTouch, isTouchToestel } from './invoer/touch.js';
 import { maakScherm } from './ui/scherm.js';
 import { maakToetshulp } from './ui/toetshulp.js';
-import { maakTerrein } from './beeld/terrein.js';
 import { maakTestfiguur } from './beeld/maak/testfiguur.js';
 import { maakVolgcamera } from './beeld/volgcamera.js';
 import { maakHibiscus } from './beeld/maak/hibiscus.js';
-import { maakMonstera } from './beeld/maak/monstera.js';
-import { maakWillekeur } from './kern/willekeur.js';
-import { maakZon } from './beeld/maak/zon.js';
+import { maakHemel } from './beeld/hemel.js';
+import { maakZee } from './beeld/water.js';
+import { maakVerreBerg } from './beeld/maak/berg.js';
+import { maakLichtstralen, maakStuifmeel } from './beeld/sfeer.js';
+import { maakWereldbeeld } from './beeld/wereldbeeld.js';
+import { WIND } from './beeld/wind.js';
 import { maakDebugscherm } from './ui/debug.js';
+
+const K = KWALITEIT[INSTELLINGEN.kwaliteit];
 
 // --- Simulatie ---
 const sim = maakSim(INSTELLINGEN.berg);
@@ -30,27 +36,60 @@ const raster = sim.wereld.raster;
 
 // --- Beeld ---
 const canvas = /** @type {HTMLCanvasElement} */ (document.getElementById('spelbeeld'));
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setClearColor(SCENE.hemelkleur);
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: K.antialias, powerPreference: 'high-performance' });
+renderer.setClearColor(SCENE.hemel.horizon);
+if (K.schaduw) {
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+}
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(SCENE.hemelkleur, SCENE.mistBegin, SCENE.mistEinde);
-const camera = new THREE.PerspectiveCamera(CAMERA.beeldhoek, 1, 0.1, 400);
+scene.fog = new THREE.Fog(SCENE.hemel.horizon, K.mist[0], K.mist[1]);
+const camera = new THREE.PerspectiveCamera(CAMERA.beeldhoek, 1, 0.15, 1500);
 
 scene.add(new THREE.HemisphereLight(SCENE.hemelLicht, SCENE.grondLicht, SCENE.hemelLichtSterkte));
-const zonRichting = new THREE.Vector3(...SCENE.zon.richting).normalize();
+const lichtRichting = new THREE.Vector3(...SCENE.lichtRichting).normalize();
 const zonlicht = new THREE.DirectionalLight(SCENE.zonkleur, SCENE.zonsterkte);
-zonlicht.position.set(...SCENE.lichtRichting);
-scene.add(zonlicht);
-const zon = maakZon(SCENE.zon);
-scene.add(zon);
+zonlicht.position.copy(lichtRichting);
+scene.add(zonlicht, zonlicht.target);
+if (K.schaduw) {
+  // Eén echte schaduwkaart rond de speler (alleen op hoog, TP 5.7).
+  zonlicht.castShadow = true;
+  zonlicht.shadow.mapSize.set(2048, 2048);
+  const c = zonlicht.shadow.camera;
+  c.left = c.bottom = -34;
+  c.right = c.top = 34;
+  c.near = 1;
+  c.far = 140;
+  zonlicht.shadow.bias = -0.0006;
+  zonlicht.shadow.normalBias = 0.04;
+  zonlicht.shadow.intensity = SCENE.schaduwSterkte; // zachte schaduw: kawaii, nooit grauw
+}
 
-scene.add(maakTerrein(raster, TERREIN));
+// Hemel, zon, wolken en de verre berg.
+const zonRichting = new THREE.Vector3(...SCENE.zon.richting).normalize();
+const hemel = maakHemel(SCENE, zonRichting, K.detail);
+scene.add(hemel.koepel, hemel.zon, hemel.wolken);
+const verreBerg = maakVerreBerg(WERELD.verreBerg, SCENE.hemel.horizon);
+scene.add(verreBerg.berg, verreBerg.gloed);
+
+// Het landschap en de jungle, in tegels rond de speler.
+const wereldbeeld = maakWereldbeeld(scene, sim, K);
+const zee = maakZee(sim.wereld.vorm.hoogte, SCENE, zonRichting);
+scene.add(zee.vlak);
+const stralen = K.lichtstralen ? maakLichtstralen(sim.wereld.vorm, SCENE.lichtstralen, lichtRichting) : null;
+if (stralen) scene.add(stralen.mesh);
+const stuifmeel = maakStuifmeel(K.stuifmeel, SCENE.stuifmeel);
+scene.add(stuifmeel.punten);
 
 const { figuur, lijf, schaduw, basisSchaal } = maakTestfiguur(TESTFIGUUR);
 scene.add(figuur, schaduw);
+if (K.schaduw) {
+  figuur.traverse((o) => (o.castShadow = true));
+  schaduw.visible = false; // de echte schaduw neemt het over
+}
 
-// Een grote hibiscus als herkenningspunt naast het startpunt, op een gebogen steel.
+// Een grote hibiscus als herkenningspunt op de open plek, op een gebogen steel (kinderwens uit stap 1).
 const H = SCENE.hibiscus;
 const [bx, bz] = H.plek;
 const bloemGrond = raster.hoogteOp(bx, bz);
@@ -59,6 +98,7 @@ const steel = new THREE.Mesh(
   new THREE.MeshLambertMaterial({ color: H.steelKleur })
 );
 steel.position.set(bx, bloemGrond + H.steelHoogte / 2, bz);
+steel.castShadow = K.schaduw;
 scene.add(steel);
 const bloem = new THREE.Group();
 const draaier = new THREE.Group();
@@ -69,26 +109,19 @@ const bloemY = bloemGrond + H.steelHoogte;
 bloem.position.set(bx, bloemY, bz);
 scene.add(bloem);
 
-// Monstera-struiken; hun houding varieert met de bergcode.
-const plantToeval = maakWillekeur(sim.zaadje ^ 0x5eed);
-for (const [mx, mz] of SCENE.monstera.plekken) {
-  const struik = maakMonstera(SCENE.monstera, plantToeval.getal);
-  struik.position.set(mx, raster.hoogteOp(mx, mz), mz);
-  struik.rotation.y = plantToeval.getal() * Math.PI * 2;
-  scene.add(struik);
-}
-
-const volgcamera = maakVolgcamera(camera, canvas, (x, z) => raster.hoogteOp(x, z));
+const volgcamera = maakVolgcamera(camera, canvas, (x, z) => Math.max(raster.hoogteOp(x, z), 0.1));
 const toetsenbord = maakToetsenbord();
 const uiLaag = /** @type {HTMLElement} */ (document.getElementById('ui'));
 const touch = maakTouch(canvas, uiLaag, volgcamera);
 maakScherm(uiLaag, { touch: isTouchToestel() });
 if (!isTouchToestel()) maakToetshulp(uiLaag);
 
+let pixel = 1;
 function pasGrootteAan() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXELVERHOUDING[INSTELLINGEN.kwaliteit]));
+  pixel = Math.min(window.devicePixelRatio, K.pixelverhouding);
+  renderer.setPixelRatio(pixel);
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -97,6 +130,13 @@ window.addEventListener('resize', pasGrootteAan);
 pasGrootteAan();
 
 const debug = INSTELLINGEN.debug ? maakDebugscherm(uiLaag) : null;
+
+// Alles rond het startpunt meteen klaarzetten, zodat het eerste beeld al vol is.
+{
+  const s = sim.speler(LOKAAL);
+  volgcamera.volg(new THREE.Vector3(...s.pos), 0, 0, LOPEN.rensnelheid, 0);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}
 
 // --- Spellus ---
 /** Intentie die window.spel kan opleggen (voor tests); anders null. */
@@ -145,13 +185,37 @@ const lus = maakSpellus({
     schaduw.scale.setScalar(THREE.MathUtils.clamp(1 - (tekenpos.y - grond) / 6, 0.4, 1));
 
     volgcamera.volg(tekenpos, s.vel[0], s.vel[2], LOPEN.rensnelheid, dt);
-    zon.position.copy(camera.position).addScaledVector(zonRichting, SCENE.zon.afstand);
+
+    // De wereld rond de speler, en alles wat met de camera meeschuift.
+    wereldbeeld.werkBij(tekenpos.x, tekenpos.z, camera);
+    hemel.koepel.position.copy(camera.position);
+    hemel.zon.position.copy(camera.position).addScaledVector(zonRichting, SCENE.zon.afstand);
+    hemel.wolken.rotation.y = tijd * SCENE.wolken.draaisnelheid;
+    verreBerg.gloed.material.opacity = 0.75 + 0.25 * Math.sin(tijd * 1.3);
+    WIND.uTijd.value = tijd;
+    WIND.uWind.value = SCENE.wind.sterkte;
+    zee.werkBij(tijd, camera);
+    stralen?.werkBij(tijd);
+    stuifmeel.werkBij(tijd, camera, pixel);
+    if (K.schaduw) {
+      zonlicht.target.position.copy(tekenpos);
+      zonlicht.position.copy(tekenpos).addScaledVector(lichtRichting, 70);
+    }
 
     bloem.rotation.y = tijd * H.draaisnelheid;
     bloem.position.y = bloemY + Math.sin(tijd * 1.6) * H.deinen;
 
     renderer.render(scene, camera);
-    debug?.beeld(renderer.info, s);
+    if (debug) {
+      const w = wereldbeeld.stats;
+      debug.beeld(
+        renderer.info,
+        `kwaliteit      ${INSTELLINGEN.kwaliteit}\n` +
+          `tegels         ${w.tegels}${w.wachtrij ? ` (+${w.wachtrij})` : ''}\n` +
+          `planten        ${w.instanties.toLocaleString('nl-BE')}\n` +
+          `plek           ${tekenpos.x.toFixed(0)}, ${tekenpos.z.toFixed(0)}`
+      );
+    }
   },
 });
 
@@ -170,6 +234,9 @@ renderer.setAnimationLoop(lus.tik);
 let handTijd = 0;
 window.spel = {
   sim,
+  renderer,
+  scene,
+  camera: volgcamera,
   get speler() {
     return sim.speler(LOKAAL);
   },
@@ -181,6 +248,16 @@ window.spel = {
     s.vorigePos = [x, y, z];
     s.vel = [0, 0, 0];
     s.opGrond = true;
+  },
+  /** Zet de camera: hoek 0 = kijkt naar de zee (-z), PI = naar de jungle; kanteling in radialen. */
+  zetCamera(hoek, kanteling = CAMERA.kanteling, afstand = CAMERA.afstand) {
+    CAMERA.afstand = afstand;
+    volgcamera.zet(hoek, kanteling);
+    this.speel(2);
+  },
+  /** Draait de camera met de muisgevoeligheid (dx, dy in pixels), zoals slepen. */
+  kijk(dx, dy = 0) {
+    volgcamera.kijk(dx, dy, CAMERA.muisGevoeligheid);
   },
   /** Legt een intentie op in plaats van het toetsenbord; null geeft het toetsenbord terug. */
   stuur(intentie) {
@@ -196,5 +273,18 @@ window.spel = {
     }
   },
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, LOPEN, SCENE },
+  afstel: { CAMERA, TESTFIGUUR, LOPEN, SCENE, WERELD, FLORA, K },
+  kwaliteit: INSTELLINGEN.kwaliteit,
+  wereld: wereldbeeld.stats,
+  /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */
+  telling() {
+    const rij = [];
+    for (const s of wereldbeeld.soorten) {
+      s.banden.forEach((b, i) => {
+        const d = b.geo.attributes.position.count / 3;
+        rij.push({ soort: s.naam, band: i, aantal: b.mesh.count, perPlant: d, driehoeken: d * b.mesh.count });
+      });
+    }
+    return rij.sort((a, b) => b.driehoeken - a.driehoeken);
+  },
 };

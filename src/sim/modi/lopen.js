@@ -7,7 +7,9 @@ const naarRad = Math.PI / 180;
  * Schuift één speler één tijdstap op.
  * @param {import('../wezens/speler.js').Speler} s
  * @param {import('../wezens/speler.js').Intentie} int
- * @param {{ raster: ReturnType<typeof import('../wereld/raster.js').maakRaster>, grens: number }} wereld
+ * @param {{ raster: ReturnType<typeof import('../wereld/tegels.js').maakTegelwereld>,
+ *           grens: { minX:number, maxX:number, minZ:number, maxZ:number }, maxDiepte: number,
+ *           stammen: (tx:number, tz:number) => { x:number, z:number, r:number }[] }} wereld
  * @param {typeof import('../../data/beweging.js').LOPEN} L
  * @param {number} dt
  * @param {(g: object) => void} meld gebeurtenis doorgeven aan beeld en geluid
@@ -79,8 +81,22 @@ export function stapLopen(s, int, wereld, L, dt, meld) {
 
   // Binnen het speelveld blijven.
   const gr = wereld.grens;
-  if (Math.abs(s.pos[0]) > gr) { s.pos[0] = Math.sign(s.pos[0]) * gr; s.vel[0] = 0; }
-  if (Math.abs(s.pos[2]) > gr) { s.pos[2] = Math.sign(s.pos[2]) * gr; s.vel[2] = 0; }
+  if (s.pos[0] < gr.minX || s.pos[0] > gr.maxX) { s.pos[0] = Math.min(Math.max(s.pos[0], gr.minX), gr.maxX); s.vel[0] = 0; }
+  if (s.pos[2] < gr.minZ || s.pos[2] > gr.maxZ) { s.pos[2] = Math.min(Math.max(s.pos[2], gr.minZ), gr.maxZ); s.vel[2] = 0; }
+
+  // Niet dieper het water in dan je kan staan (zwemmen komt later). Langs de waterlijn schuiven mag.
+  const diep = -wereld.maxDiepte;
+  const r = wereld.raster;
+  if (r.hoogteOp(s.pos[0], s.pos[2]) < diep) {
+    const ox = s.vorigePos[0];
+    const oz = s.vorigePos[2];
+    if (r.hoogteOp(s.pos[0], oz) >= diep) { s.pos[2] = oz; s.vel[2] = 0; }
+    else if (r.hoogteOp(ox, s.pos[2]) >= diep) { s.pos[0] = ox; s.vel[0] = 0; }
+    else { s.pos[0] = ox; s.pos[2] = oz; s.vel[0] = 0; s.vel[2] = 0; }
+  }
+
+  // Niet door boomstammen lopen: zachtjes eruit duwen.
+  duwUitStammen(s, wereld, L.lijfStraal);
 
   // --- Grond ---
   const grond = wereld.raster.hoogteOp(s.pos[0], s.pos[2]);
@@ -102,6 +118,31 @@ export function stapLopen(s, int, wereld, L, dt, meld) {
     let verschil = doelHoek - s.richting;
     verschil = Math.atan2(Math.sin(verschil), Math.cos(verschil));
     s.richting += verschil * Math.min(1, L.draaisnelheid * dt);
+  }
+}
+
+function duwUitStammen(s, wereld, straal) {
+  const T = wereld.raster.tegelGrootte;
+  const tx = Math.floor(s.pos[0] / T);
+  const tz = Math.floor(s.pos[2] / T);
+  for (let j = tz - 1; j <= tz + 1; j++) {
+    for (let i = tx - 1; i <= tx + 1; i++) {
+      for (const st of wereld.stammen(i, j)) {
+        const dx = s.pos[0] - st.x;
+        const dz = s.pos[2] - st.z;
+        const min = st.r + straal;
+        const d2 = dx * dx + dz * dz;
+        if (d2 >= min * min || d2 < 1e-8) continue;
+        const d = Math.sqrt(d2);
+        const nx = dx / d;
+        const nz = dz / d;
+        s.pos[0] = st.x + nx * min;
+        s.pos[2] = st.z + nz * min;
+        // De snelheid naar de stam toe wegnemen, langs de stam glijden mag.
+        const v = s.vel[0] * nx + s.vel[2] * nz;
+        if (v < 0) { s.vel[0] -= v * nx; s.vel[2] -= v * nz; }
+      }
+    }
   }
 }
 

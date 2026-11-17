@@ -43,6 +43,12 @@ export function maakVolgcamera(camera, sleepvlak, grondOp) {
 
   return {
     kijk,
+    /** Zet de camera meteen op een hoek en kanteling (voor tests en schermafdrukken). */
+    zet(h, k) {
+      hoek = h;
+      kanteling = THREE.MathUtils.clamp(k, C.minKanteling, C.maxKanteling);
+      sindsSlepen = 0;
+    },
     get hoek() {
       return hoek;
     },
