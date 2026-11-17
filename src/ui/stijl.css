@@ -1,0 +1,180 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #8fd3ff;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#spelbeeld {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.debugscherm {
+  position: absolute;
+  top: calc(8px + env(safe-area-inset-top));
+  left: calc(8px + env(safe-area-inset-left));
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font: 12px/1.45 ui-monospace, Consolas, monospace;
+  white-space: pre;
+}
+
+/* --- Touchbediening (TP 8, GD 4): alleen zichtbaar op touchtoestellen --- */
+.touchlaag {
+  display: none;
+}
+body.touch .touchlaag {
+  display: block;
+}
+body.touch .toetshulp {
+  display: none;
+}
+
+.joystick {
+  position: absolute;
+  width: calc(var(--stick) * 2);
+  height: calc(var(--stick) * 2);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.32));
+  border: 0.6vh solid rgba(255, 255, 255, 0.7);
+  box-sizing: border-box;
+  opacity: 0;
+  transition: opacity 0.12s;
+  pointer-events: none;
+}
+.joystick.zichtbaar {
+  opacity: 1;
+}
+.knop-stick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: calc(var(--stick) * 0.9);
+  height: calc(var(--stick) * 0.9);
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, #ffd0e4);
+  box-shadow: 0 0.6vh 1.6vh rgba(120, 30, 70, 0.35);
+}
+
+.touchknop {
+  position: absolute;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 1vh 0 rgba(0, 0, 0, 0.18), 0 1.4vh 2.4vh rgba(0, 0, 0, 0.2);
+  transition: transform 0.06s, box-shadow 0.06s;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.touchknop svg {
+  width: 62%;
+  height: 62%;
+  pointer-events: none;
+}
+.touchknop.ingedrukt {
+  transform: translateY(0.8vh) scale(0.94);
+  box-shadow: 0 0.2vh 0 rgba(0, 0, 0, 0.18), 0 0.4vh 1vh rgba(0, 0, 0, 0.2);
+}
+.springknop {
+  width: var(--spring);
+  height: var(--spring);
+  right: calc(var(--rand) + env(safe-area-inset-right));
+  bottom: calc(var(--rand) + env(safe-area-inset-bottom));
+  background: radial-gradient(circle at 35% 30%, #ffb3d1, #ff6fa8 70%, #e2508b);
+}
+.actieknop {
+  width: var(--actie);
+  height: var(--actie);
+  right: calc(var(--rand) + var(--spring) + 3vh + env(safe-area-inset-right));
+  bottom: calc(var(--rand) + var(--spring) * 0.45 + env(safe-area-inset-bottom));
+  background: radial-gradient(circle at 35% 30%, #b8f5e4, #5fd3b3 70%, #3bb594);
+}
+
+/* --- "Draai je toestel": alleen op touchtoestellen in staande stand --- */
+.draaischerm {
+  display: none;
+}
+@media (orientation: portrait) {
+  body.touch .draaischerm {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(160deg, #8fd3ff, #ffb3d1);
+    pointer-events: auto;
+    z-index: 10;
+  }
+  body.touch .touchlaag {
+    display: none;
+  }
+}
+.draaischerm svg {
+  width: min(60vw, 60vh);
+  height: min(60vw, 60vh);
+}
+.draaitoestel {
+  transform-origin: 100px 90px;
+  animation: draai 2.4s ease-in-out infinite;
+}
+@keyframes draai {
+  0%, 25% { transform: rotate(0deg); }
+  55%, 85% { transform: rotate(-90deg); }
+  100% { transform: rotate(0deg); }
+}
+
+/* --- Toetsenhulp op pc --- */
+.toetshulp {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.75);
+  color: #6b2a4a;
+  font-size: 14px;
+  white-space: nowrap;
+  transition: opacity 1.5s;
+}
+.toetshulp.weg {
+  opacity: 0;
+}
+.toetshulp kbd {
+  display: inline-block;
+  min-width: 1.2em;
+  margin-right: 2px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid #e0a8c4;
+  border-bottom-width: 3px;
+  font: 12px/1.4 system-ui, sans-serif;
+  text-align: center;
+}
