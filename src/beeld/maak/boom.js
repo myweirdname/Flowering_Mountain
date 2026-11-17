@@ -137,5 +137,9 @@ export function maakKruinbol(B, kruinKleuren, detail) {
     zwaai: 0.25,
   });
   bol.dispose();
+  // Een eenvoudige stam, zodat de kruin niet zweeft en de echte boom straks op dezelfde plek verschijnt.
+  const stam = maakBuis([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, H * 0.5, 0), new THREE.Vector3(0, H - 2, 0)], (t) => 0.6 * (1 - 0.4 * t), 1, 4);
+  bouwer.voegToe(stam, { kleur: B.stamKleur, zwaai: 0 });
+  stam.dispose();
   return bouwer.maak();
 }

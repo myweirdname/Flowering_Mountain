@@ -7,10 +7,12 @@ import * as THREE from 'three';
 export const WIND = {
   uTijd: { value: 0 },
   uWind: { value: 1 },
+  uSpeler: { value: new THREE.Vector3() }, // waar de speler is: planten aan de rand groeien in
 };
 
 /**
- * @param {{ gaten?: 'monstera' | 'banaan' | null, gloed?: number, gloedSterkte?: number }} o
+ * @param {{ gaten?: 'monstera' | 'banaan' | null, gloed?: number, gloedSterkte?: number, rand?: [number, number] }} o
+ *   rand: vanaf rand[0] meter krimpt een plant, op rand[1] meter is hij weg (zacht ingroeien in plaats van opduiken)
  */
 export function maakPlantMateriaal(o = {}) {
   const m = new THREE.MeshLambertMaterial({
@@ -20,9 +22,12 @@ export function maakPlantMateriaal(o = {}) {
     emissiveIntensity: o.gloedSterkte ?? 1,
   });
   const gaten = o.gaten ?? null;
+  const uRand = { value: new THREE.Vector2(...(o.rand ?? [1e5, 1e6])) };
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uTijd = WIND.uTijd;
     shader.uniforms.uWind = WIND.uWind;
+    shader.uniforms.uSpeler = WIND.uSpeler;
+    shader.uniforms.uRand = uRand;
     shader.vertexShader = shader.vertexShader
       .replace(
         '#include <common>',
@@ -31,7 +36,9 @@ export function maakPlantMateriaal(o = {}) {
         attribute vec2 bladpos;
         varying vec2 vBladpos;
         uniform float uTijd;
-        uniform float uWind;`
+        uniform float uWind;
+        uniform vec3 uSpeler;
+        uniform vec2 uRand;`
       )
       .replace(
         '#include <begin_vertex>',
@@ -39,6 +46,8 @@ export function maakPlantMateriaal(o = {}) {
         vec3 plek = vec3(0.0);
         #ifdef USE_INSTANCING
           plek = instanceMatrix[3].xyz;
+          // Aan de rand van zijn afstandsband groeit de plant zacht uit de grond.
+          transformed *= 1.0 - smoothstep(uRand.x, uRand.y, distance(plek.xz, uSpeler.xz));
         #endif
         float fase = plek.x * 0.21 + plek.z * 0.17;
         float golf = sin(uTijd * 1.1 + fase) * 0.6 + sin(uTijd * 2.3 + fase * 1.7) * 0.3;

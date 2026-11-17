@@ -4,13 +4,14 @@ export const KWALITEIT = {
   laag: {
     pixelverhouding: 1,
     antialias: false,
-    tegelStraal: 50,     // fijn terrein rond de speler
-    dichtbij: 26,        // bomen en palmen in vol detail
+    tegelStraal: 50,     // terreintegels rond de speler
+    fijnStraal: 30,      // tot hier het terrein op 1 m (zoals de simulatie), verder op 2 m
+    dichtbij: 22,        // bomen en palmen in vol detail
     dichtbijKlein: 0,    // struiken en bloemen in vol detail (0 = nergens)
-    struikStraal: 34,
-    bloemStraal: 34,
-    grasStraal: 22,
-    struiken: 0.5,
+    struikStraal: 44,
+    bloemStraal: 40,
+    grasStraal: 28,
+    struiken: 0.45,
     bloemen: 0.5,
     gras: 0.4,
     detail: 0,           // 0 = eenvoudige vormen, 1 = rijke vormen
@@ -18,12 +19,14 @@ export const KWALITEIT = {
     lichtstralen: false,
     stuifmeel: 110,
     mist: [26, 115],     // begin en einde van de mist
-    tegelsPerBeeld: 1,   // zoveel nieuwe tegels per beeld maken (spreiden = geen haperingen)
+    bouwBudget: 3,       // ms per beeld voor nieuwe tegels (spreiden = geen haperingen)
+    ingroeien: 8,        // planten groeien over zoveel meter uit de grond in plaats van plots te verschijnen
   },
   midden: {
     pixelverhouding: 1.5,
     antialias: true,
     tegelStraal: 80,
+    fijnStraal: 36,
     dichtbij: 40,
     dichtbijKlein: 20,
     struikStraal: 60,
@@ -37,12 +40,14 @@ export const KWALITEIT = {
     lichtstralen: true,
     stuifmeel: 250,
     mist: [34, 145],
-    tegelsPerBeeld: 1,
+    bouwBudget: 4,
+    ingroeien: 10,
   },
   hoog: {
     pixelverhouding: 2,
     antialias: true,
     tegelStraal: 110,
+    fijnStraal: 45,
     dichtbij: 36,
     dichtbijKlein: 22,
     struikStraal: 64,
@@ -56,6 +61,7 @@ export const KWALITEIT = {
     lichtstralen: true,
     stuifmeel: 420,
     mist: [40, 175],
-    tegelsPerBeeld: 2,
+    bouwBudget: 6,
+    ingroeien: 12,
   },
 };

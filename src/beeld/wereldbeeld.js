@@ -37,13 +37,13 @@ export function maakWereldbeeld(scene, sim, K) {
 
   // --- Plantsoorten ---
   const toeval = maakWillekeur(flora.vormZaad).getal;
-  const gewoon = maakPlantMateriaal({ gloed: 0x0c160c });
-  const bloemMat = maakPlantMateriaal({ gloed: 0x2a1f24 });
-  const rotsMat = new THREE.MeshLambertMaterial({ vertexColors: true });
+  const gewoon = { gloed: 0x0c160c };
+  const bloemMat = { gloed: 0x2a1f24 };
+  const rotsMat = { gloed: 0x000000 };
   const kl = new THREE.Color();
 
   /**
-   * @typedef {{ geo: THREE.BufferGeometry, straal: number, mat: THREE.Material, schaduw?: boolean,
+   * @typedef {{ geo: THREE.BufferGeometry, straal: number, mat: any, schaduw?: boolean,
    *             mesh?: THREE.InstancedMesh, cap?: number }} Band
    * @typedef {{ naam: string, bron: 'boom'|'palm'|'rots'|'struik'|'bloem'|'gras', laag: 'grote'|'kleine',
    *             filter: (p: any) => boolean, schaal: (p: any) => number, kleur: (p: any, c: THREE.Color) => void,
@@ -78,7 +78,7 @@ export function maakWereldbeeld(scene, sim, K) {
   });
   flora.struikNamen.forEach((naam, i) => {
     const P = FLORA.bladplanten[naam];
-    const mat = P.gaten ? maakPlantMateriaal({ gaten: P.gaten, gloed: 0x0c160c }) : gewoon;
+    const mat = P.gaten ? { gaten: P.gaten, gloed: 0x0c160c } : gewoon;
     soorten.push({
       naam, bron: 'struik', laag: 'kleine', filter: (p) => p.soort === i && p.kans < K.struiken, zak: 0.05,
       schaal: (p) => P.grootte[0] + p.schaal * (P.grootte[1] - P.grootte[0]),
@@ -109,11 +109,15 @@ export function maakWereldbeeld(scene, sim, K) {
     banden: [{ geo: maakGras(FLORA.gras, d), straal: K.grasStraal, mat: gewoon }],
   });
 
+  // Elke band krijgt een eigen materiaal (dezelfde shader, dus geen extra werk), zodat de laatste band
+  // van elke soort aan zijn buitenrand kan laten ingroeien. Tussen twee banden wisselt alleen de vorm.
   for (const s of soorten) {
-    for (const b of s.banden) {
+    s.banden.forEach((b, i) => {
+      const laatste = i === s.banden.length - 1;
+      b.mat = maakPlantMateriaal({ ...b.mat, rand: laatste ? [b.straal - K.ingroeien, b.straal] : undefined });
       b.cap = 0;
       maakBandMesh(b, 64);
-    }
+    });
   }
 
   function maakBandMesh(b, cap) {
@@ -132,7 +136,7 @@ export function maakWereldbeeld(scene, sim, K) {
   }
 
   // --- Tegels ---
-  /** @typedef {{ tx:number, tz:number, terrein?: THREE.Mesh, inst: Map<string, { m: Float32Array, c: Float32Array, n: number }> }} Tegel */
+  /** @typedef {{ tx:number, tz:number, terrein?: THREE.Mesh, stap: number, inst: Map<string, { m: Float32Array, c: Float32Array, n: number }> }} Tegel */
   /** @type {Map<number, Tegel>} */
   const tegels = new Map();
   const sleutel = (tx, tz) => (tx + 4096) * 8192 + (tz + 4096);
@@ -144,7 +148,7 @@ export function maakWereldbeeld(scene, sim, K) {
     const k = sleutel(tx, tz);
     let t = tegels.get(k);
     if (!t) {
-      t = { tx, tz, inst: new Map() };
+      t = { tx, tz, stap: 0, lod: 0, lodNodig: 1, inst: new Map() };
       tegels.set(k, t);
     }
     return t;
@@ -193,26 +197,52 @@ export function maakWereldbeeld(scene, sim, K) {
   let laatsteX = 1e9;
   let laatsteZ = 1e9;
   let moetHerbouwen = true;
+  /** @type {Tegel[]} */
   let wachtrij = [];
-  const geladen = new Set();
+  const metTerrein = new Set(); // tegels met fijn terrein (daar laat het grove vlak zijn cellen weg)
   const voor = new THREE.Vector3();
   const stats = { tegels: 0, wachtrij: 0, instanties: 0 };
+  const kleineSoorten = soorten.filter((s) => s.laag === 'kleine');
 
-  function laadTerrein(t) {
-    const r = sim.wereld.raster.tegel(t.tx, t.tz);
-    t.terrein = maakTegelTerrein(r, vorm.hoogte, kleurOp, grondMat);
-    t.terrein.receiveShadow = K.schaduw;
-    scene.add(t.terrein);
-    geladen.add(sleutel(t.tx, t.tz));
+  /**
+   * Een tegel klaarmaken gaat in kleine stappen, zodat één beeld nooit te lang duurt:
+   * 0 → hoogteraster (simulatie), 1 → terrein tekenen, 2 → kleine planten plaatsen. Na stap 2 is hij klaar.
+   * @returns {boolean} true als het terrein net verscheen
+   */
+  function werkAanTegel(t) {
+    if (t.stap === 0) {
+      sim.wereld.raster.tegel(t.tx, t.tz);
+      t.stap = 1;
+    } else if (t.stap === 1 || t.lod !== t.lodNodig) {
+      // Terrein (opnieuw) tekenen, fijn of grof naargelang de afstand.
+      if (t.terrein) {
+        scene.remove(t.terrein);
+        t.terrein.geometry.dispose();
+      }
+      t.terrein = maakTegelTerrein(sim.wereld.raster.tegel(t.tx, t.tz), vorm.hoogte, kleurOp, grondMat, t.lodNodig);
+      t.terrein.receiveShadow = K.schaduw;
+      t.lod = t.lodNodig;
+      scene.add(t.terrein);
+      metTerrein.add(sleutel(t.tx, t.tz));
+      if (t.stap === 1) t.stap = 2;
+    } else if (t.stap === 2) {
+      for (const s of kleineSoorten) instData(t, s);
+      t.stap = 3;
+    }
   }
+  const tegelKlaar = (t) => t.stap >= 3 && t.lod === t.lodNodig;
 
   function geefTerreinVrij(t) {
-    scene.remove(t.terrein);
-    t.terrein.geometry.dispose();
-    t.terrein = undefined;
-    geladen.delete(sleutel(t.tx, t.tz));
+    if (t.terrein) {
+      scene.remove(t.terrein);
+      t.terrein.geometry.dispose();
+      t.terrein = undefined;
+    }
+    t.stap = 0;
+    t.lod = 0;
+    metTerrein.delete(sleutel(t.tx, t.tz));
     // Kleine planten van verre tegels vergeten (die komen terug als je weer dichtbij bent).
-    for (const s of soorten) if (s.laag === 'kleine') t.inst.delete(s.naam);
+    for (const s of kleineSoorten) t.inst.delete(s.naam);
   }
 
   function herbouw(x, z, camera) {
@@ -237,7 +267,7 @@ export function maakWereldbeeld(scene, sim, K) {
             if (tx < minT || tx > maxT || tz < minT || tz > maxT) continue;
             const a = afstand(tx, tz, x, z);
             if (a >= b.straal || a < binnen) continue;
-            if (s.laag === 'kleine' && !geladen.has(sleutel(tx, tz))) continue;
+            if (s.laag === 'kleine' && !(tegels.get(sleutel(tx, tz))?.stap >= 3)) continue;
             // Buiten beeld (naast of achter de camera): overslaan.
             if (a > 12) {
               const mx = (tx + 0.5) * T - x;
@@ -273,7 +303,12 @@ export function maakWereldbeeld(scene, sim, K) {
         }
         n = o;
         mesh.count = n;
+        // Alleen het gebruikte stuk naar de grafische kaart sturen.
+        mesh.instanceMatrix.clearUpdateRanges();
+        mesh.instanceMatrix.addUpdateRange(0, n * 16);
         mesh.instanceMatrix.needsUpdate = true;
+        mesh.instanceColor.clearUpdateRanges();
+        mesh.instanceColor.addUpdateRange(0, n * 3);
         mesh.instanceColor.needsUpdate = true;
         totaal += n;
       }
@@ -297,34 +332,43 @@ export function maakWereldbeeld(scene, sim, K) {
         laatsteTegelZ = tz;
         // Tegels vrijgeven die te ver zijn (met wat speling, zodat ze niet heen en weer springen).
         for (const t of tegels.values()) {
-          if (t.terrein && afstand(t.tx, t.tz, x, z) > K.tegelStraal + 16) geefTerreinVrij(t);
+          if (t.stap > 0 && afstand(t.tx, t.tz, x, z) > K.tegelStraal + 16) geefTerreinVrij(t);
         }
         // Nieuwe tegels in de wachtrij, de dichtste eerst.
         const r = Math.ceil(K.tegelStraal / T) + 1;
-        wachtrij = [];
+        const nieuw = [];
         for (let j = tz - r; j <= tz + r; j++) {
           for (let i = tx - r; i <= tx + r; i++) {
             if (i < minT || i > maxT || j < minT || j > maxT) continue;
             const a = afstand(i, j, x, z);
-            if (a < K.tegelStraal && !geladen.has(sleutel(i, j))) wachtrij.push({ i, j, a });
+            if (a >= K.tegelStraal) continue;
+            const t = tegel(i, j);
+            t.lodNodig = a < K.fijnStraal ? 1 : 2;
+            if (!tegelKlaar(t)) nieuw.push([a, t]);
           }
         }
-        wachtrij.sort((p, q) => p.a - q.a);
+        nieuw.sort((p, q) => p[0] - q[0]);
+        wachtrij = nieuw.map((p) => p[1]);
         moetHerbouwen = true;
       }
-      // Gespreid laden: enkele tegels per beeld.
-      let veranderd = false;
-      const per = alles ? Infinity : K.tegelsPerBeeld;
-      for (let k = 0; k < per && wachtrij.length; k++) {
-        const { i, j } = wachtrij.shift();
-        laadTerrein(tegel(i, j));
-        veranderd = true;
+      // Gespreid laden: kleine stappen tot het tijdsbudget van dit beeld op is (altijd minstens één).
+      let terreinVeranderd = false;
+      let plantenKlaar = false;
+      const begin = performance.now();
+      while (wachtrij.length && (alles || performance.now() - begin < K.bouwBudget)) {
+        const t = wachtrij[0];
+        if (t.stap >= 1) terreinVeranderd = true;
+        werkAanTegel(t);
+        if (tegelKlaar(t)) {
+          wachtrij.shift();
+          plantenKlaar = true;
+        }
       }
-      if (veranderd || alles) {
+      if (terreinVeranderd || alles) {
         // Speling van 40 m: het grove vlak wordt pas bij een nieuwe tegel opnieuw bijgesneden.
-        grof.verberg((i, j) => geladen.has(sleutel(i, j)), x, z, K.mist[1] + 40);
-        moetHerbouwen = true;
+        grof.verberg((i, j) => metTerrein.has(sleutel(i, j)), x, z, K.mist[1] + 40);
       }
+      if (plantenKlaar) moetHerbouwen = true;
       // Ook herbouwen als de camera ver genoeg gedraaid is.
       camera.getWorldDirection(voor);
       const hoek = Math.atan2(voor.x, voor.z);
@@ -340,7 +384,7 @@ export function maakWereldbeeld(scene, sim, K) {
         herbouw(x, z, camera);
         moetHerbouwen = false;
       }
-      stats.tegels = geladen.size;
+      stats.tegels = metTerrein.size;
       stats.wachtrij = wachtrij.length;
     },
   };

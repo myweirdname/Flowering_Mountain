@@ -21,6 +21,7 @@ export function maakRaster(hoogte, beginX, beginZ, grootte, stap) {
 
   // Hergebruikte uitkomst, zodat er in de spellus geen nieuwe objecten ontstaan.
   const c = { fu: 0, fv: 0, h00: 0, h10: 0, h01: 0, h11: 0 };
+  const helling = [0, 0];
   function cel(x, z) {
     let u = (x - beginX) / stap;
     let v = (z - beginZ) / stap;
@@ -53,11 +54,17 @@ export function maakRaster(hoogte, beginX, beginZ, grootte, stap) {
       return h00 + (h11 - h01) * fu + (h01 - h00) * fv;
     },
 
-    /** Helling op (x, z) als [dh/dx, dh/dz]. */
+    /** Helling op (x, z) als [dh/dx, dh/dz]. Hetzelfde lijstje wordt hergebruikt: meteen uitlezen. */
     hellingOp(x, z) {
       const { fu, fv, h00, h10, h01, h11 } = cel(x, z);
-      if (fu >= fv) return [(h10 - h00) / stap, (h11 - h10) / stap];
-      return [(h11 - h01) / stap, (h01 - h00) / stap];
+      if (fu >= fv) {
+        helling[0] = (h10 - h00) / stap;
+        helling[1] = (h11 - h10) / stap;
+      } else {
+        helling[0] = (h11 - h01) / stap;
+        helling[1] = (h01 - h00) / stap;
+      }
+      return helling;
     },
   };
 }

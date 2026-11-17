@@ -75,7 +75,7 @@ scene.add(verreBerg.berg, verreBerg.gloed);
 
 // Het landschap en de jungle, in tegels rond de speler.
 const wereldbeeld = maakWereldbeeld(scene, sim, K);
-const zee = maakZee(sim.wereld.vorm.hoogte, SCENE, zonRichting);
+const zee = maakZee(sim.wereld.vorm.hoogte, SCENE, zonRichting, K.detail === 0);
 scene.add(zee.vlak);
 const stralen = K.lichtstralen ? maakLichtstralen(sim.wereld.vorm, SCENE.lichtstralen, lichtRichting) : null;
 if (stralen) scene.add(stralen.mesh);
@@ -129,13 +129,15 @@ function pasGrootteAan() {
 window.addEventListener('resize', pasGrootteAan);
 pasGrootteAan();
 
-const debug = INSTELLINGEN.debug ? maakDebugscherm(uiLaag) : null;
+const debug = maakDebugscherm(uiLaag, INSTELLINGEN.debug);
 
 // Alles rond het startpunt meteen klaarzetten, zodat het eerste beeld al vol is.
 {
   const s = sim.speler(LOKAAL);
   volgcamera.volg(new THREE.Vector3(...s.pos), 0, 0, LOPEN.rensnelheid, 0);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+  // Alle shaders nu al klaarmaken, zodat er onderweg nooit een hapering komt als iets voor het eerst in beeld komt.
+  renderer.compile(scene, camera);
 }
 
 // --- Spellus ---
@@ -194,6 +196,7 @@ const lus = maakSpellus({
     verreBerg.gloed.material.opacity = 0.75 + 0.25 * Math.sin(tijd * 1.3);
     WIND.uTijd.value = tijd;
     WIND.uWind.value = SCENE.wind.sterkte;
+    WIND.uSpeler.value.copy(tekenpos);
     zee.werkBij(tijd, camera);
     stralen?.werkBij(tijd);
     stuifmeel.werkBij(tijd, camera, pixel);
@@ -206,16 +209,18 @@ const lus = maakSpellus({
     bloem.position.y = bloemY + Math.sin(tijd * 1.6) * H.deinen;
 
     renderer.render(scene, camera);
-    if (debug) {
+    debug.beeld(renderer.info, () => {
       const w = wereldbeeld.stats;
-      debug.beeld(
-        renderer.info,
-        `kwaliteit      ${INSTELLINGEN.kwaliteit}\n` +
-          `tegels         ${w.tegels}${w.wachtrij ? ` (+${w.wachtrij})` : ''}\n` +
-          `planten        ${w.instanties.toLocaleString('nl-BE')}\n` +
-          `plek           ${tekenpos.x.toFixed(0)}, ${tekenpos.z.toFixed(0)}`
+      return (
+        `kwaliteit      ${INSTELLINGEN.kwaliteit}
+` +
+        `tegels         ${w.tegels}${w.wachtrij ? ` (+${w.wachtrij})` : ''}
+` +
+        `planten        ${w.instanties.toLocaleString('nl-BE')}
+` +
+        `plek           ${tekenpos.x.toFixed(0)}, ${tekenpos.z.toFixed(0)}`
       );
-    }
+    });
   },
 });
 

@@ -33,58 +33,72 @@ export function maakGrondkleur(vorm, K) {
 
 /**
  * Eén fijne tegel uit het hoogteraster van de simulatie.
+ * Met sprong 1 is elk punt van het raster een hoekpunt: precies wat de voeten van de speler voelen.
+ * Met sprong 2 (verder weg) wordt elk tweede punt gebruikt: vier keer minder driehoeken, op afstand niet te zien.
  * @param {ReturnType<typeof import('../sim/wereld/raster.js').maakRaster>} r
  * @param {(x:number, z:number) => number} hoogte voor de buren net buiten de tegel (normalen)
  * @param {ReturnType<typeof maakGrondkleur>} kleurOp
  * @param {THREE.Material} materiaal
+ * @param {number} sprong 1 of 2
  */
-export function maakTegelTerrein(r, hoogte, kleurOp, materiaal) {
-  const p = r.punten;
-  const n = r.n;
-  const st = r.stap;
+export function maakTegelTerrein(r, hoogte, kleurOp, materiaal, sprong = 1) {
+  const P = r.punten;
   const H = r.hoogtes;
-  const randPunten = 4 * (n + 1);
-  const totaal = p * p + randPunten;
+  const n = r.n / sprong; // cellen per zijde in deze tegel
+  const p = n + 1;
+  const st = r.stap * sprong;
+  const totaal = p * p + 4 * p;
   const pos = new Float32Array(totaal * 3);
   const nor = new Float32Array(totaal * 3);
   const kl = new Float32Array(totaal * 3);
   const k = new THREE.Color();
-  const v = new THREE.Vector3();
 
-  const hOp = (i, j) => (i >= 0 && i < p && j >= 0 && j < p ? H[j * p + i] : hoogte(r.beginX + i * st, r.beginZ + j * st));
+  // Hoogte op rasterpunt (i, j) van deze tegel; net erbuiten rechtstreeks uit de hoogtefunctie.
+  const hOp = (i, j) =>
+    i >= 0 && i < p && j >= 0 && j < p ? H[j * sprong * P + i * sprong] : hoogte(r.beginX + i * st, r.beginZ + j * st);
   for (let j = 0; j < p; j++) {
     for (let i = 0; i < p; i++) {
-      const q = j * p + i;
+      const q = (j * p + i) * 3;
       const x = r.beginX + i * st;
       const z = r.beginZ + j * st;
       const hl = hOp(i - 1, j);
       const hr = hOp(i + 1, j);
       const hd = hOp(i, j - 1);
       const hu = hOp(i, j + 1);
-      v.set(hl - hr, 2 * st, hd - hu).normalize();
-      pos[q * 3] = x;
-      pos[q * 3 + 1] = H[q];
-      pos[q * 3 + 2] = z;
-      nor.set([v.x, v.y, v.z], q * 3);
-      kleurOp(x, z, Math.hypot(hr - hl, hu - hd) / (2 * st), k);
-      kl.set([k.r, k.g, k.b], q * 3);
+      const nx = hl - hr;
+      const ny = 2 * st;
+      const nz = hd - hu;
+      const l = Math.hypot(nx, ny, nz);
+      pos[q] = x;
+      pos[q + 1] = H[j * sprong * P + i * sprong];
+      pos[q + 2] = z;
+      nor[q] = nx / l;
+      nor[q + 1] = ny / l;
+      nor[q + 2] = nz / l;
+      kleurOp(x, z, Math.hypot(nx, nz) / (2 * st), k);
+      kl[q] = k.r;
+      kl[q + 1] = k.g;
+      kl[q + 2] = k.b;
     }
   }
 
-  const index = [];
+  const index = new Uint16Array(n * n * 6 + 4 * n * 6);
+  let w = 0;
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const a = j * p + i;
       const b = a + 1;
       const c = a + p;
       const d = c + 1;
-      index.push(a, d, b, a, c, d); // zelfde schuine lijn als de simulatie
+      // Zelfde schuine lijn als de simulatie.
+      index[w++] = a; index[w++] = d; index[w++] = b;
+      index[w++] = a; index[w++] = c; index[w++] = d;
     }
   }
 
-  // Rokjes: langs elke rand een strook die 1,5 m naar beneden hangt.
+  // Rokjes: langs elke rand een strook die 1,5 m naar beneden hangt (verbergt kiertjes met de buren),
+  // met de driehoeken naar buiten gekeerd (daar kijk je naar het kiertje).
   let q = p * p;
-  // Elke rand met de driehoeken naar buiten gekeerd (daar kijk je naar het kiertje).
   const randen = [
     [(t) => t, true],               // voorrand  (j = 0)
     [(t) => n * p + t, false],      // achterrand (j = n)
@@ -97,15 +111,13 @@ export function maakTegelTerrein(r, hoogte, kleurOp, materiaal) {
       pos[q * 3] = pos[boven * 3];
       pos[q * 3 + 1] = pos[boven * 3 + 1] - 1.5;
       pos[q * 3 + 2] = pos[boven * 3 + 2];
-      nor.set(nor.subarray(boven * 3, boven * 3 + 3), q * 3);
-      kl.set(kl.subarray(boven * 3, boven * 3 + 3), q * 3);
+      nor.copyWithin(q * 3, boven * 3, boven * 3 + 3);
+      kl.copyWithin(q * 3, boven * 3, boven * 3 + 3);
       if (t > 0) {
         const a = rand(t - 1);
-        const b = boven;
         const c = q - 1;
-        const d = q;
-        if (rechts) index.push(a, b, c, b, d, c);
-        else index.push(a, c, b, b, c, d);
+        if (rechts) { index[w++] = a; index[w++] = boven; index[w++] = c; index[w++] = boven; index[w++] = q; index[w++] = c; }
+        else { index[w++] = a; index[w++] = c; index[w++] = boven; index[w++] = boven; index[w++] = c; index[w++] = q; }
       }
       q++;
     }
@@ -115,7 +127,7 @@ export function maakTegelTerrein(r, hoogte, kleurOp, materiaal) {
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
   geo.setAttribute('color', new THREE.BufferAttribute(kl, 3));
-  geo.setIndex(index);
+  geo.setIndex(new THREE.BufferAttribute(index, 1));
   geo.computeBoundingSphere();
   const mesh = new THREE.Mesh(geo, materiaal);
   mesh.matrixAutoUpdate = false;

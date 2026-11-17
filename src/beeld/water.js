@@ -8,7 +8,7 @@ import * as THREE from 'three';
  * @param {typeof import('../data/scene.js').SCENE} S
  * @param {THREE.Vector3} zonRichting
  */
-export function maakZee(hoogte, S, zonRichting) {
+export function maakZee(hoogte, S, zonRichting, eenvoudig = false) {
   const W = S.water;
   const n = W.kaartResolutie;
   const half = W.kaartGebied;
@@ -45,6 +45,7 @@ export function maakZee(hoogte, S, zonRichting) {
     uniforms,
     fog: true,
     transparent: true,
+    defines: eenvoudig ? { EENVOUDIG: '' } : {},
     vertexShader: `
       #include <fog_pars_vertex>
       varying vec3 vWereld;
@@ -82,13 +83,15 @@ export function maakZee(hoogte, S, zonRichting) {
         float glans = pow(max(dot(reflect(-kijk, n), uZon), 0.0), 90.0);
         c += uGlinster * glans * 1.3;
 
-        // Twinkelsterretjes op het water.
+        // Twinkelsterretjes op het water (niet op laag detailniveau).
+        #ifndef EENVOUDIG
         vec2 cel = floor(p * 0.9);
         float rnd = fract(sin(dot(cel, vec2(12.9898, 78.233))) * 43758.5453);
         float twinkel = step(0.975, rnd) * pow(max(sin(t * 2.5 + rnd * 60.0), 0.0), 12.0);
         vec2 f = fract(p * 0.9) - 0.5;
         twinkel *= smoothstep(0.12, 0.0, abs(f.x) * abs(f.y) * 8.0 + length(f) * 0.25);
         c += uGlinster * twinkel * (1.0 - fres) * 1.2;
+        #endif
 
         // Schuim aan de waterlijn: een rand die zacht op en neer gaat, plus golfjes die aanspoelen.
         float golfje = sin(t * 1.3 + p.x * 0.07 + p.y * 0.05) * 0.07;

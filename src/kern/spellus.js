@@ -14,7 +14,8 @@ export function maakSpellus({ stap, teken }) {
   return {
     /** Oproepen bij elk beeld, met de tijd van requestAnimationFrame. */
     tik(nu) {
-      const dtBeeld = vorige < 0 ? STAP : Math.min((nu - vorige) / 1000, 0.25);
+      // Nooit terug in de tijd (kan na een tabbladwissel of een test die vooruitspoelt), nooit meer dan 0,25 s.
+      const dtBeeld = vorige < 0 ? STAP : Math.min(Math.max((nu - vorige) / 1000, 0), 0.25);
       vorige = nu;
       opgespaard += dtBeeld;
       let n = 0;
