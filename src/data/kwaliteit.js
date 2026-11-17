@@ -7,9 +7,10 @@ export const KWALITEIT = {
     tegelStraal: 50,     // terreintegels rond de speler
     fijnStraal: 30,      // tot hier het terrein op 1 m (zoals de simulatie), verder op 2 m
     dichtbij: 22,        // bomen en palmen in vol detail
+    middenStraal: 36,    // bomen in eenvoudige vorm; verder: kruinbollen (allemaal dezelfde vorm, minder fijn)
     dichtbijKlein: 0,    // struiken en bloemen in vol detail (0 = nergens)
     struikStraal: 44,
-    bloemStraal: 40,
+    bloemStraal: 36,
     grasStraal: 28,
     struiken: 0.45,
     bloemen: 0.5,
@@ -28,6 +29,7 @@ export const KWALITEIT = {
     tegelStraal: 80,
     fijnStraal: 36,
     dichtbij: 40,
+    middenStraal: 60,
     dichtbijKlein: 20,
     struikStraal: 60,
     bloemStraal: 50,
@@ -49,6 +51,7 @@ export const KWALITEIT = {
     tegelStraal: 110,
     fijnStraal: 45,
     dichtbij: 36,
+    middenStraal: 75,
     dichtbijKlein: 22,
     struikStraal: 64,
     bloemStraal: 56,

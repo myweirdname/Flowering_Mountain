@@ -147,10 +147,19 @@ export function maakBladplant(P, detail, toeval) {
   }
 
   const top = new THREE.Vector3();
+  // Alle toeval eerst, voor alle bladeren: een eenvoudiger plant is dezelfde plant met minder bladeren.
+  const houding = [];
+  for (let i = 0; i < P.aantal; i++) {
+    houding.push({
+      draai: i * 2.39996 + toeval() * 0.35, // de gulden hoek: bladeren verdelen zich mooi
+      kanteling: P.spreiding * (0.55 + 0.7 * toeval()), // 0 = recht omhoog
+      lengte: P.steel * (0.7 + 0.5 * toeval()),
+      opwaarts: P.steel > 0 ? 0.25 + toeval() * 0.4 : 0.75 + toeval() * 0.45,
+      rol: (toeval() - 0.5) * 0.35,
+    });
+  }
   for (let i = 0; i < n; i++) {
-    const draai = i * 2.39996 + toeval() * 0.35; // de gulden hoek: bladeren verdelen zich mooi
-    const kanteling = P.spreiding * (0.55 + 0.7 * toeval()); // 0 = recht omhoog
-    const lengte = P.steel * (0.7 + 0.5 * toeval());
+    const { draai, kanteling, lengte, opwaarts, rol } = houding[i];
     const uit = new THREE.Vector3(Math.sin(draai), 0, Math.cos(draai));
     top.set(uit.x * Math.sin(kanteling) * lengte, voetY + Math.cos(kanteling) * lengte, uit.z * Math.sin(kanteling) * lengte);
     if (lengte > 0.05) {
@@ -163,10 +172,9 @@ export function maakBladplant(P, detail, toeval) {
       bouwer.voegToe(steel, { kleur: P.steelKleur, zwaai: (p) => Math.max(0, p.y - voetY) * 0.25 });
     }
     // Het blad: omhoog gekanteld (de ingebouwde buiging laat de punt weer hangen).
-    const opwaarts = P.steel > 0 ? 0.25 + toeval() * 0.4 : 0.75 + toeval() * 0.45;
     const voetZwaai = Math.max(0, top.y - voetY) * 0.25 + (P.stam ? 0.25 : 0);
     bouwer.voegToe(blad, {
-      matrix: matrix(top.x, top.y, top.z, -opwaarts, draai, (toeval() - 0.5) * 0.35),
+      matrix: matrix(top.x, top.y, top.z, -opwaarts, draai, rol),
       zwaai: (p, eigen) => voetZwaai + eigen * 0.9,
     });
   }

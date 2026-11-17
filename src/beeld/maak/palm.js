@@ -35,7 +35,8 @@ export function maakPalm(P, detail, toeval) {
   stam.dispose();
 
   // De bladkroon.
-  const nBlad = detail > 0 ? P.bladeren : detail === 0 ? P.bladeren - 1 : 6;
+  // Altijd evenveel bladeren in dezelfde houding: alleen de fijnheid verschilt met de afstand.
+  const nBlad = P.bladeren;
   const blad = maakBlad(
     {
       vorm: 'veer',

@@ -12,7 +12,7 @@ import { maakPlantMateriaal } from './wind.js';
 import { maakBladplant } from './maak/blad.js';
 import { maakBloemplant } from './maak/bloem.js';
 import { maakPalm } from './maak/palm.js';
-import { maakBoom, maakKruinbol } from './maak/boom.js';
+import { maakBoom } from './maak/boom.js';
 import { maakGras, maakRots } from './maak/klein.js';
 
 /**
@@ -26,7 +26,8 @@ export function maakWereldbeeld(scene, sim, K) {
   const begroeiing = sim.wereld.begroeiing;
   const flora = begroeiing.flora;
   const d = K.detail;
-  const verStraal = K.mist[1] + 8; // verder dan de mist hoeft niets getekend te worden
+  // Zo ver tekenen we bomen: net voor het einde van de mist zijn ze al bijna onzichtbaar (en groeien ze daar weg).
+  const verStraal = K.mist[1] - 10;
 
   // --- Terrein ---
   const grondMat = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -36,7 +37,8 @@ export function maakWereldbeeld(scene, sim, K) {
   scene.add(grof.mesh);
 
   // --- Plantsoorten ---
-  const toeval = maakWillekeur(flora.vormZaad).getal;
+  // Elke fijnheid van dezelfde soort krijgt een verse reeks met hetzelfde zaadje: zelfde vorm, andere fijnheid.
+  const toeval = (k) => maakWillekeur(flora.vormZaad + k).getal;
   const gewoon = { gloed: 0x0c160c };
   const bloemMat = { gloed: 0x2a1f24 };
   const rotsMat = { gloed: 0x000000 };
@@ -57,17 +59,17 @@ export function maakWereldbeeld(scene, sim, K) {
     naam: 'boom', bron: 'boom', laag: 'grote', filter: () => true, schaal: (p) => p.schaal, zak: 0.2,
     kleur: (p, c) => c.setRGB(0.9 + 0.1 * p.tint, 1, 0.92 + 0.08 * (1 - p.tint)),
     banden: [
-      { geo: maakBoom(FLORA.boom, flora.kruinKleuren, d, toeval), straal: K.dichtbij, mat: gewoon, schaduw: true },
-      { geo: maakBoom(FLORA.boom, flora.kruinKleuren, -1, toeval), straal: K.tegelStraal, mat: gewoon },
-      { geo: maakKruinbol(FLORA.boom, flora.kruinKleuren, d), straal: verStraal, mat: gewoon },
+      { geo: maakBoom(FLORA.boom, flora.kruinKleuren, d, toeval(1)), straal: K.dichtbij, mat: gewoon, schaduw: true },
+      { geo: maakBoom(FLORA.boom, flora.kruinKleuren, -1, toeval(1)), straal: K.middenStraal, mat: gewoon },
+      { geo: maakBoom(FLORA.boom, flora.kruinKleuren, -2, toeval(1)), straal: verStraal, mat: gewoon },
     ],
   });
   soorten.push({
     naam: 'palm', bron: 'palm', laag: 'grote', filter: () => true, schaal: (p) => p.schaal, zak: 0.1,
     kleur: (p, c) => c.setRGB(0.93 + 0.07 * p.tint, 1, 0.94),
     banden: [
-      { geo: maakPalm(FLORA.palm, d, toeval), straal: K.dichtbij, mat: gewoon, schaduw: true },
-      { geo: maakPalm(FLORA.palm, -1, toeval), straal: verStraal, mat: gewoon },
+      { geo: maakPalm(FLORA.palm, d, toeval(2)), straal: K.dichtbij, mat: gewoon, schaduw: true },
+      { geo: maakPalm(FLORA.palm, -1, toeval(2)), straal: verStraal, mat: gewoon },
     ],
   });
   soorten.push({
@@ -85,10 +87,10 @@ export function maakWereldbeeld(scene, sim, K) {
       kleur: (p, c) => c.setScalar(0.88 + 0.12 * p.tint),
       banden: d
         ? [
-            { geo: maakBladplant(P, 1, toeval), straal: K.dichtbijKlein, mat },
-            { geo: maakBladplant(P, 0, toeval), straal: K.struikStraal, mat },
+            { geo: maakBladplant(P, 1, toeval(10 + i)), straal: K.dichtbijKlein, mat },
+            { geo: maakBladplant(P, 0, toeval(10 + i)), straal: K.struikStraal, mat },
           ]
-        : [{ geo: maakBladplant(P, 0, toeval), straal: K.struikStraal, mat }],
+        : [{ geo: maakBladplant(P, 0, toeval(10 + i)), straal: K.struikStraal, mat }],
     });
   });
   flora.bloemen.forEach((gen, i) => {
@@ -268,13 +270,16 @@ export function maakWereldbeeld(scene, sim, K) {
             const a = afstand(tx, tz, x, z);
             if (a >= b.straal || a < binnen) continue;
             if (s.laag === 'kleine' && !(tegels.get(sleutel(tx, tz))?.stap >= 3)) continue;
-            // Buiten beeld (naast of achter de camera): overslaan.
+            // Buiten beeld (naast of achter de camera): overslaan. Gemeten vanaf de camera zelf.
             if (a > 12) {
-              const mx = (tx + 0.5) * T - x;
-              const mz = (tz + 0.5) * T - z;
+              const mx = (tx + 0.5) * T - camera.position.x;
+              const mz = (tz + 0.5) * T - camera.position.z;
               const l = Math.hypot(mx, mz);
-              const hoek = Math.acos(Math.min(1, Math.max(-1, (mx * voor.x + mz * voor.z) / l)));
-              if (hoek - Math.atan((T * 0.71) / l) > halfZicht) continue;
+              // Een tegel waar de camera (bijna) in staat, wordt altijd getekend.
+              if (l > T) {
+                const hoek = Math.acos(Math.min(1, Math.max(-1, (mx * voor.x + mz * voor.z) / l)));
+                if (hoek - Math.atan((T * 0.71) / l) > halfZicht) continue;
+              }
             }
             const data = instData(tegel(tx, tz), s);
             if (data.n === 0) continue;
@@ -374,7 +379,7 @@ export function maakWereldbeeld(scene, sim, K) {
       const hoek = Math.atan2(voor.x, voor.z);
       let dh = hoek - laatsteHoek;
       dh = Math.atan2(Math.sin(dh), Math.cos(dh));
-      if (Math.abs(dh) > 0.3) moetHerbouwen = true;
+      if (Math.abs(dh) > 0.2) moetHerbouwen = true;
       // En als je een paar meter verder bent (de afstandsbanden schuiven mee).
       if (Math.hypot(x - laatsteX, z - laatsteZ) > 4) moetHerbouwen = true;
       if (moetHerbouwen) {
