@@ -1,2 +1,2 @@
 // Gemaakt door tools/publiceer.py bij het online zetten.
-export const VERSIE = '26/11/18 22:26:53';
+export const VERSIE = '26/11/19 00:36:11';

@@ -12,6 +12,25 @@ const ACTIE_ICOON = `<svg viewBox="0 0 100 100" aria-hidden="true">
         fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
 </svg>`;
 
+const FLUIT_ICOON = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <path d="M28 80 C14 56 18 22 50 20 C82 22 86 56 72 80" fill="none" stroke="#fff" stroke-width="17" stroke-linecap="round"/>
+  <path d="M28 80 C14 56 18 22 50 20 C82 22 86 56 72 80" fill="none" stroke="#e0a21c" stroke-width="9" stroke-linecap="round"/>
+  ${[[24, 62], [24, 40], [50, 26], [76, 40], [76, 62]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.2" fill="#fff"/>`).join('')}
+</svg>`;
+
+// Wat de actieknop doet, met een eigen pictogram (GD 4: het pictogram wisselt naargelang de situatie).
+export const ACTIE_ICONEN = {
+  hand: ACTIE_ICOON,
+  opstappen: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M50 14 L74 40 H60 V58 H40 V40 H26 Z" fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M18 74 C30 62 70 62 82 74 L78 86 H22 Z" fill="#ffd84d" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+  </svg>`,
+  afstappen: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M18 30 C30 18 70 18 82 30 L78 42 H22 Z" fill="#ffd84d" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M50 88 L74 62 H60 V48 H40 V62 H26 Z" fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+  </svg>`,
+};
+
 /** Is dit vermoedelijk een toestel met aanraakscherm als hoofdbediening? */
 export function isTouchToestel() {
   return matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 && !matchMedia('(pointer: fine)').matches;
@@ -29,10 +48,12 @@ export function maakTouch(vlak, ui, camera) {
   laag.style.setProperty('--actie', `${T.actieKnop}vh`);
   laag.style.setProperty('--rand', `${T.randAfstand}vh`);
   laag.style.setProperty('--stick', `${T.joystickStraal}vh`);
+  laag.style.setProperty('--fluit', `${T.fluitKnop}vh`);
   laag.innerHTML = `
     <div class="joystick"><div class="knop-stick"></div></div>
     <button class="touchknop springknop" aria-label="springen">${SPRING_ICOON}</button>
-    <button class="touchknop actieknop" aria-label="actie">${ACTIE_ICOON}</button>`;
+    <button class="touchknop actieknop" aria-label="actie">${ACTIE_ICOON}</button>
+    <button class="touchknop fluitknop" aria-label="pony fluiten">${FLUIT_ICOON}</button>`;
   ui.appendChild(laag);
 
   const stick = /** @type {HTMLElement} */ (laag.querySelector('.joystick'));
@@ -132,7 +153,10 @@ export function maakTouch(vlak, ui, camera) {
     };
   }
   const leesSpring = maakKnop(/** @type {HTMLElement} */ (laag.querySelector('.springknop')));
-  const leesActie = maakKnop(/** @type {HTMLElement} */ (laag.querySelector('.actieknop')));
+  const actieKnop = /** @type {HTMLElement} */ (laag.querySelector('.actieknop'));
+  const leesActie = maakKnop(actieKnop);
+  const leesFluit = maakKnop(/** @type {HTMLElement} */ (laag.querySelector('.fluitknop')));
+  let actieSoort = 'hand';
 
   // Lang drukken mag geen menu of selectie openen.
   vlak.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -150,7 +174,15 @@ export function maakTouch(vlak, ui, camera) {
   return {
     /** Beweging ten opzichte van de camera: x = rechts, y = vooruit, lengte 0..1. */
     lees() {
-      return { beweeg: [beweeg[0], beweeg[1]], spring: leesSpring(), actie: leesActie() };
+      return { beweeg: [beweeg[0], beweeg[1]], spring: leesSpring(), actie: leesActie(), fluit: leesFluit() };
+    },
+    /** Zet het pictogram van de actieknop ('hand', 'opstappen', 'afstappen'); wenkt als er iets te doen is. */
+    zetActie(soort) {
+      const s = soort ?? 'hand';
+      if (s === actieSoort) return;
+      actieSoort = s;
+      actieKnop.innerHTML = ACTIE_ICONEN[s];
+      actieKnop.classList.toggle('wenkt', s !== 'hand');
     },
   };
 }

@@ -1,11 +1,12 @@
-// De grond onder je voeten: het terrein, met de rotsen erop (TP 6). Een rots is een afgeplatte bol,
+// De grond onder je voeten: het terrein, met de rotsen en de hindernissen van de springweide erop (TP 6). Een rots is een afgeplatte bol,
 // dezelfde vorm als het beeld tekent (beeld/maak/klein.js maakRots), zonder de kleine bulten.
 
 /**
  * @param {{ hoogteOp(x:number, z:number): number, tegelGrootte: number }} raster
  * @param {(tx:number, tz:number) => { x:number, y:number, z:number, maat:number, cos:number, sin:number }[]} rotsen
+ * @param {(x:number, z:number) => number} [hindernisOp] bovenkant van de hindernissen in de springweide
  */
-export function maakGrond(raster, rotsen) {
+export function maakGrond(raster, rotsen, hindernisOp = () => -Infinity) {
   const T = raster.tegelGrootte;
 
   /** Hoogte van de rotsen op (x, z), of -Infinity als er geen rots ligt. */
@@ -37,8 +38,12 @@ export function maakGrond(raster, rotsen) {
 
   return {
     rotsOp,
-    /** De hoogte waarop je staat: terrein of rots, wat het hoogste is. */
+    /** De hoogte waarop je staat: terrein, rots of hindernis, wat het hoogste is. */
     grondOp(x, z) {
+      return Math.max(raster.hoogteOp(x, z), rotsOp(x, z), hindernisOp(x, z));
+    },
+    /** Terrein en rotsen, zonder de hindernissen (de pony springt erover in plaats van erop te staan). */
+    terreinOp(x, z) {
       return Math.max(raster.hoogteOp(x, z), rotsOp(x, z));
     },
   };

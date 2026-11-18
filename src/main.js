@@ -35,6 +35,14 @@ import { maakWereldbeeld } from './beeld/wereldbeeld.js';
 import { maakGrens } from './beeld/grens.js';
 import { WIND } from './beeld/wind.js';
 import { maakDebugscherm } from './ui/debug.js';
+import { PONY } from './data/dieren.js';
+import { RIJDEN } from './data/rijden.js';
+import { WEIDE } from './data/springweide.js';
+import { maakPony as maakPonyVorm } from './beeld/maak/pony.js';
+import { aanBot } from './beeld/maak/viervoeter.js';
+import { maakDierAnimatie } from './beeld/dierAnimatie.js';
+import { maakWeidebeeld } from './beeld/springweide.js';
+import { maakBloeispoor } from './beeld/bloeispoor.js';
 
 const K = KWALITEIT[INSTELLINGEN.kwaliteit];
 
@@ -110,8 +118,8 @@ function ondergrond(s) {
   const z = s.pos[2];
   if (sim.wereld.rotsOp(x, z) > raster.hoogteOp(x, z) + 0.03) return 'rots';
   sim.wereld.vorm.bodem(x, z, bodem);
-  if (bodem.h < 0.05) return 'water';
-  return bodem.zand > 0.5 ? 'zand' : 'gras';
+  if (bodem.h < 0.05 || sim.wereld.weide.water(x, z) > bodem.h) return 'water';
+  return bodem.zand > 0.5 || bodem.pad > 0.5 ? 'zand' : 'gras';
 }
 const animatie = maakAnimatie(avonturier, {
   onStap() {
@@ -127,6 +135,56 @@ if (K.schaduw) {
   figuur.traverse((o) => (o.castShadow = true));
   schaduw.visible = false; // de echte schaduw neemt het over
 }
+
+// --- De springweide en het bloeispoor ---
+const weidebeeld = maakWeidebeeld(sim.wereld.weide, K.detail);
+weidebeeld.vast.castShadow = K.schaduw;
+weidebeeld.vast.receiveShadow = K.schaduw;
+scene.add(weidebeeld.groep);
+const bloeispoor = maakBloeispoor(K.detail ? 1600 : 700, K.detail);
+scene.add(bloeispoor.mesh);
+
+// --- De pony ---
+const ponyVorm = maakPonyVorm(PONY);
+const ponyHouder = new THREE.Group();
+ponyHouder.scale.setScalar(RIJDEN.ponySchaal);
+ponyHouder.add(ponyVorm.groep);
+const ponySchaduw = new THREE.Mesh(
+  new THREE.CircleGeometry(1, 28).rotateX(-Math.PI / 2),
+  new THREE.MeshBasicMaterial({ color: 0x3b2a5a, transparent: true, opacity: 0.22, depthWrite: false })
+);
+ponySchaduw.renderOrder = 2;
+scene.add(ponyHouder, ponySchaduw);
+if (K.schaduw) {
+  ponyVorm.groep.traverse((o) => (o.castShadow = true));
+  ponySchaduw.visible = false;
+}
+// Het zadelpunt: hier zit de avonturier, het beweegt mee met de rug van de pony.
+const zadel = new THREE.Object3D();
+zadel.position.set(...RIJDEN.zadel);
+aanBot(ponyVorm.bot.lijf, new THREE.Vector3(0, ponyVorm.rugY, 0), zadel);
+/** Waar staan de hoeven op? */
+function ponyOndergrond(p) {
+  if (p.diepte > 0.05) return 'water';
+  const x = p.pos[0];
+  const z = p.pos[2];
+  if (sim.wereld.rotsOp(x, z) > raster.hoogteOp(x, z) + 0.03) return 'rots';
+  sim.wereld.vorm.bodem(x, z, bodem);
+  return bodem.zand > 0.5 || bodem.pad > 0.5 ? 'zand' : 'gras';
+}
+const ponyAnim = maakDierAnimatie(ponyVorm, 1, {
+  opHoef() {
+    const p = sim.pony(LOKAAL);
+    geluid.hoef(ponyOndergrond(p), Math.min(1, Math.abs(p.snelheid) / RIJDEN.galop));
+  },
+});
+// Op- en afstappen: een sprongetje van de grond naar het zadel (of terug).
+let rijOvergang = null;
+let juichTijd = 0;
+let aaiTijd = 0;
+const zadelPos = new THREE.Vector3();
+const zadelDraai = new THREE.Quaternion();
+const ponyPos = new THREE.Vector3();
 
 // Een grote hibiscus als herkenningspunt op de open plek, op een gebogen steel (kinderwens uit stap 1).
 const H = SCENE.hibiscus;
@@ -187,7 +245,31 @@ const toetsenbord = maakToetsenbord();
 const uiLaag = /** @type {HTMLElement} */ (document.getElementById('ui'));
 const touch = maakTouch(canvas, uiLaag, volgcamera);
 maakScherm(uiLaag, { touch: isTouchToestel() });
-const hud = maakHud(uiLaag);
+const hud = maakHud(uiLaag, WEIDE.hindernissen.map((h) => h.soort));
+
+// Tik (of klik) op de pony: aaien.
+let aaiWacht = false;
+const tikken = new Map();
+const straal = new THREE.Ray();
+const ponyMidden = new THREE.Vector3();
+canvas.addEventListener('pointerdown', (e) => tikken.set(e.pointerId, { x: e.clientX, y: e.clientY, t: performance.now() }));
+canvas.addEventListener('pointerup', (e) => {
+  const t = tikken.get(e.pointerId);
+  tikken.delete(e.pointerId);
+  if (!t || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 12 || performance.now() - t.t > 450) return;
+  // Een straal vanuit de camera door de tik: raakt hij het lijf of het hoofd van de pony?
+  const ndc = new THREE.Vector3((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1, 0.5).unproject(camera);
+  straal.origin.copy(camera.position);
+  straal.direction.copy(ndc).sub(camera.position).normalize();
+  const s = RIJDEN.ponySchaal;
+  for (const [hoogte, voor, r] of [[0.65, 0, 0.62], [1.1, 0.6, 0.38]]) {
+    ponyMidden.set(Math.sin(ponyHouder.rotation.y) * voor * s, hoogte * s, Math.cos(ponyHouder.rotation.y) * voor * s).add(ponyHouder.position);
+    if (straal.distanceToPoint(ponyMidden) < r * s && camera.position.distanceTo(ponyMidden) < 30) {
+      aaiWacht = true;
+      return;
+    }
+  }
+});
 if (!isTouchToestel()) maakToetshulp(uiLaag);
 
 let pixel = 1;
@@ -214,6 +296,108 @@ const debug = maakDebugscherm(uiLaag, INSTELLINGEN.debug);
   renderer.compile(scene, camera);
 }
 
+/** Beeld en geluid bij wat de pony doet. Geeft true als de gebeurtenis van de pony was. */
+function ponyGebeurtenis(g) {
+  const p = sim.pony(LOKAAL);
+  const kop = () => {
+    const s = RIJDEN.ponySchaal;
+    return [p.pos[0] + Math.sin(p.richting) * 0.6 * s, p.pos[1] + 1.4 * s, p.pos[2] + Math.cos(p.richting) * 0.6 * s];
+  };
+  switch (g.soort) {
+    case 'fluit':
+      geluid.fluit();
+      return true;
+    case 'ponyErBij':
+      ponyAnim.blij();
+      geluid.hinnik(true);
+      return true;
+    case 'ponyWeg':
+      deeltjes.blaadjes(g.pos[0], g.pos[1], g.pos[2], 20, [0x6fd35e, 0x9be37a, 0xff8cc6], 0.7);
+      return true;
+    case 'ponyVerschijnt':
+      deeltjes.blaadjes(g.pos[0], g.pos[1], g.pos[2], 24, [0x6fd35e, 0x9be37a, 0xff8cc6], 0.8);
+      geluid.hinnik();
+      return true;
+    case 'opstappen':
+    case 'afstappen':
+      rijOvergang = { t: 0, duur: 0.38, op: g.soort === 'opstappen', van: figuur.position.clone(), draai: figuur.quaternion.clone() };
+      if (g.soort === 'opstappen') geluid.opstappen();
+      else geluid.landing(2);
+      return true;
+    case 'ponySprong':
+      geluid.ponySprong();
+      return true;
+    case 'ponyLanding':
+      ponyAnim.land(g.snelheid / 7);
+      animatie.land(Math.min(0.5, g.snelheid / 14));
+      if (g.nat) {
+        deeltjes.spetters(g.pos[0], g.pos[2], 1.3, g.pos[1]);
+        geluid.plons(3);
+      } else {
+        deeltjes.stof(g.pos[0], g.pos[1], g.pos[2], EFFECTEN.stof);
+        geluid.ponyLanding(g.snelheid, ponyOndergrond(p));
+      }
+      return true;
+    case 'perfect': {
+      deeltjes.bloemenregen(g.pos[0], g.pos[1], g.pos[2]);
+      const [hx, hy, hz] = kop();
+      deeltjes.hartjes(hx, hy, hz, 4);
+      geluid.perfect();
+      ponyAnim.blij();
+      juichTijd = 1.1;
+      return true;
+    }
+    case 'weigeren':
+      ponyAnim.schud();
+      geluid.weigeren();
+      return true;
+    case 'ponyTik':
+      geluid.tik();
+      return true;
+    case 'ponyPlons':
+      deeltjes.spetters(g.pos[0], g.pos[2], g.sterkte * 0.6, g.pos[1]);
+      return true;
+    case 'spoor':
+      bloeispoor.voegToe(g.pos[0], g.pos[1], g.pos[2], g.keuze, g.draai);
+      return true;
+    case 'wortel':
+      weidebeeld.pak(g.id);
+      deeltjes.glinsters(g.pos[0], g.pos[1] + 0.3, g.pos[2], WEIDE.kleuren.wortel, 12);
+      geluid.knabbel();
+      hud.wortel();
+      return true;
+    case 'aai': {
+      ponyAnim.blij();
+      const [hx, hy, hz] = kop();
+      deeltjes.hartjes(hx, hy, hz, 5);
+      geluid.aai();
+      if (g.rijdend) aaiTijd = 1.2;
+      return true;
+    }
+    case 'rondeStart':
+      hud.rondeStart();
+      return true;
+    case 'rondeHindernis':
+      hud.hindernis(g.groep, g.perfect);
+      geluid.hindernisTel(g.gedaan);
+      return true;
+    case 'rondeKlaar': {
+      hud.rondeKlaar(g.tijd, g.perfect, g.record);
+      geluid.rondeKlaar(g.record);
+      const [hx, hy, hz] = kop();
+      deeltjes.bloemenregen(hx, hy + 0.5, hz, 90);
+      deeltjes.hartjes(hx, hy, hz, 6);
+      return true;
+    }
+    case 'rondeStop':
+      hud.rondeStop();
+      return true;
+    case 'hindernis':
+      return true;
+  }
+  return false;
+}
+
 // --- Spellus ---
 /** Intentie die window.spel kan opleggen (voor tests); anders null. */
 let opgelegd = null;
@@ -226,10 +410,14 @@ const lus = maakSpellus({
   stap(dt) {
     // Beide altijd lezen, zodat een korte tik op een touchknop nooit verloren gaat.
     const invoer = voegSamen(toetsenbord.lees(), touch.lees());
-    const intentie = opgelegd ?? naarIntentie(invoer, volgcamera.hoek);
+    const intentie = { ...(opgelegd ?? naarIntentie(invoer, volgcamera.hoek)) };
+    if (aaiWacht) intentie.aai = true;
+    aaiWacht = false;
     sim.stap({ [LOKAAL]: intentie }, dt);
     for (const g of sim.neemGebeurtenissen()) {
+      if (g.soort === 'wortelTerug') weidebeeld.terug(g.id);
       if (g.speler !== LOKAAL) continue;
+      if (ponyGebeurtenis(g)) continue;
       if (g.soort === 'landing') {
         animatie.land(g.snelheid / 12);
         if (g.snelheid > 2) geluid.landing(g.snelheid);
@@ -271,12 +459,76 @@ const lus = maakSpellus({
     figuur.position.copy(tekenpos);
     figuur.rotation.y = s.vorigeRichting + dr * overgang;
 
-    animatie.werkBij(s, dt, LOPEN.rensnelheid);
+    // --- De pony ---
+    const p = sim.pony(LOKAAL);
+    const rijdt = s.modus === 'rijden';
+    ponyPos.set(
+      p.vorigePos[0] + (p.pos[0] - p.vorigePos[0]) * overgang,
+      p.vorigePos[1] + (p.pos[1] - p.vorigePos[1]) * overgang,
+      p.vorigePos[2] + (p.pos[2] - p.vorigePos[2]) * overgang
+    );
+    let pr = p.richting - p.vorigeRichting;
+    pr = Math.atan2(Math.sin(pr), Math.cos(pr));
+    ponyHouder.position.copy(ponyPos);
+    ponyHouder.rotation.y = p.vorigeRichting + pr * overgang;
+    ponyAnim.werkBij(dt, p.gang, rijdt ? undefined : camera, {
+      snelheid: Math.abs(p.snelheid) / RIJDEN.ponySchaal,
+      lucht: !p.opGrond,
+      vy: p.vel[1],
+      graast: p.graast,
+      achteruit: p.gang === 'terug',
+    });
+    {
+      const pg = sim.wereld.terreinOp(ponyPos.x, ponyPos.z);
+      const s0 = RIJDEN.ponySchaal * THREE.MathUtils.clamp(1 - (ponyPos.y - pg) / 4, 0.5, 1);
+      ponySchaduw.visible = !K.schaduw && p.diepte < 0.3;
+      ponySchaduw.position.set(ponyPos.x, pg + 0.03, ponyPos.z);
+      ponySchaduw.rotation.y = ponyHouder.rotation.y;
+      ponySchaduw.scale.set(0.4 * s0, 1, 0.78 * s0);
+    }
+    ponyHouder.updateMatrixWorld(true);
+    zadel.getWorldPosition(zadelPos);
+    zadel.getWorldQuaternion(zadelDraai);
+
+    // De avonturier op de pony, of in een sprongetje op of af.
+    if (rijOvergang) {
+      rijOvergang.t += dt;
+      const f = Math.min(1, rijOvergang.t / rijOvergang.duur);
+      const e = f * f * (3 - 2 * f);
+      if (rijOvergang.op) {
+        figuur.position.lerpVectors(rijOvergang.van, zadelPos, e);
+        figuur.quaternion.slerpQuaternions(rijOvergang.draai, zadelDraai, e);
+      } else {
+        const doel = figuur.quaternion.clone();
+        figuur.position.lerpVectors(rijOvergang.van, tekenpos, e);
+        figuur.quaternion.slerpQuaternions(rijOvergang.draai, doel, e);
+      }
+      figuur.position.y += Math.sin(f * Math.PI) * 0.55;
+      if (f >= 1) rijOvergang = null;
+    } else if (rijdt) {
+      figuur.position.copy(zadelPos);
+      figuur.quaternion.copy(zadelDraai);
+    }
+    animatie.werkBij(s, dt, LOPEN.rensnelheid, rijdt
+      ? { gang: p.gang, lucht: !p.opGrond, vy: p.vel[1], weigert: p.weigert > 0, juich: juichTijd, aai: aaiTijd }
+      : undefined);
+    juichTijd = Math.max(0, juichTijd - dt);
+    aaiTijd = Math.max(0, aaiTijd - dt);
+    weidebeeld.werkBij(tijd, dt);
+    bloeispoor.werkBij(dt);
+
+    // HUD: galopmeter, ronde, en wat de actieknop nu doet.
+    hud.galop(rijdt, p.galop, p.galoppeert);
+    if (s.ronde?.bezig) hud.rondeTijd(sim.tik / 60 - s.ronde.start);
+    hud.werkBij();
+    const wat = sim.actieVoor(LOKAAL);
+    hud.actie(wat === 'afstappen' && Math.abs(p.snelheid) > 1.5 ? null : wat);
+    touch.zetActie(wat ?? 'hand');
 
     const grond = sim.wereld.grondOp(tekenpos.x, tekenpos.z);
     // In het water: geen schaduw op de bodem, wel kringetjes rond het lijfje.
     const zwemt = s.modus === 'zwemmen';
-    schaduw.visible = !K.schaduw && !zwemt && grond > -0.3;
+    schaduw.visible = !K.schaduw && !zwemt && grond > -0.3 && !rijdt && !rijOvergang;
     if (zwemt) {
       kringTijd -= dt * (0.6 + Math.hypot(s.vel[0], s.vel[2]) * 0.4);
       if (kringTijd <= 0) {
@@ -297,7 +549,7 @@ const lus = maakSpellus({
     schaduw.position.set(tekenpos.x, grond + 0.03, tekenpos.z);
     schaduw.scale.setScalar(THREE.MathUtils.clamp(1 - (tekenpos.y - grond) / 6, 0.4, 1));
 
-    volgcamera.volg(tekenpos, s.vel[0], s.vel[2], LOPEN.rensnelheid, dt);
+    volgcamera.volg(tekenpos, s.vel[0], s.vel[2], rijdt ? RIJDEN.galop : LOPEN.rensnelheid, dt, rijdt);
 
     // De wereld rond de speler, en alles wat met de camera meeschuift.
     wereldbeeld.werkBij(tekenpos.x, tekenpos.z, camera);
@@ -330,7 +582,9 @@ const lus = maakSpellus({
 ` +
         `planten        ${w.instanties.toLocaleString('nl-BE')}
 ` +
-        `plek           ${tekenpos.x.toFixed(0)}, ${tekenpos.z.toFixed(0)}`
+        `plek           ${tekenpos.x.toFixed(0)}, ${tekenpos.z.toFixed(0)}
+` +
+        `pony           ${p.gang} ${Math.abs(p.snelheid).toFixed(1)} m/s · bloeispoor ${bloeispoor.aantal}`
       );
     });
   },
@@ -354,6 +608,7 @@ window.spel = {
   renderer,
   scene,
   camera: volgcamera,
+  kijker: camera, // de Three.js-camera zelf (om bv. een plek op het scherm te berekenen)
   deeltjes,
   geluid,
   get speler() {
@@ -362,6 +617,7 @@ window.spel = {
   /** Zet de speler op (x, z), op de grond. */
   zet(x, z) {
     const s = sim.speler(LOKAAL);
+    sim.rijd(LOKAAL, false);
     const y = sim.wereld.grondOp(x, z);
     s.klimt = null;
     s.pos = [x, y, z];
@@ -396,8 +652,32 @@ window.spel = {
       lus.tik(handTijd);
     }
   },
+  get pony() {
+    return sim.pony(LOKAAL);
+  },
+  /** Zet de pony op (x, z) met kijkrichting `richting` (radialen). */
+  zetPony(x, z, richting = 0) {
+    sim.zetPony(LOKAAL, x, z, richting);
+  },
+  /** Meteen op de pony (true) of eraf (false). */
+  rijd(aan = true) {
+    sim.rijd(LOKAAL, aan);
+  },
+  /** Zet pony en speler vlak voor de bloemenboog van de springweide, klaar om een ronde te rijden. */
+  naarWeide(opPony = true) {
+    const W = sim.wereld.weide;
+    const p = W.baanPunt(WEIDE.start - 7);
+    const [x, z] = W.naarWereld(p.u, p.v);
+    const r = Math.atan2(W.su * p.tu, p.tv);
+    this.zet(x - Math.cos(r) * 1.6, z + Math.sin(r) * 1.6);
+    sim.speler(LOKAAL).richting = r;
+    sim.zetPony(LOKAAL, x, z, r);
+    if (opPony) sim.rijd(LOKAAL, true);
+    volgcamera.zet(r + Math.PI, CAMERA.kanteling);
+  },
+  bloeispoor,
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */
@@ -412,3 +692,10 @@ window.spel = {
     return rij.sort((a, b) => b.driehoeken - a.driehoeken);
   },
 };
+
+// Snelkoppeling ?plek=weide: meteen bij de springweide beginnen, naast de pony (TP 9).
+if (INSTELLINGEN.plek === 'weide') {
+  window.spel.naarWeide(false);
+  const s = sim.speler(LOKAAL);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}

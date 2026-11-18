@@ -1,9 +1,12 @@
-// Afsteltabel voor kleine effecten: plof, spetters, kringen.
+// Afsteltabel voor kleine effecten: plof, spetters, kringen, hartjes en de bloemenregen.
 
 export const EFFECTEN = {
-  maxDeeltjes: 320,
+  maxDeeltjes: 520,
   maxKringen: 8,
   plof: { aantal: 36, kleuren: [0xff8cc6, 0xffc2dc, 0xffffff, 0xffe14d, 0xff5fa2] },
   plons: { aantal: 18, kleur: 0xbfefff },
   zwemKring: 0.55,   // om de hoeveel seconden een kringetje bij het zwemmen
+  hartjes: { kleuren: [0xff4f8b, 0xff7fb0, 0xff6f9f] },
+  bloemenregen: { aantal: 70, straal: 1.8, kleuren: [0xff6fae, 0xffd84d, 0xffffff, 0xb98bff, 0xff9f5a, 0x7fd8ff] },
+  stof: 0xf3d49a,    // stofwolkje van de zandbaan bij het neerkomen
 };

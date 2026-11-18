@@ -18,6 +18,7 @@ export function maakVolgcamera(camera, sleepvlak, grondOp, vrijeAfstand) {
   let eersteKeer = true;
   let afstand = C.afstand; // korter als er een boom tussen zit
   const gewenst = new THREE.Vector3();
+  let rij = 0; // 0 = te voet, 1 = op de pony (verder weg en hoger, zodat je de pony helemaal ziet)
 
   /** Rondkijken: dx, dy in pixels. */
   function kijk(dx, dy, gevoeligheid) {
@@ -62,9 +63,14 @@ export function maakVolgcamera(camera, sleepvlak, grondOp, vrijeAfstand) {
      * @param {number} vZ horizontale snelheid z
      * @param {number} maxSnelheid
      * @param {number} dt
+     * @param {boolean} [rijdt] op de pony
      */
-    volg(figuur, vX, vZ, maxSnelheid, dt) {
+    volg(figuur, vX, vZ, maxSnelheid, dt, rijdt = false) {
       sindsSlepen += dt;
+      rij += ((rijdt ? 1 : 0) - rij) * (1 - Math.exp(-2.5 * dt));
+      const verAf = C.afstand + (C.rijden.afstand - C.afstand) * rij;
+      const hoogteDoel = C.hoogteDoel + (C.rijden.hoogteDoel - C.hoogteDoel) * rij;
+      const meedraaien = C.meedraaien + (C.rijden.meedraaien - C.meedraaien) * rij;
 
       // Rustig achter de looprichting draaien, maar niet als je naar de camera toe loopt.
       const snelheid = Math.hypot(vX, vZ);
@@ -72,31 +78,31 @@ export function maakVolgcamera(camera, sleepvlak, grondOp, vrijeAfstand) {
         const achter = Math.atan2(-vX, -vZ); // camerahoek recht achter de looprichting
         let verschil = Math.atan2(Math.sin(achter - hoek), Math.cos(achter - hoek));
         const naarCamera = Math.max(0, -Math.cos(verschil)); // 1 = recht naar de camera toe
-        const sterkte = C.meedraaien * Math.min(1, snelheid / maxSnelheid) * (1 - naarCamera);
+        const sterkte = meedraaien * Math.min(1, snelheid / maxSnelheid) * (1 - naarCamera);
         hoek += verschil * Math.min(1, sterkte * dt);
       }
 
       const t = 1 - Math.exp(-C.volgen * dt);
       const tv = 1 - Math.exp(-C.verticaalVolgen * dt);
       if (eersteKeer) {
-        doel.set(figuur.x, figuur.y + C.hoogteDoel, figuur.z);
+        doel.set(figuur.x, figuur.y + hoogteDoel, figuur.z);
         eersteKeer = false;
       } else {
         doel.x += (figuur.x - doel.x) * t;
         doel.z += (figuur.z - doel.z) * t;
-        doel.y += (figuur.y + C.hoogteDoel - doel.y) * tv;
+        doel.y += (figuur.y + hoogteDoel - doel.y) * tv;
       }
 
-      const horizontaal = Math.cos(kanteling) * C.afstand;
+      const horizontaal = Math.cos(kanteling) * verAf;
       gewenst.set(
         doel.x + Math.sin(hoek) * horizontaal,
-        doel.y + Math.sin(kanteling) * C.afstand,
+        doel.y + Math.sin(kanteling) * verAf,
         doel.z + Math.cos(hoek) * horizontaal
       );
       // Zit er een boom tussen, dan meteen dichterbij; daarna rustig terug naar achter.
-      const vrij = vrijeAfstand ? Math.max(C.minAfstand, vrijeAfstand(doel, gewenst)) : C.afstand;
+      const vrij = vrijeAfstand ? Math.max(C.minAfstand, vrijeAfstand(doel, gewenst)) : verAf;
       afstand = vrij < afstand ? vrij : afstand + (vrij - afstand) * (1 - Math.exp(-C.terugNaBoom * dt));
-      camera.position.copy(doel).lerp(gewenst, afstand / C.afstand);
+      camera.position.copy(doel).lerp(gewenst, Math.min(1, afstand / verAf));
       const grond = grondOp(camera.position.x, camera.position.z) + C.bovenGrond;
       if (camera.position.y < grond) camera.position.y = grond;
       camera.lookAt(doel);

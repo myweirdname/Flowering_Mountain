@@ -15,4 +15,6 @@ export const CAMERA = {
   beeldhoek: 55,
   minAfstand: 1.6,       // zo dicht komt de camera als er een boom tussen zit
   terugNaBoom: 3,        // hoe snel ze daarna terug naar achter schuift
+  // Op de pony: wat verder weg en hoger, en de camera draait sneller mee (een pony loopt niet opzij).
+  rijden: { afstand: 9.5, hoogteDoel: 1.7, meedraaien: 2.6 },
 };

@@ -7,7 +7,8 @@ export function maakToetshulp(ui) {
     '<span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> lopen</span>' +
     '<span><kbd>Shift</kbd> rennen</span>' +
     '<span><kbd>spatie</kbd> springen</span>' +
-    '<span><kbd>E</kbd> actie</span>' +
+    '<span><kbd>E</kbd> actie (op de pony)</span>' +
+    '<span><kbd>F</kbd> pony fluiten</span>' +
     '<span><kbd>M</kbd> geluid</span>' +
     '<span>muis slepen: rondkijken</span>';
   ui.appendChild(el);

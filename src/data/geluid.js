@@ -13,6 +13,22 @@ export const GELUID = {
   zwemslag: 0.12,
   plof: 0.3,
 
+  // De pony.
+  hoef: 0.11,
+  fluit: 0.12,
+  hinnik: 0.16,
+  snuif: 0.22,
+  ponySprong: 0.12,
+  ponyLanding: 0.3,
+  perfect: 0.16,
+  weigeren: 0.08,
+  knabbel: 0.2,
+  aai: 0.16,
+  opstappen: 0.12,
+  tik: 0.25,
+  tel: 0.18,
+  ronde: 0.2,
+
   branding: 0.22,
   golfPeriode: 6.5,     // seconden per golf
   insecten: 0.035,

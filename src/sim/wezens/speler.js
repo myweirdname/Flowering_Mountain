@@ -1,20 +1,22 @@
 // De toestand van een speler: gewone gegevens, zodat later meerdere spelers kunnen (TP 4).
 
 /**
- * @typedef {{ beweeg: [number, number], spring: boolean, actie: boolean }} Intentie
+ * @typedef {{ beweeg: [number, number], spring: boolean, actie: boolean, fluit?: boolean, aai?: boolean }} Intentie
  * `beweeg` is een richting op de grond in wereldcoördinaten [x, z], lengte 0..1.
+ * `fluit` roept de pony; `aai` aait de pony (één stap lang, na een tik op de pony).
  */
 
 /** @returns {Intentie} */
 export function legeIntentie() {
-  return { beweeg: [0, 0], spring: false, actie: false };
+  return { beweeg: [0, 0], spring: false, actie: false, fluit: false, aai: false };
 }
 
 /** @typedef {ReturnType<typeof maakSpeler>} Speler */
 export function maakSpeler(id, x, y, z) {
   return {
     id,
-    modus: 'lopen',
+    modus: 'lopen',       // 'lopen' | 'zwemmen' | 'rijden'
+    rijdt: null,          // id van de pony waar je op zit
     pos: [x, y, z],
     vorigePos: [x, y, z], // stand bij de vorige stap, voor vloeiend tekenen
     vel: [0, 0, 0],
@@ -33,5 +35,9 @@ export function maakSpeler(id, x, y, z) {
     bloesems: 0,          // verzamelde bloesems
     bloesemReeks: 0,      // hoeveel kort na elkaar (voor de stijgende klank)
     sindsBloesem: 99,
+    actieVorige: false,
+    fluitVorige: false,
+    /** @type {any} */
+    ronde: null,          // rondetijd in de springweide (sim/modi/ronde.js)
   };
 }

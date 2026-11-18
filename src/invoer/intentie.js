@@ -1,7 +1,7 @@
 // Zet invoer ten opzichte van de camera om in een intentie in wereldrichting.
 
 /**
- * @param {{ beweeg: [number, number], spring: boolean, actie: boolean }} invoer x = rechts, y = vooruit
+ * @param {{ beweeg: [number, number], spring: boolean, actie: boolean, fluit?: boolean }} invoer x = rechts, y = vooruit
  * @param {number} cameraHoek draaihoek van de camera rond de verticale as
  * @returns {import('../sim/wezens/speler.js').Intentie}
  */
@@ -16,12 +16,14 @@ export function naarIntentie(invoer, cameraHoek) {
     beweeg: [rx * x + vx * y, rz * x + vz * y],
     spring: invoer.spring,
     actie: invoer.actie,
+    fluit: !!invoer.fluit,
+    aai: false,
   };
 }
 
 /**
  * Voegt toetsenbord en touch samen: de grootste beweging wint, knoppen tellen als één van beide drukt.
- * @param {...{ beweeg: [number, number], spring: boolean, actie: boolean }} bronnen
+ * @param {...{ beweeg: [number, number], spring: boolean, actie: boolean, fluit?: boolean }} bronnen
  */
 export function voegSamen(...bronnen) {
   let beste = bronnen[0];
@@ -30,5 +32,6 @@ export function voegSamen(...bronnen) {
     beweeg: beste.beweeg,
     spring: bronnen.some((b) => b.spring),
     actie: bronnen.some((b) => b.actie),
+    fluit: bronnen.some((b) => b.fluit),
   };
 }

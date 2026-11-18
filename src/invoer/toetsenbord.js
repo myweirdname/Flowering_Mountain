@@ -1,5 +1,5 @@
 // Toetsenbord → intentie (TP 4, GD 4). De simulatie ziet nooit welke toets er werd ingedrukt.
-// WASD/pijltjes bewegen, Shift rent, spatie springt, E is de actieknop.
+// WASD/pijltjes bewegen, Shift rent (of galop op de pony), spatie springt, E is de actieknop, F fluit de pony.
 
 const LINKS = ['KeyA', 'ArrowLeft'];
 const RECHTS = ['KeyD', 'ArrowRight'];
@@ -7,6 +7,7 @@ const VOORUIT = ['KeyW', 'ArrowUp'];
 const ACHTERUIT = ['KeyS', 'ArrowDown'];
 const SPRING = ['Space'];
 const ACTIE = ['KeyE'];
+const FLUIT = ['KeyF'];
 const REN = ['ShiftLeft', 'ShiftRight'];
 const SPELTOETSEN = new Set([...LINKS, ...RECHTS, ...VOORUIT, ...ACHTERUIT, ...SPRING]);
 
@@ -37,7 +38,7 @@ export function maakToetsenbord(doel = window) {
         x = (x / l) * kracht;
         y = (y / l) * kracht;
       }
-      return { beweeg: [x, y], spring: iets(SPRING), actie: iets(ACTIE) };
+      return { beweeg: [x, y], spring: iets(SPRING), actie: iets(ACTIE), fluit: iets(FLUIT) };
     },
   };
 }

@@ -273,5 +273,234 @@ export function maakGeluid() {
       toon(t + 0.25, { freq: G.toonladder[2] * 2, piek: G.plof * 0.4, verval: 0.4 });
       toon(t + 0.33, { freq: G.toonladder[4] * 2, piek: G.plof * 0.4, verval: 0.5 });
     },
+
+    // --- De pony (GD 16) ---
+
+    /** Eén hoefslag op gras, zand, rots of in het water. sterkte 0..1 (stap zacht, galop luid). */
+    hoef(ondergrond, sterkte) {
+      const t = plek(0.15);
+      if (t < 0) return;
+      const v = G.hoef * (0.55 + sterkte * 0.6);
+      const pan = Math.random() * 0.3 - 0.15;
+      if (ondergrond === 'water') {
+        ruisStoot(t, { freq: 1100, freqEind: 500, q: 1.4, piek: v * 1.1, aanslag: 0.008, verval: 0.16, pan });
+        return;
+      }
+      // Een doffe klop, met wat ruis erbovenop: gras is zacht, zand ruist, rots klikt.
+      toon(t, { vorm: 'triangle', freq: 150 + Math.random() * 30, freqEind: 75, piek: v, aanslag: 0.003, verval: 0.07, pan });
+      if (ondergrond === 'zand') ruisStoot(t, { soort: 'lowpass', freq: 1300, freqEind: 400, piek: v * 0.7, aanslag: 0.005, verval: 0.08, pan });
+      else if (ondergrond === 'rots') ruisStoot(t, { soort: 'highpass', freq: 2200, piek: v * 0.45, verval: 0.025, pan });
+      else ruisStoot(t, { freq: 700, freqEind: 350, q: 0.9, piek: v * 0.55, aanslag: 0.004, verval: 0.06, pan });
+    },
+
+    /** De avonturier fluit haar pony: twee vrolijke fluittonen. */
+    fluit() {
+      const t = plek(0.7);
+      if (t < 0) return;
+      const vib = (s, f0, f1, d) => {
+        const o = ctx.createOscillator();
+        o.type = 'sine';
+        o.frequency.setValueAtTime(f0, s);
+        o.frequency.exponentialRampToValueAtTime(f1, s + d * 0.8);
+        const lfo = ctx.createOscillator();
+        lfo.frequency.value = 7;
+        const diep = ctx.createGain();
+        diep.gain.value = 25;
+        lfo.connect(diep).connect(o.frequency);
+        const g = omhul(s, G.fluit, 0.03, d);
+        o.connect(g);
+        naarUit(g);
+        o.start(s);
+        lfo.start(s);
+        o.stop(s + d + 0.1);
+        lfo.stop(s + d + 0.1);
+      };
+      vib(t, 1500, 2150, 0.16);
+      vib(t + 0.22, 1350, 2000, 0.3);
+      ruisStoot(t, { soort: 'highpass', freq: 3500, piek: G.fluit * 0.12, aanslag: 0.02, verval: 0.45 });
+    },
+
+    /** Hinniken: een vrolijk, hoog gehinnik met een trilling (blij = korter en hoger). */
+    hinnik(blij = false) {
+      const t = plek(1.2);
+      if (t < 0) return;
+      const duur = blij ? 0.55 : 0.85;
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      const f0 = blij ? 1250 : 1100;
+      o.frequency.setValueAtTime(f0 * 0.85, t);
+      o.frequency.linearRampToValueAtTime(f0, t + 0.08);
+      o.frequency.exponentialRampToValueAtTime(f0 * 0.5, t + duur);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 11;
+      const diep = ctx.createGain();
+      diep.gain.value = 70;
+      lfo.connect(diep).connect(o.frequency);
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 1500;
+      f.Q.value = 1.6;
+      const zacht = ctx.createBiquadFilter();
+      zacht.type = 'lowpass';
+      zacht.frequency.value = 2600;
+      // Trilling in de luidheid: het typische "hihihi".
+      const trem = ctx.createGain();
+      trem.gain.value = 0.6;
+      const tl = ctx.createOscillator();
+      tl.frequency.value = 13;
+      const td = ctx.createGain();
+      td.gain.value = 0.4;
+      tl.connect(td).connect(trem.gain);
+      const g = omhul(t, G.hinnik, 0.04, duur);
+      o.connect(f).connect(zacht).connect(trem).connect(g);
+      naarUit(g);
+      for (const x of [o, lfo, tl]) {
+        x.start(t);
+        x.stop(t + duur + 0.1);
+      }
+      ruisStoot(t + duur * 0.6, { soort: 'bandpass', freq: 900, q: 1.5, piek: G.hinnik * 0.35, aanslag: 0.05, verval: 0.3 });
+    },
+
+    /** Snuiven: lippen die brrr doen. */
+    snuif() {
+      const t = plek(0.5);
+      if (t < 0) return;
+      const bron = ctx.createBufferSource();
+      bron.buffer = ruis;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.frequency.value = 650;
+      f.Q.value = 1.8;
+      const trem = ctx.createGain();
+      trem.gain.value = 0.5;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 26;
+      const ld = ctx.createGain();
+      ld.gain.value = 0.5;
+      lfo.connect(ld).connect(trem.gain);
+      const g = omhul(t, G.snuif, 0.02, 0.38);
+      bron.connect(f).connect(trem).connect(g);
+      naarUit(g);
+      bron.start(t, Math.random());
+      lfo.start(t);
+      bron.stop(t + 0.45);
+      lfo.stop(t + 0.45);
+      toon(t, { vorm: 'sawtooth', freq: 85, freqEind: 70, piek: G.snuif * 0.25, aanslag: 0.02, verval: 0.3 });
+    },
+
+    /** Afzet: een zwiep door de lucht. */
+    ponySprong() {
+      const t = plek(0.35);
+      if (t < 0) return;
+      ruisStoot(t, { freq: 500, freqEind: 1900, q: 1.2, piek: G.ponySprong, aanslag: 0.08, verval: 0.22 });
+      toon(t, { freq: 260, freqEind: 520, piek: G.ponySprong * 0.5, aanslag: 0.01, verval: 0.14 });
+    },
+
+    /** Neerkomen: eerst de voorhoeven, dan de achterhoeven. */
+    ponyLanding(sterkte, ondergrond) {
+      const t = plek(0.3);
+      if (t < 0) return;
+      const v = G.ponyLanding * Math.min(1, 0.5 + sterkte / 10);
+      for (const [d, s] of [[0, 1], [0.09, 0.8]]) {
+        toon(t + d, { vorm: 'triangle', freq: 120, freqEind: 60, piek: v * s, aanslag: 0.003, verval: 0.1 });
+        ruisStoot(t + d, { soort: 'lowpass', freq: ondergrond === 'zand' ? 1200 : 700, freqEind: 250, piek: v * s * 0.7, aanslag: 0.004, verval: 0.12 });
+      }
+    },
+
+    /** Een perfecte sprong: een fonkelend loopje omhoog. */
+    perfect() {
+      const t = plek(1.2);
+      if (t < 0) return;
+      const L = G.toonladder;
+      [L[0], L[2], L[3], L[4], L[0] * 2, L[2] * 2].forEach((f, i) => {
+        toon(t + i * 0.055, { freq: f, piek: G.perfect, aanslag: 0.004, verval: 0.5 });
+        toon(t + i * 0.055, { freq: f * 2.76, piek: G.perfect * 0.15, aanslag: 0.002, verval: 0.2 });
+      });
+      for (let k = 0; k < 6; k++) toon(t + 0.35 + Math.random() * 0.4, { freq: 3000 + Math.random() * 2500, piek: G.perfect * 0.18, verval: 0.12 });
+    },
+
+    /** Weigeren: snuiven en het schudden van de manen. */
+    weigeren() {
+      this.snuif();
+      const t = plek(0.8);
+      if (t < 0) return;
+      for (let k = 0; k < 4; k++) ruisStoot(t + 0.15 + k * 0.11, { soort: 'highpass', freq: 1800, piek: G.weigeren, aanslag: 0.01, verval: 0.07, pan: k % 2 ? 0.25 : -0.25 });
+    },
+
+    /** Knabbelen aan een wortel: krok krok krok. */
+    knabbel() {
+      const t = plek(0.6);
+      if (t < 0) return;
+      for (let k = 0; k < 4; k++) {
+        ruisStoot(t + k * 0.1, { freq: 2600, freqEind: 1400, q: 2.5, piek: G.knabbel, aanslag: 0.003, verval: 0.04 });
+        toon(t + k * 0.1, { vorm: 'triangle', freq: 520, freqEind: 300, piek: G.knabbel * 0.4, verval: 0.04 });
+      }
+      toon(t + 0.45, { freq: G.toonladder[3] * 2, piek: G.knabbel * 0.6, verval: 0.3 });
+    },
+
+    /** Aaien: een tevreden, zacht gegrinnik en een tinkeltje. */
+    aai() {
+      const t = plek(0.8);
+      if (t < 0) return;
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(240, t);
+      o.frequency.exponentialRampToValueAtTime(170, t + 0.45);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 9;
+      const ld = ctx.createGain();
+      ld.gain.value = 18;
+      lfo.connect(ld).connect(o.frequency);
+      const g = omhul(t, G.aai, 0.04, 0.45);
+      o.connect(g);
+      naarUit(g);
+      o.start(t);
+      lfo.start(t);
+      o.stop(t + 0.55);
+      lfo.stop(t + 0.55);
+      toon(t + 0.12, { freq: G.toonladder[4] * 2, piek: G.aai * 0.5, verval: 0.4 });
+      toon(t + 0.22, { freq: G.toonladder[2] * 4, piek: G.aai * 0.35, verval: 0.4 });
+    },
+
+    /** Opstappen: hupsakee, met een zacht kraakje van het zadeldekje. */
+    opstappen() {
+      const t = plek(0.4);
+      if (t < 0) return;
+      toon(t, { freq: 380, freqEind: 700, piek: G.opstappen, aanslag: 0.01, verval: 0.16 });
+      ruisStoot(t + 0.18, { freq: 380, q: 5, piek: G.opstappen * 0.6, aanslag: 0.02, verval: 0.12 });
+    },
+
+    /** Een tikje met de hoeven tegen een hindernis. */
+    tik() {
+      const t = plek(0.2);
+      if (t < 0) return;
+      toon(t, { vorm: 'triangle', freq: 520, freqEind: 330, piek: G.tik, aanslag: 0.002, verval: 0.06 });
+      ruisStoot(t, { soort: 'highpass', freq: 2500, piek: G.tik * 0.4, verval: 0.02 });
+    },
+
+    /** Een hindernis van de ronde is gesprongen: één klokje, hoger naargelang hoeveel er al gedaan zijn. */
+    hindernisTel(n) {
+      const t = plek(0.6);
+      if (t < 0) return;
+      const L = G.toonladder;
+      const f = L[n % L.length] * (n >= L.length ? 2 : 1);
+      toon(t, { freq: f, piek: G.tel, aanslag: 0.004, verval: 0.55 });
+      toon(t, { freq: f * 2.76, piek: G.tel * 0.15, aanslag: 0.002, verval: 0.2 });
+    },
+
+    /** Een ronde uitgereden: een klokjesloopje (met een extra zwier bij een nieuw record). */
+    rondeKlaar(record) {
+      const t = plek(1.8);
+      if (t < 0) return;
+      const L = G.toonladder;
+      const reeks = record ? [L[0], L[2], L[3], L[4], L[0] * 2, L[2] * 2, L[3] * 2] : [L[0], L[2], L[3], L[0] * 2];
+      reeks.forEach((f, i) => {
+        toon(t + i * 0.11, { freq: f, piek: G.ronde, aanslag: 0.005, verval: 0.7 });
+        toon(t + i * 0.11, { freq: f * 2, piek: G.ronde * 0.3, aanslag: 0.005, verval: 0.4 });
+      });
+      const eind = t + reeks.length * 0.11;
+      toon(eind, { freq: L[0] * 2, piek: G.ronde * 0.8, verval: 1.0 });
+      toon(eind, { freq: L[3] * 2, piek: G.ronde * 0.6, verval: 1.0 });
+    },
   };
 }

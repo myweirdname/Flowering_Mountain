@@ -12,6 +12,9 @@ export const BLOESEMS = {
   pakStraal: 0.75,     // zo dicht moet je erbij komen
   pakHoogte: 0.9,      // en zoveel hoogteverschil mag er zijn (springen om een hoge te pakken)
   reeksTijd: 2.5,      // snel na elkaar gepakt: elke klank een toon hoger
+  bovenHindernis: 2.1, // boven elke hindernis in de springweide zweeft er een, zo hoog
+  rijMidden: 1.25,     // op de pony zit je midden zo hoog boven haar hoeven
+  rijStraal: 1.1,      // en reik je zo ver
 
   // Hoe ze eruitzien.
   blaadjeKleur: 0xff7fbf,

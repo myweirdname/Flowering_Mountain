@@ -19,6 +19,19 @@ export const ANIMATIE = {
   pletten: 0.25,       // hoeveel het lijfje plet bij een landing
   rekken: 0.12,        // hoeveel het uitrekt tijdens het stijgen
 
+  // Op de pony.
+  rijden: {
+    beenX: -0.55,      // beentjes iets naar voren
+    beenWijd: 1.15,    // en wijd uit elkaar, over haar flanken
+    armX: -1.1,        // handjes vooruit, in de manen
+    armWijd: 0.28,
+    leunStap: 0.05,
+    leunDraf: 0.14,
+    leunGalop: 0.3,
+    leunSprong: 0.4,
+    hupDraf: 0.035,    // zo hoog hupt ze mee in draf (meter)
+  },
+
   knipperDuur: 0.13,
   knipperTussen: [1.8, 4.5], // seconden tussen twee keer knipperen
 };

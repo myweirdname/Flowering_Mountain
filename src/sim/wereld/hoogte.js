@@ -4,11 +4,14 @@
 // In stap 12 groeit dit uit tot het hele eiland; de vorm van de functie blijft dezelfde.
 import { maakWillekeur } from '../../kern/willekeur.js';
 import { lagenruis, waardenruis } from './ruis.js';
+import { maakWeide } from './springweide.js';
+import { WEIDE } from '../../data/springweide.js';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /**
- * @typedef {{ h:number, zand:number, kamp:number, pad:number, bos:number, lagune:number, d:number }} Bodem
+ * @typedef {{ h:number, zand:number, kamp:number, pad:number, bos:number, lagune:number, d:number,
+ *             weide:number, baan:number, nat:number }} Bodem
  */
 
 /**
@@ -52,6 +55,8 @@ export function maakWereldvorm(zaadje, W) {
   const kampH = ruw(W.kamp.x, W.kamp.z);
   const padX = (z) => W.kamp.x + W.pad.slinger * Math.sin(z * 0.09 + padFase);
   const geulX = (z) => lagX + 1.6 * Math.sin(z * 0.2 + geulFase);
+  // De springweide ligt aan de andere kant van het kamp dan de lagune.
+  const weide = maakWeide(WEIDE, { x: W.kamp.x, z: W.kamp.z, h: kampH }, kant, ruw);
 
   /**
    * Vult `uit` met de hoogte en de soort ondergrond op (x, z).
@@ -84,15 +89,22 @@ export function maakWereldvorm(zaadje, W) {
     if (z < lagZ && d > -4) gw = 1 - glad((Math.abs(x - geulX(z)) - L.geulBreedte * 0.5) / L.geulBreedte);
     h += (Math.min(h, -L.geulDiepte) - h) * gw;
 
-    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw);
+    // De springweide: vlak gemaakt, met de beek en de vijver erin gegraven.
+    const st = weide.stempel(x, z, h);
+    h = st.h;
+
+    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw) * (1 - st.weide);
     let zand = 1 - glad((d - S.breedte * 0.75) / 5);
-    zand = Math.max(zand, 1 - glad((dl - 1.08) / 0.3), gw);
+    zand = Math.max(zand, 1 - glad((dl - 1.08) / 0.3), gw, st.nat);
     if (uit.h < 0.3) zand = 1;
     uit.zand = zand;
     uit.kamp = kw * (1 - zand);
-    uit.pad = pw * (1 - zand);
+    uit.weide = st.weide * (1 - zand) * (1 - kw);
+    uit.baan = st.baan * (1 - zand);
+    uit.nat = st.nat;
+    uit.pad = Math.max(pw, st.pad, st.baan) * (1 - zand);
     uit.lagune = lw;
-    uit.bos = Math.max(0, 1 - zand - uit.kamp - uit.pad);
+    uit.bos = Math.max(0, 1 - zand - uit.kamp - uit.pad - uit.weide);
     uit.d = d;
     return uit;
   }
@@ -103,6 +115,7 @@ export function maakWereldvorm(zaadje, W) {
     hoogte: (x, z) => bodem(x, z, tijdelijk).h,
     kustZ,
     lagune: { x: lagX, z: lagZ, straal: lagR },
+    weide,
     kamp: { x: W.kamp.x, z: W.kamp.z, straal: W.kamp.straal, h: kampH },
   };
 }

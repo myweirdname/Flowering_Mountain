@@ -113,6 +113,21 @@ body.touch .toetshulp {
   background: radial-gradient(circle at 35% 30%, #b8f5e4, #5fd3b3 70%, #3bb594);
 }
 
+.fluitknop {
+  width: var(--fluit);
+  height: var(--fluit);
+  right: calc(var(--rand) + env(safe-area-inset-right));
+  bottom: calc(var(--rand) + var(--spring) + 4vh + env(safe-area-inset-bottom));
+  background: radial-gradient(circle at 35% 30%, #fff1b8, #ffcf4d 70%, #e8a91c);
+}
+.actieknop.wenkt {
+  animation: wenk 1.1s ease-in-out infinite;
+}
+@keyframes wenk {
+  0%, 100% { box-shadow: 0 1vh 0 rgba(0, 0, 0, 0.18), 0 0 0 0 rgba(255, 255, 255, 0.9); }
+  50% { box-shadow: 0 1vh 0 rgba(0, 0, 0, 0.18), 0 0 0 2.2vh rgba(255, 255, 255, 0); }
+}
+
 /* --- "Draai je toestel": alleen op touchtoestellen in staande stand --- */
 .draaischerm {
   display: none;
@@ -213,4 +228,203 @@ body.touch .toetshulp {
 @keyframes draai {
   from { transform: rotate(-72deg); }
   to { transform: rotate(0); }
+}
+
+/* --- Op de pony: galopmeter (een wortel met een balkje) --- */
+.galopmeter {
+  position: absolute;
+  top: calc(78px + env(safe-area-inset-top));
+  left: calc(14px + env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 46px;
+  padding: 0 14px 0 6px;
+  border-radius: 23px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 3px 10px rgba(200, 110, 30, 0.25);
+  opacity: 0;
+  transform: translateX(-20px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+.galopmeter.zichtbaar {
+  opacity: 1;
+  transform: none;
+}
+.galopmeter svg {
+  width: 38px;
+  height: 38px;
+}
+.galopmeter .balk {
+  width: 120px;
+  height: 16px;
+  border-radius: 8px;
+  background: #ffe6cf;
+  overflow: hidden;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.12);
+}
+.galopmeter .vulling {
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #ffb45e, #ff8a2a);
+  transition: width 0.15s;
+}
+.galopmeter.actief .vulling {
+  background: linear-gradient(90deg, #ffd84d, #ff8a2a, #ff6fae);
+  background-size: 200% 100%;
+  animation: glans 0.6s linear infinite;
+}
+@keyframes glans {
+  from { background-position: 0 0; }
+  to { background-position: 200% 0; }
+}
+.galopmeter.wip {
+  animation: wip 0.35s ease-out;
+}
+
+/* --- De ronde in de springweide: tijd en vijf hindernissen --- */
+.rondebalk {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  padding: 0 14px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 3px 10px rgba(194, 65, 122, 0.25);
+  color: #c2417a;
+  font: 800 26px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+  opacity: 0;
+  transform: translate(-50%, -20px);
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+}
+.rondebalk.zichtbaar {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.rondetijd {
+  min-width: 86px;
+  margin-right: 4px;
+}
+.hindernisicoon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #eee6ee;
+  filter: grayscale(1) opacity(0.55);
+  transition: filter 0.3s, background 0.3s, transform 0.3s;
+}
+.hindernisicoon svg {
+  width: 30px;
+  height: 30px;
+}
+.hindernisicoon.gedaan {
+  background: #fff6c8;
+  filter: none;
+  animation: wip 0.4s ease-out;
+}
+.hindernisicoon.perfect {
+  background: radial-gradient(circle, #fff6c8 55%, #ffd84d);
+  box-shadow: 0 0 10px #ffd84d;
+}
+
+/* --- Rozet als je een ronde uitrijdt --- */
+.rondekaart {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transform: translate(-50%, 0) scale(0.3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.4s, transform 0.5s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.rondekaart.zichtbaar {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+.rozet svg {
+  width: min(22vh, 150px);
+  height: min(26vh, 180px);
+  filter: drop-shadow(0 4px 8px rgba(120, 30, 70, 0.3));
+  animation: zwaai 2s ease-in-out infinite;
+}
+@keyframes zwaai {
+  0%, 100% { transform: rotate(-6deg); }
+  50% { transform: rotate(6deg); }
+}
+.kaarttijd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 20px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #c2417a;
+  font: 900 36px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+.kroon svg {
+  width: 44px;
+  height: 30px;
+}
+.sterren {
+  display: flex;
+  gap: 2px;
+}
+.sterren svg {
+  width: 40px;
+  height: 40px;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.2));
+}
+
+/* --- Pc: welke toets doet de actie --- */
+.actiehint {
+  position: absolute;
+  left: 50%;
+  bottom: 120px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 3px 10px rgba(47, 125, 109, 0.3);
+  opacity: 0;
+  transform: translate(-50%, 10px);
+  transition: opacity 0.25s, transform 0.25s;
+  pointer-events: none;
+}
+.actiehint.zichtbaar {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+.actiehint kbd {
+  min-width: 1.4em;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #8fd3c0;
+  border-bottom-width: 3px;
+  color: #2f7d6d;
+  font: 700 16px/1.3 system-ui, sans-serif;
+  text-align: center;
+}
+.actiehint svg {
+  width: 34px;
+  height: 34px;
+}
+body.touch .actiehint {
+  display: none;
 }

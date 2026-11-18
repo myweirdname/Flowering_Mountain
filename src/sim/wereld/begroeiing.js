@@ -74,6 +74,16 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
   const L = F.lagen;
   const kamp = vorm.kamp;
   const lag = vorm.lagune;
+  // Bloemen niet vlak naast het water en niet midden in een hindernis.
+  const weide = vorm.weide;
+  const nabijWater = (x, z) => {
+    if (!weide.dichtbij(x, z)) return false;
+    for (const d of weide.delen) {
+      const [a, bb] = weide.inDeel(d, x, z);
+      if (Math.abs(a) < d.diep + 1.4 && Math.abs(bb) < d.breed + 0.8) return true;
+    }
+    return false;
+  };
 
   const steilte = (x, z) => {
     const dx = vorm.hoogte(x + 0.6, z) - vorm.hoogte(x - 0.6, z);
@@ -114,7 +124,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     const kampAfstand = (x, z) => Math.hypot(x - kamp.x, z - kamp.z);
 
     overRaster(tx, tz, L.boom.afstand, 'boom', (x, z, r1, r2, r3, r4) => {
-      if (b.bos < 0.8 || b.h < 0.8 || b.pad > 0.01 || r1 > 0.85) return;
+      if (b.bos < 0.8 || b.h < 0.8 || b.pad > 0.01 || b.weide > 0.01 || r1 > 0.85) return;
       if (kampAfstand(x, z) < kamp.straal + 5 || steilte(x, z) > 0.6) return;
       const p = plant(x, z, r2 * Math.PI * 2, 0.8 + r3 * 0.45, r4, r1);
       g.boom.push(p);
@@ -122,7 +132,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     });
 
     overRaster(tx, tz, L.palm.afstand, 'palm', (x, z, r1, r2, r3, r4) => {
-      if (b.h < 0.3 || b.pad > 0.05) return;
+      if (b.h < 0.3 || b.pad > 0.05 || b.weide > 0.02) return;
       const ring = Math.hypot(x - lag.x, z - lag.z) / lag.straal;
       let draai;
       if (ring > 1.0 && ring < 1.5 && r1 < 0.8) {
@@ -139,7 +149,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     });
 
     overRaster(tx, tz, L.rots.afstand, 'rots', (x, z, r1, r2, r3, r4) => {
-      if (b.h < -1.2 || r1 > (b.zand > 0.5 ? 0.28 : 0.4) || b.pad > 0.05 || b.kamp > 0.6) return;
+      if (b.h < -1.2 || r1 > (b.zand > 0.5 ? 0.28 : 0.4) || b.pad > 0.05 || b.kamp > 0.6 || b.weide > 0.05) return;
       // Af en toe een grote rots: een lage rand om op te klimmen.
       const R = F.rots;
       const [a, bmax] = r1 < R.grootKans ? R.grootte : R.klein;
@@ -180,7 +190,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
 
     overRaster(tx, tz, L.struik.afstand, 'struik', (x, z, r1, r2, r3, r4) => {
       const kampRand = b.kamp > 0.02 && b.kamp < 0.5;
-      if (b.h < 0.4 || b.pad > 0.15 || !(b.bos > 0.35 || kampRand)) return;
+      if (b.h < 0.4 || b.pad > 0.15 || b.weide > 0.35 || !(b.bos > 0.35 || kampRand)) return;
       if (steilte(x, z) > 0.9 || opRots(x, z, 0.9)) return;
       g.struik.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1, kiesGewogen(flora.struikGewichten, r4)));
     });
@@ -190,7 +200,11 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
       // Veel bloemen langs de rand van de open plek en het pad, trosjes in de jungle.
       const rand = (b.kamp > 0.04 && b.kamp < 0.92) || b.pad > 0.05;
       const tros = waardenruis(x / 8, z / 8, zaadje ^ 0x77);
-      if (b.kamp >= 0.92) {
+      if (b.weide > 0.03) {
+        // De springweide: veel bloemen langs de rand, perkjes in het midden, nooit op de baan of in het water.
+        if (b.baan > 0.05 || b.nat > 0.02 || nabijWater(x, z)) return;
+        if (b.weide > 0.9 ? tros < 0.6 : tros < 0.3) return;
+      } else if (b.kamp >= 0.92) {
         // Bloemenperkjes op de open plek zelf, met grasveld ertussen.
         if (tros < 0.62) return;
       } else if (rand ? tros < 0.25 : b.bos < 0.15 || tros < 0.55 || r1 > 0.7) return;
@@ -201,8 +215,8 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     });
 
     overRaster(tx, tz, L.gras.afstand, 'gras', (x, z, r1, r2, r3, r4) => {
-      if (b.h < 0.3 || b.zand > 0.25 || b.pad > 0.5) return;
-      if (!(b.kamp > 0.05 || b.pad > 0.05 || (b.bos > 0.3 && r4 < 0.35))) return;
+      if (b.h < 0.3 || b.zand > 0.25 || b.pad > 0.5 || b.nat > 0.02) return;
+      if (!(b.kamp > 0.05 || b.pad > 0.05 || (b.weide > 0.05 && r4 < 0.55) || (b.bos > 0.3 && r4 < 0.35))) return;
       if (opRots(x, z, -0.2)) return;
       g.gras.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1));
     });

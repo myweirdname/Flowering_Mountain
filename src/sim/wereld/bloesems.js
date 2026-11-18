@@ -8,14 +8,16 @@ import { maakWillekeur } from '../../kern/willekeur.js';
  * @param {{ grondOp(x:number, z:number): number, rotsen(tx:number, tz:number): any[], tegelGrootte:number }} w
  * @param {number} zaadje
  * @param {typeof import('../../data/bloesems.js').BLOESEMS} B
+ * @param {{ x:number, y:number, z:number }[]} [vast] plekken die altijd een bloesem krijgen (bv. boven de hindernissen)
  * @returns {Bloesem[]}
  */
-export function maakBloesems(vorm, w, zaadje, B) {
+export function maakBloesems(vorm, w, zaadje, B, vast = []) {
   const r = maakWillekeur(zaadje ^ 0xb10e5);
   const lijst = [];
   const voeg = (x, z, y) => lijst.push({ id: lijst.length, x, y, z, gepakt: false });
   const vrij = (x, z, afstand) => lijst.every((b) => Math.hypot(b.x - x, b.z - z) > afstand);
   const k = vorm.kamp;
+  for (const v of vast) voeg(v.x, v.z, v.y);
 
   // Boven op grote rotsen (opklimmen loont).
   const T = w.tegelGrootte;
@@ -62,12 +64,15 @@ export function maakBloesems(vorm, w, zaadje, B) {
 /** Pakt de bloesems die de speler raakt. */
 export function pakBloesems(s, lijst, B, dt, meld) {
   s.sindsBloesem += dt;
-  const midden = s.pos[1] + 0.6;
+  // Op de pony ben je groter: je zit hoger en reikt verder.
+  const rijdt = s.modus === 'rijden';
+  const midden = s.pos[1] + (rijdt ? B.rijMidden : 0.6);
+  const straal = rijdt ? B.rijStraal : B.pakStraal;
   for (const b of lijst) {
     if (b.gepakt) continue;
     const dx = b.x - s.pos[0];
     const dz = b.z - s.pos[2];
-    if (dx * dx + dz * dz > B.pakStraal * B.pakStraal) continue;
+    if (dx * dx + dz * dz > straal * straal) continue;
     if (Math.abs(b.y - midden) > B.pakHoogte) continue;
     b.gepakt = true;
     s.bloesems++;

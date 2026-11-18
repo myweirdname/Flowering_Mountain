@@ -3,6 +3,7 @@
 // cellen weg; een "rokje" langs elke tegelrand verbergt de kiertjes tussen fijn en grof.
 import * as THREE from 'three';
 import { waardenruis } from '../sim/wereld/ruis.js';
+import { WEIDE } from '../data/springweide.js';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
@@ -15,12 +16,16 @@ export function maakGrondkleur(vorm, K) {
   const c = Object.fromEntries(Object.entries(K).map(([n, v]) => [n, new THREE.Color(v)]));
   const b = /** @type {any} */ ({});
   const zand = new THREE.Color();
+  const weideGras = new THREE.Color(WEIDE.kleuren.weideGras);
+  const baan = new THREE.Color(WEIDE.kleuren.baan);
   return function kleurOp(x, z, steil, uit) {
     vorm.bodem(x, z, b);
     const vlek = glad((waardenruis(x / 5, z / 5, 31) - 0.4) / 0.35);
     uit.copy(c.bos).lerp(c.mos, vlek * 0.8);
     uit.lerp(c.kampGras, b.kamp);
+    uit.lerp(weideGras, b.weide);
     uit.lerp(c.pad, Math.min(1, b.pad * 1.1));
+    uit.lerp(baan, b.baan);
     // Zand: droog bovenaan, nat bij de waterlijn, zacht geel onder water.
     zand.copy(c.zand).lerp(c.natZand, 1 - glad((b.h - 0.05) / 0.45));
     if (b.h < -0.1) zand.lerp(c.onderwater, glad((-b.h - 0.1) / 0.8));

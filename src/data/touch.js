@@ -7,6 +7,7 @@ export const TOUCH = {
   kijkGevoeligheid: 0.009, // rondkijken door op de rechterhelft te slepen
   springKnop: 24,          // diameter van de springknop (vh), minstens 15
   actieKnop: 17,           // diameter van de actieknop (vh), minstens 15
+  fluitKnop: 15,           // diameter van de fluitknop (hoefijzer) om de pony te roepen
   randAfstand: 5,          // knoppen blijven zo ver uit de hoeken (vh)
   linkerDeel: 0.5,         // welk deel van het scherm (van links) de joystick is
 };

@@ -92,12 +92,16 @@ export const TIJGERS = {
 // Gangen: hoe de poten bewegen. fase = wanneer elke poot begint te stappen in de cyclus
 // [linksvoor, rechtsvoor, linksachter, rechtsachter]; draagtijd = deel van de cyclus dat een poot op de grond staat.
 export const GANGEN = {
-  stil: { frequentie: 0, pas: 0, optil: 0, deining: 0, fase: [0, 0.5, 0.75, 0.25], draagtijd: 1 },
+  stil: { frequentie: 0, pas: 0, optil: 0, deining: 0, fase: [0, 0.5, 0.75, 0.25], draagtijd: 1, maxFrequentie: 1 },
   // Stap: vier tellen, één poot tegelijk in de lucht.
-  stap: { frequentie: 1.05, pas: 0.36, optil: 0.09, deining: 0.012, fase: [0.25, 0.75, 0, 0.5], draagtijd: 0.68 },
+  stap: { frequentie: 1.05, pas: 0.36, optil: 0.09, deining: 0.012, fase: [0.25, 0.75, 0, 0.5], draagtijd: 0.68, maxFrequentie: 2.2 },
   // Draf: diagonale paren tegelijk, met een klein zweefmomentje.
-  draf: { frequentie: 1.9, pas: 0.48, optil: 0.14, deining: 0.035, fase: [0, 0.5, 0.5, 0], draagtijd: 0.42 },
+  draf: { frequentie: 1.9, pas: 0.48, optil: 0.14, deining: 0.035, fase: [0, 0.5, 0.5, 0], draagtijd: 0.42, maxFrequentie: 3.4 },
+  // Galop: drie tellen (achter, achter, voor-voor) en een lange zweeffase; het lijf wiegt op en neer.
+  galop: { frequentie: 2.3, pas: 0.85, optil: 0.2, deining: 0.03, fase: [0.62, 0.5, 0.12, 0.0], draagtijd: 0.3, maxFrequentie: 3.0, galop: 1 },
 };
+// In het spel bepaalt de echte snelheid hoe snel de poten gaan (zodat de hoeven niet over de grond glijden);
+// `pas` is dan de langste stap en `maxFrequentie` het snelste ritme.
 
 // Levendigheid: knipperen, oren, staart en rondkijken.
 export const LEVEN = {

@@ -45,7 +45,19 @@ export function maakDeeltjes() {
       void main() {
         vec2 p = gl_PointCoord - 0.5;
         float a;
-        if (vVorm > 0.5) {
+        if (vVorm > 1.5) {
+          // Een hartje: twee bolletjes en een puntje, met een wit randje.
+          vec2 q = vec2(p.x, -p.y) * 2.7;
+          q.y += 0.12;
+          float r = dot(q, q) - 1.0;
+          float f = r * r * r - q.x * q.x * q.y * q.y * q.y;
+          a = smoothstep(0.015, -0.015, f);
+          if (a < 0.02) discard;
+          vec3 c = mix(vec3(1.0), vKleur, smoothstep(-0.03, -0.12, f));
+          gl_FragColor = vec4(c, a);
+          #include <colorspace_fragment>
+          return;
+        } else if (vVorm > 0.5) {
           // Een bloemblaadje: een schuin ovaaltje.
           vec2 q = mat2(0.8, 0.6, -0.6, 0.8) * p;
           a = smoothstep(0.5, 0.42, length(q * vec2(1.0, 1.9)));
@@ -85,7 +97,7 @@ export function maakDeeltjes() {
     kleur[i * 3] = kl.r; kleur[i * 3 + 1] = kl.g; kleur[i * 3 + 2] = kl.b;
     basis[i] = maat;
     grootte[i] = maat;
-    vorm[i] = blaadje ? 1 : 0;
+    vorm[i] = blaadje === 2 ? 2 : blaadje ? 1 : 0;
     leven[i] = levensduur;
     duur[i] = levensduur;
     zwaar[i] = zwaarte;
@@ -113,25 +125,43 @@ export function maakDeeltjes() {
         voegToe(x, y, z, Math.cos(a) * v, rnd(0.8, 3), Math.sin(a) * v, n % 3 ? kleur : 0xfff6b0, rnd(0.08, 0.14), rnd(0.5, 0.9), false, 0.4);
       }
     },
-    /** Waterspetters en een kring (plons, zwemslag). */
-    spetters(x, z, sterkte = 1) {
+    /** Hartjes die zacht opstijgen (aaien, een perfecte sprong). */
+    hartjes(x, y, z, aantal = 5, kleuren = E.hartjes.kleuren) {
+      for (let n = 0; n < aantal; n++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = rnd(0.2, 0.7);
+        voegToe(x + rnd(-0.25, 0.25), y + rnd(0, 0.3), z + rnd(-0.25, 0.25), Math.cos(a) * v, rnd(1.0, 1.8), Math.sin(a) * v,
+          kleuren[n % kleuren.length], rnd(0.26, 0.4), rnd(1.3, 1.9), 2, -0.02);
+      }
+    },
+    /** Een regen van bloemblaadjes die van boven neerdwarrelt (een perfecte sprong). */
+    bloemenregen(x, y, z, aantal = E.bloemenregen.aantal, kleuren = E.bloemenregen.kleuren) {
+      for (let n = 0; n < aantal; n++) {
+        const a = Math.random() * Math.PI * 2;
+        const r = Math.sqrt(Math.random()) * E.bloemenregen.straal;
+        voegToe(x + Math.cos(a) * r, y + rnd(0.6, 2.2), z + Math.sin(a) * r, Math.cos(a) * 0.8, rnd(0.5, 2.2), Math.sin(a) * 0.8,
+          kleuren[n % kleuren.length], rnd(0.2, 0.32), rnd(1.6, 2.4), true, 0.12);
+      }
+    },
+    /** Waterspetters en een kring (plons, zwemslag). y = hoogte van het wateroppervlak. */
+    spetters(x, z, sterkte = 1, y = 0) {
       const aantal = Math.round(E.plons.aantal * Math.min(1.5, sterkte));
       for (let n = 0; n < aantal; n++) {
         const a = Math.random() * Math.PI * 2;
         const v = rnd(0.4, 1.8) * sterkte;
-        voegToe(x + Math.cos(a) * 0.2, 0.05, z + Math.sin(a) * 0.2, Math.cos(a) * v, rnd(1.5, 3.8) * Math.min(1.4, sterkte), Math.sin(a) * v,
+        voegToe(x + Math.cos(a) * 0.2, y + 0.05, z + Math.sin(a) * 0.2, Math.cos(a) * v, rnd(1.5, 3.8) * Math.min(1.4, sterkte), Math.sin(a) * v,
           n % 3 ? E.plons.kleur : 0xffffff, rnd(0.08, 0.15), rnd(0.5, 0.9), false, 1);
       }
-      this.kring(x, z, 1.4 * sterkte);
+      this.kring(x, z, 1.4 * sterkte, 1.2, y);
     },
     /** Een kring die uitdijt op het water. */
-    kring(x, z, max = 1, d = 1.2) {
+    kring(x, z, max = 1, d = 1.2, y = 0) {
       const r = ringen[volgendeRing];
       volgendeRing = (volgendeRing + 1) % ringen.length;
       r.t = 0;
       r.duur = d;
       r.max = max;
-      r.m.position.set(x, 0.04, z);
+      r.m.position.set(x, y + 0.04, z);
       r.m.visible = true;
     },
     /** Stofje bij een landing op zand. */
