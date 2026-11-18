@@ -355,7 +355,10 @@ function stapLucht(p, stuur, wereld, R, dt, meld) {
 }
 
 function beginWeigeren(p, meld) {
-  p.weigert = 1e-6; // wordt meteen op de volle duur gezet in stapWeigeren
+  // De volle duur wordt in stapWeigeren gezet (daar kennen we de afsteltabel). Een aparte vlag, want
+  // een klein restje tijd aan het einde van het weigeren mag nooit als "nieuwe weigering" tellen.
+  p.weigert = 1e-6;
+  p.weigerNieuw = true;
   p.snelheid = 0;
   p.vel = [0, 0, 0];
   p.boost = 0;
@@ -366,9 +369,13 @@ function beginWeigeren(p, meld) {
 
 /** Weigeren: stoppen, hoofd schudden, zelf een stapje terug zetten. */
 function stapWeigeren(p, wereld, R, dt, meld) {
-  if (p.weigert < 1e-5) p.weigert = R.weigerDuur;
+  if (p.weigerNieuw) {
+    p.weigerNieuw = false;
+    p.weigert = R.weigerDuur;
+  }
   const t = R.weigerDuur - p.weigert;
   p.weigert -= dt;
+  if (p.weigert < 1e-4) p.weigert = 0; // afrondingsrestjes wegwerken
   const stuur = { richting: null, snelheid: 0, spring: false, springNu: false, gereden: false };
   if (t < 0.8) p.snelheid = 0;
   else p.snelheid = -R.terugSnelheid * Math.sin(Math.min(1, (t - 0.8) / (R.weigerDuur - 0.8)) * Math.PI);
