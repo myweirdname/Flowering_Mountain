@@ -48,12 +48,21 @@ export function maakAnimatie(delen, { onStap } = {}) {
       let wieg = 0;
 
       if (klimt) {
-        // Opklimmen over een rand: armen hoog vooruit, beentjes trappelen.
-        fase += dt * 18;
-        armX = [-2.6, -2.6];
-        armZ = [-0.25, 0.25];
-        beenX = [Math.sin(fase) * 0.9, -Math.sin(fase) * 0.9];
-        leun = 0.25;
+        // Opklimmen over een rand: eerst handen op de rand en optrekken (beentjes trappelen),
+        // dan op de handen steunen en één knie erop zetten.
+        const f = s.klimt.t / s.klimt.duur;
+        if (f < 0.55) {
+          fase += dt * 14;
+          armX = [-2.9, -2.9];
+          armZ = [-0.2, 0.2];
+          beenX = [0.3 + Math.sin(fase) * 0.6, 0.3 - Math.sin(fase) * 0.6];
+          leun = 0.15;
+        } else {
+          armX = [-0.5, -0.5];
+          armZ = [-0.35, 0.35];
+          beenX = [-1.7, 0.4];
+          leun = 0.55;
+        }
       } else if (zwemt) {
         // Schoolslag: armen zwaaien rond, beentjes schoppen, lijf voorover in het water.
         fase += dt * (3 + v * 2.2);

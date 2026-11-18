@@ -4,7 +4,7 @@ export const GELUID = {
   volume: 0.8,
   maxKlanken: 12,       // nooit meer klanken tegelijk (TP 12)
 
-  stappen: 0.22,
+  stappen: 0.08,         // zacht: je hoort ze heel vaak
   sprong: 0.12,
   landing: 0.3,
   opklimmen: 0.1,

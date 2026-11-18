@@ -37,7 +37,11 @@ export const FLORA = {
 
   // Rotsen: de vorm is een afgeplatte bol; ongeveer 0,44 x de maat steekt boven de grond uit.
   // grootKans = hoe vaak een rots groot is (een lage rand om op te klimmen).
-  rots: { kleuren: [0xc6b4e6, 0xe9c6d6, 0xbfc9e8], klein: [0.4, 1.4], grootte: [1.7, 2.4], grootKans: 0.07 },
+  rots: {
+    kleuren: [0xc6b4e6, 0xe9c6d6, 0xbfc9e8], klein: [0.4, 1.4], grootte: [2.0, 2.6], grootKans: 0.07,
+    // Vaste klimrotsen vlak bij het kamp (ten opzichte van het kampmidden), zodat je er meteen één vindt.
+    bijKamp: [{ dx: 12.5, dz: 2, maat: 2.1, draai: 0.4 }, { dx: 13.5, dz: 9.5, maat: 2.6, draai: 1.9 }],
+  },
 
   gras: { kleur: 0x6fd65e, punt: 0xc9f590, hoogte: 0.34 },
 

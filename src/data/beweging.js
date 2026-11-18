@@ -21,7 +21,7 @@ export const LOPEN = {
   stapHoogte: 0.3,          // zo hoog stap je zonder moeite op iets
   klimHoogte: 1.2,          // tot zo hoog klim je vanzelf op een rand (hoger houdt je tegen)
   randSteilte: 1.2,         // steiler dan dit (hoogte per meter) is een rand, geen helling
-  klimTijd: 0.42,           // hoe lang opklimmen duurt (voor de hoogste rand)
+  klimTijd: 0.8,            // hoe lang opklimmen duurt (voor de hoogste rand)
   klimVooruit: 0.55,        // zo ver op de rand kom je terecht
 
   lijfStraal: 0.32,        // hoe dik het figuurtje is om tegen stammen te botsen

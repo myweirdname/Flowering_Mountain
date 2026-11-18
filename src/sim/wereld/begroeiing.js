@@ -150,6 +150,18 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
       g.rots.push(p);
     });
 
+    for (const v of F.rots.bijKamp) {
+      const x = kamp.x + v.dx;
+      const z = kamp.z + v.dz;
+      if (Math.floor(x / T) !== tx || Math.floor(z / T) !== tz) continue;
+      vorm.bodem(x, z, b);
+      const p = plant(x, z, v.draai, 0.5, 0.3, 0);
+      p.maat = v.maat;
+      p.cos = Math.cos(p.draai);
+      p.sin = Math.sin(p.draai);
+      g.rots.push(p);
+    }
+
     groot.set(k, g);
     return g;
   }
@@ -161,10 +173,15 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     if (g) return g;
     g = { struik: [], bloem: [], gras: [] };
 
+    // Rotsen in en rond deze tegel: daar groeit niets op, en struiken blijven er een stukje vandaan.
+    const rotsen = [];
+    for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) rotsen.push(...grote(tx + i, tz + j).rots);
+    const opRots = (x, z, marge) => rotsen.some((r) => Math.hypot(x - r.x, z - r.z) < r.maat + marge);
+
     overRaster(tx, tz, L.struik.afstand, 'struik', (x, z, r1, r2, r3, r4) => {
       const kampRand = b.kamp > 0.02 && b.kamp < 0.5;
       if (b.h < 0.4 || b.pad > 0.15 || !(b.bos > 0.35 || kampRand)) return;
-      if (steilte(x, z) > 0.9) return;
+      if (steilte(x, z) > 0.9 || opRots(x, z, 0.9)) return;
       g.struik.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1, kiesGewogen(flora.struikGewichten, r4)));
     });
 
@@ -178,6 +195,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
         if (tros < 0.62) return;
       } else if (rand ? tros < 0.25 : b.bos < 0.15 || tros < 0.55 || r1 > 0.7) return;
       // Bloemen in trosjes van dezelfde soort.
+      if (opRots(x, z, 0)) return;
       const soort = maakWillekeur(maakZaadje(`${Math.floor(x / 7)},${Math.floor(z / 7)}`) ^ zaadje).geheel(flora.bloemen.length);
       g.bloem.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1, soort));
     });
@@ -185,6 +203,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     overRaster(tx, tz, L.gras.afstand, 'gras', (x, z, r1, r2, r3, r4) => {
       if (b.h < 0.3 || b.zand > 0.25 || b.pad > 0.5) return;
       if (!(b.kamp > 0.05 || b.pad > 0.05 || (b.bos > 0.3 && r4 < 0.35))) return;
+      if (opRots(x, z, -0.2)) return;
       g.gras.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1));
     });
 
