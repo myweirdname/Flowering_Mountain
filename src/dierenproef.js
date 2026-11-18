@@ -317,10 +317,12 @@ function beeld(nu) {
   cam.afstand += (camDoel.afstand - cam.afstand) * o;
   cam.doel.lerp(camDoel.doel, o);
   const ch = Math.cos(cam.hoogte);
+  // Bij "allemaal" op een smal (staand) scherm verder weg, zodat de hele rij in beeld past.
+  const afstand = cam.afstand * (keuze === 'alle' ? Math.max(1, 1.25 / camera.aspect) : 1);
   camera.position.set(
-    cam.doel.x + Math.sin(cam.hoek) * ch * cam.afstand,
-    cam.doel.y + Math.sin(cam.hoogte) * cam.afstand,
-    cam.doel.z + Math.cos(cam.hoek) * ch * cam.afstand
+    cam.doel.x + Math.sin(cam.hoek) * ch * afstand,
+    cam.doel.y + Math.sin(cam.hoogte) * afstand,
+    cam.doel.z + Math.cos(cam.hoek) * ch * afstand
   );
   camera.lookAt(cam.doel);
 
