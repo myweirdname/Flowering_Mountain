@@ -1,0 +1,101 @@
+// Het gedeelde skelet van een viervoeter (pony, tijger): lijf met voor- en achterkant, nek, hoofd,
+// oren, een staart als ketting en vier poten van drie stukjes (boven, onder, voet).
+// Volgorde van de poten overal: [linksvoor, rechtsvoor, linksachter, rechtsachter].
+// Links is +x (het dier kijkt naar +z).
+import * as THREE from 'three';
+import { Lichaam } from './lichaam.js';
+
+export const POTEN = [
+  { naam: 'lv', kant: 1, voor: true },
+  { naam: 'rv', kant: -1, voor: true },
+  { naam: 'la', kant: 1, voor: false },
+  { naam: 'ra', kant: -1, voor: false },
+];
+
+/** Afronding aan de uiteinden van een lob: 1 in het midden, zacht naar 0 aan de randen. */
+export function kap(t, rand = 0.15, randB = rand) {
+  const e = Math.min(t / rand, (1 - t) / randB, 1);
+  const f = 1 - Math.max(0, e);
+  return Math.sqrt(Math.max(0, 1 - f * f));
+}
+
+/** Een eenvoudige vaste willekeur (zelfde vorm bij elke start). */
+export function vast(i) {
+  const x = Math.sin(i * 127.1 + 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+
+/**
+ * @param {{ rugY: number, rompVoor: number, rompAchter: number, voorZ: number, achterZ: number,
+ *   pootX: number, heupY: number, knieY: number, enkelY: number, voetVoor: number,
+ *   nek: [THREE.Vector3, THREE.Vector3], hoofd: THREE.Vector3, hoofdEind: THREE.Vector3,
+ *   oor: [THREE.Vector3, THREE.Vector3], staart: THREE.Vector3[] }} m  (oor: linkeroor, het rechter is gespiegeld)
+ */
+export function maakSkelet(m) {
+  const L = new Lichaam();
+  const V = (x, y, z) => new THREE.Vector3(x, y, z);
+  L.bot('wortel', null, V(0, 0, 0));
+  L.bot('lijf', 'wortel', V(0, m.rugY, 0));
+  L.bot('achter', 'lijf', V(0, m.rugY, m.achterZ), V(0, m.rugY, m.rompAchter));
+  L.bot('voor', 'lijf', V(0, m.rugY, m.voorZ), V(0, m.rugY, m.rompVoor));
+  L.bot('nek', 'voor', m.nek[0], m.nek[1]);
+  L.bot('hoofd', 'nek', m.hoofd, m.hoofdEind);
+  const spiegel = (v) => V(-v.x, v.y, v.z);
+  L.bot('oorL', 'hoofd', m.oor[0], m.oor[1]);
+  L.bot('oorR', 'hoofd', spiegel(m.oor[0]), spiegel(m.oor[1]));
+  m.staart.forEach((p, i) => {
+    if (i === m.staart.length - 1) return;
+    L.bot('staart' + i, i ? 'staart' + (i - 1) : 'achter', p, m.staart[i + 1]);
+  });
+  for (const poot of POTEN) {
+    const x = poot.kant * m.pootX;
+    const z = poot.voor ? m.voorZ : m.achterZ;
+    const n = poot.naam;
+    L.bot(n + '_boven', poot.voor ? 'voor' : 'achter', V(x, m.heupY, z), V(x, m.knieY, z));
+    L.bot(n + '_onder', n + '_boven', V(x, m.knieY, z), V(x, m.enkelY, z));
+    L.bot(n + '_voet', n + '_onder', V(x, m.enkelY, z), V(x, 0, z + m.voetVoor));
+  }
+  return L;
+}
+
+/**
+ * Wat de animatie over het dier moet weten, na `L.maak(...)`.
+ * @param {Lichaam} L
+ * @param {Record<string, THREE.Bone>} bot
+ * @param {any} m dezelfde maten als bij maakSkelet
+ */
+export function dierInfo(L, bot, m) {
+  const poten = POTEN.map((p) => {
+    const boven = L.botPos(p.naam + '_boven');
+    const onder = L.botPos(p.naam + '_onder');
+    const voet = L.botPos(p.naam + '_voet');
+    return {
+      ...p,
+      boven: bot[p.naam + '_boven'],
+      onder: bot[p.naam + '_onder'],
+      voet: bot[p.naam + '_voet'],
+      L1: boven.distanceTo(onder),
+      L2: onder.distanceTo(voet),
+      rust: voet.clone(), // waar de enkel staat in rust (in lichaamsassen)
+      // Voorpoten buigen met de knie naar voren, achterpoten met de hak naar achteren.
+      buig: p.voor ? 1 : -1,
+    };
+  });
+  const staart = [];
+  for (let i = 0; bot['staart' + i]; i++) staart.push(bot['staart' + i]);
+  for (const b of [bot.nek, bot.hoofd, bot.oorL, bot.oorR]) b.rotation.order = 'YXZ';
+  return { poten, staart, rugY: m.rugY, pootLengte: m.heupY - m.enkelY };
+}
+
+/**
+ * Hang onderdelen die in lichaamsassen gebouwd zijn aan een bot (oog, neus...).
+ * @param {THREE.Bone} b
+ * @param {THREE.Vector3} botPos rustplaats van dat bot
+ */
+export function aanBot(b, botPos, ...objecten) {
+  const houder = new THREE.Group();
+  houder.position.copy(botPos).negate();
+  houder.add(...objecten);
+  b.add(houder);
+  return houder;
+}
