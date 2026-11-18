@@ -140,7 +140,14 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
 
     overRaster(tx, tz, L.rots.afstand, 'rots', (x, z, r1, r2, r3, r4) => {
       if (b.h < -1.2 || r1 > (b.zand > 0.5 ? 0.28 : 0.4) || b.pad > 0.05 || b.kamp > 0.6) return;
-      g.rots.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1));
+      // Af en toe een grote rots: een lage rand om op te klimmen.
+      const R = F.rots;
+      const [a, bmax] = r1 < R.grootKans ? R.grootte : R.klein;
+      const p = plant(x, z, r2 * Math.PI * 2, r3, r4, r1);
+      p.maat = a + r3 * (bmax - a);
+      p.cos = Math.cos(p.draai);
+      p.sin = Math.sin(p.draai);
+      g.rots.push(p);
     });
 
     groot.set(k, g);
@@ -191,5 +198,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     kleine,
     /** Stammen in tegel (tx, tz), om tegen te botsen. */
     stammen: (tx, tz) => grote(tx, tz).stammen,
+    /** Rotsen in tegel (tx, tz), om op te staan en op te klimmen. */
+    rotsen: (tx, tz) => grote(tx, tz).rots,
   };
 }

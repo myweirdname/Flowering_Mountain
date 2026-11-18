@@ -54,7 +54,7 @@ export function maakScherm(ui, { touch }) {
     gestart = true;
     volledigScherm();
     houdWakker();
-    // Later: hier ook het geluid ontgrendelen (stap 5).
+    // Het geluid ontgrendelt zichzelf bij dezelfde tik (geluid/geluid.js).
   };
   // Bij elke tik, zodat wie volledig scherm verlaat (terugknop) het bij de volgende tik terugkrijgt.
   window.addEventListener('pointerdown', eersteTik);

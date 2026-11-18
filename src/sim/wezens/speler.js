@@ -22,9 +22,16 @@ export function maakSpeler(id, x, y, z) {
     vorigeRichting: 0,
     opGrond: true,
     glijdt: false,
+    klimt: null,          // bezig met opklimmen over een rand: { t, duur, van, naar, richting }
     coyote: 0,
     sprongBuffer: 0,
     springVorige: false,
     springtVast: false,
+    veilig: [x, y, z],    // laatste veilige grond
+    veiligTijd: 0,
+    glijTijd: 0,
+    bloesems: 0,          // verzamelde bloesems
+    bloesemReeks: 0,      // hoeveel kort na elkaar (voor de stijgende klank)
+    sindsBloesem: 99,
   };
 }

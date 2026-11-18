@@ -8,13 +8,16 @@ import { CAMERA as C } from '../data/camera.js';
  * @param {THREE.PerspectiveCamera} camera
  * @param {HTMLElement} sleepvlak
  * @param {(x:number, z:number) => number} grondOp
+ * @param {(van: THREE.Vector3, naar: THREE.Vector3) => number} [vrijeAfstand] hoe ver de camera vrij zicht heeft
  */
-export function maakVolgcamera(camera, sleepvlak, grondOp) {
+export function maakVolgcamera(camera, sleepvlak, grondOp, vrijeAfstand) {
   let hoek = 0;            // draaihoek rond de verticale as; 0 = camera aan de +z-kant
   let kanteling = C.kanteling;
   let sindsSlepen = 99;
   const doel = new THREE.Vector3();
   let eersteKeer = true;
+  let afstand = C.afstand; // korter als er een boom tussen zit
+  const gewenst = new THREE.Vector3();
 
   /** Rondkijken: dx, dy in pixels. */
   function kijk(dx, dy, gevoeligheid) {
@@ -85,11 +88,15 @@ export function maakVolgcamera(camera, sleepvlak, grondOp) {
       }
 
       const horizontaal = Math.cos(kanteling) * C.afstand;
-      camera.position.set(
+      gewenst.set(
         doel.x + Math.sin(hoek) * horizontaal,
         doel.y + Math.sin(kanteling) * C.afstand,
         doel.z + Math.cos(hoek) * horizontaal
       );
+      // Zit er een boom tussen, dan meteen dichterbij; daarna rustig terug naar achter.
+      const vrij = vrijeAfstand ? Math.max(C.minAfstand, vrijeAfstand(doel, gewenst)) : C.afstand;
+      afstand = vrij < afstand ? vrij : afstand + (vrij - afstand) * (1 - Math.exp(-C.terugNaBoom * dt));
+      camera.position.copy(doel).lerp(gewenst, afstand / C.afstand);
       const grond = grondOp(camera.position.x, camera.position.z) + C.bovenGrond;
       if (camera.position.y < grond) camera.position.y = grond;
       camera.lookAt(doel);

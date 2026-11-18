@@ -74,7 +74,7 @@ export function maakWereldbeeld(scene, sim, K) {
   });
   soorten.push({
     naam: 'rots', bron: 'rots', laag: 'grote', filter: () => true, zak: 0,
-    schaal: (p) => FLORA.rots.grootte[0] + p.schaal * (FLORA.rots.grootte[1] - FLORA.rots.grootte[0]),
+    schaal: (p) => p.maat, // de simulatie kent dezelfde maat (om op te staan)
     kleur: (p, c) => c.set(FLORA.rots.kleuren[Math.floor(p.tint * FLORA.rots.kleuren.length) % FLORA.rots.kleuren.length]),
     banden: [{ geo: maakRots(d), straal: Math.min(K.tegelStraal, 70), mat: rotsMat, schaduw: true }],
   });

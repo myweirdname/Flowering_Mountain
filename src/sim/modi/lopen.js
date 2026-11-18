@@ -1,4 +1,6 @@
-// Bewegingsregels te voet (TP 6, GD 5): lopen, rennen, springen, zwaartekracht, afglijden.
+// Bewegingsregels te voet (TP 6, GD 5): lopen, rennen, springen, zwaartekracht, afglijden
+// en lage randen (rotsen) vanzelf opklimmen. In diep water ga je over op zwemmen.
+import { onthoudVeilig, naarVeiligeGrond } from './veilig.js';
 // Gewone wiskunde, geen fysica-engine en geen Three.js.
 
 const naarRad = Math.PI / 180;
@@ -8,13 +10,20 @@ const naarRad = Math.PI / 180;
  * @param {import('../wezens/speler.js').Speler} s
  * @param {import('../wezens/speler.js').Intentie} int
  * @param {{ raster: ReturnType<typeof import('../wereld/tegels.js').maakTegelwereld>,
- *           grens: { minX:number, maxX:number, minZ:number, maxZ:number }, maxDiepte: number,
- *           stammen: (tx:number, tz:number) => { x:number, z:number, r:number }[] }} wereld
+ *           grens: { minX:number, maxX:number, minZ:number, maxZ:number }, vorm: any,
+ *           stammen: (tx:number, tz:number) => { x:number, z:number, r:number }[],
+ *           grondOp: (x:number, z:number) => number }} wereld
  * @param {typeof import('../../data/beweging.js').LOPEN} L
  * @param {number} dt
  * @param {(g: object) => void} meld gebeurtenis doorgeven aan beeld en geluid
+ * @param {typeof import('../../data/beweging.js').ZWEMMEN} Z wanneer je begint te zwemmen
  */
-export function stapLopen(s, int, wereld, L, dt, meld) {
+export function stapLopen(s, int, wereld, L, dt, meld, Z) {
+  if (s.klimt) {
+    stapOpklimmen(s, L, dt);
+    return;
+  }
+
   // --- Invoer: gewenste horizontale snelheid ---
   let [bx, bz] = int.beweeg;
   const lengte = Math.hypot(bx, bz);
@@ -84,34 +93,28 @@ export function stapLopen(s, int, wereld, L, dt, meld) {
   if (s.pos[0] < gr.minX || s.pos[0] > gr.maxX) { s.pos[0] = Math.min(Math.max(s.pos[0], gr.minX), gr.maxX); s.vel[0] = 0; }
   if (s.pos[2] < gr.minZ || s.pos[2] > gr.maxZ) { s.pos[2] = Math.min(Math.max(s.pos[2], gr.minZ), gr.maxZ); s.vel[2] = 0; }
 
-  // Niet dieper het water in dan je kan staan (zwemmen komt later).
-  // Vloeiend langs de waterlijn schuiven: terug naar de vorige plek, de snelheid richting dieper water
-  // wegnemen, en met de rest langs de oever verder (geen gewiebel).
-  const diep = -wereld.maxDiepte;
-  const r = wereld.raster;
-  if (r.hoogteOp(s.pos[0], s.pos[2]) < diep) {
-    const ox = s.vorigePos[0];
-    const oz = s.vorigePos[2];
-    const helling = r.hellingOp(ox, oz);
-    let nx = -helling[0]; // de richting waarin het dieper wordt
-    let nz = -helling[1];
-    let nl = Math.hypot(nx, nz);
-    if (nl < 1e-6) { nx = s.pos[0] - ox; nz = s.pos[2] - oz; nl = Math.hypot(nx, nz) || 1; }
-    nx /= nl;
-    nz /= nl;
-    const vn = s.vel[0] * nx + s.vel[2] * nz;
-    if (vn > 0) { s.vel[0] -= vn * nx; s.vel[2] -= vn * nz; }
-    const tx = ox + s.vel[0] * dt;
-    const tz = oz + s.vel[2] * dt;
-    if (r.hoogteOp(tx, tz) >= diep) { s.pos[0] = tx; s.pos[2] = tz; }
-    else { s.pos[0] = ox; s.pos[2] = oz; s.vel[0] = 0; s.vel[2] = 0; }
-  }
-
   // Niet door boomstammen lopen: zachtjes eruit duwen.
   duwUitStammen(s, wereld, L.lijfStraal);
 
+  // --- Randen: een lage rand klim je vanzelf op, een hoge houdt je tegen ---
+  // Een rand is iets dat in één stap te hoog is, of steiler dan een muurtje (de zijkant van een rots).
+  const hoger = wereld.grondOp(s.pos[0], s.pos[2]) - s.pos[1];
+  const verplaatst = Math.hypot(s.pos[0] - s.vorigePos[0], s.pos[2] - s.vorigePos[2]);
+  if (hoger > L.stapHoogte || (hoger > 0.03 && hoger > verplaatst * L.randSteilte)) {
+    const hv = Math.hypot(s.vel[0], s.vel[2]);
+    const rand = hv > 0.5 ? randHoogte(s, wereld, L, hv) : hoger;
+    if (rand > L.stapHoogte) {
+      if (rand <= L.klimHoogte && kracht > 0.2 && hv > 0.5) {
+        beginOpklimmen(s, wereld, L, hv);
+        meld({ soort: 'opklimmen', speler: s.id });
+        return;
+      }
+      tegenhouden(s, wereld, L);
+    }
+  }
+
   // --- Grond ---
-  const grond = wereld.raster.hoogteOp(s.pos[0], s.pos[2]);
+  const grond = wereld.grondOp(s.pos[0], s.pos[2]);
   const wasOpGrond = s.opGrond;
   if (s.pos[1] <= grond) {
     if (!wasOpGrond) meld({ soort: 'landing', speler: s.id, snelheid: -s.vel[1] });
@@ -124,6 +127,23 @@ export function stapLopen(s, int, wereld, L, dt, meld) {
     s.opGrond = false;
   }
 
+  // Diep water: zwemmen.
+  if (grond < -Z.inDiepte && s.pos[1] < -Z.drijfDiepte + 0.05) {
+    meld({ soort: 'plons', speler: s.id, pos: [s.pos[0], 0, s.pos[2]], snelheid: Math.max(1, -s.vel[1]) });
+    s.modus = 'zwemmen';
+    s.opGrond = false;
+    s.vel[1] *= 0.3;
+    return;
+  }
+
+  // Laatste veilige grond onthouden; te lang glijden of ver vallen brengt je daar terug.
+  onthoudVeilig(s, grond, dt, L.veiligNa);
+  s.glijTijd = glijdt ? s.glijTijd + dt : 0;
+  if (s.glijTijd > L.maxGlijTijd || s.pos[1] < L.terugOnder) {
+    naarVeiligeGrond(s, meld);
+    return;
+  }
+
   // --- Draaien naar de looprichting ---
   if (Math.hypot(s.vel[0], s.vel[2]) > 0.3 && !glijdt) {
     const doelHoek = Math.atan2(s.vel[0], s.vel[2]);
@@ -131,6 +151,64 @@ export function stapLopen(s, int, wereld, L, dt, meld) {
     verschil = Math.atan2(Math.sin(verschil), Math.cos(verschil));
     s.richting += verschil * Math.min(1, L.draaisnelheid * dt);
   }
+}
+
+const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
+
+/** Hoe hoog de rand voor je is: de grond een eindje verder, ten opzichte van je voeten. */
+function randHoogte(s, wereld, L, hv) {
+  const nx = s.vorigePos[0] + (s.vel[0] / hv) * L.klimVooruit;
+  const nz = s.vorigePos[2] + (s.vel[2] / hv) * L.klimVooruit;
+  return Math.max(wereld.grondOp(nx, nz), wereld.grondOp(s.pos[0], s.pos[2])) - s.pos[1];
+}
+
+/** Start het opklimmen vanaf de vorige plek naar een plekje net op de rand. */
+function beginOpklimmen(s, wereld, L, hv) {
+  const dx = s.vel[0] / hv;
+  const dz = s.vel[2] / hv;
+  const ox = s.vorigePos[0];
+  const oz = s.vorigePos[2];
+  const nx = ox + dx * L.klimVooruit;
+  const nz = oz + dz * L.klimVooruit;
+  const top = wereld.grondOp(nx, nz);
+  const hoogte = Math.max(0, top - s.pos[1]);
+  s.klimt = { t: 0, duur: L.klimTijd * (0.6 + 0.4 * hoogte / L.klimHoogte), van: [ox, s.pos[1], oz], naar: [nx, top, nz], richting: [dx, dz] };
+  s.pos[0] = ox;
+  s.pos[2] = oz;
+  s.vel[0] = s.vel[1] = s.vel[2] = 0;
+  s.opGrond = false;
+  s.richting = Math.atan2(dx, dz);
+}
+
+/** Eerst omhoog trekken, dan erop stappen. */
+function stapOpklimmen(s, L, dt) {
+  const k = s.klimt;
+  k.t += dt;
+  const f = k.t / k.duur;
+  const boven = k.naar[1] + 0.06;
+  if (f < 0.6) {
+    s.pos[1] = k.van[1] + (boven - k.van[1]) * glad(f / 0.6);
+  } else {
+    const g = glad((f - 0.6) / 0.4);
+    s.pos[0] = k.van[0] + (k.naar[0] - k.van[0]) * g;
+    s.pos[2] = k.van[2] + (k.naar[2] - k.van[2]) * g;
+    s.pos[1] = boven + (k.naar[1] - boven) * g;
+  }
+  if (f >= 1) {
+    s.pos = [k.naar[0], k.naar[1], k.naar[2]];
+    s.vel = [k.richting[0] * L.loopsnelheid * 0.5, 0, k.richting[1] * L.loopsnelheid * 0.5];
+    s.opGrond = true;
+    s.klimt = null;
+  }
+}
+
+/** Te hoge rand: terug, maar langs de rand verder schuiven mag (eerst x alleen, dan z alleen). */
+function tegenhouden(s, wereld, L) {
+  const [ox, , oz] = s.vorigePos;
+  const kan = (x, z) => wereld.grondOp(x, z) - s.pos[1] <= L.stapHoogte;
+  if (kan(s.pos[0], oz)) { s.pos[2] = oz; s.vel[2] = 0; }
+  else if (kan(ox, s.pos[2])) { s.pos[0] = ox; s.vel[0] = 0; }
+  else { s.pos[0] = ox; s.pos[2] = oz; s.vel[0] = 0; s.vel[2] = 0; }
 }
 
 function duwUitStammen(s, wereld, straal) {

@@ -17,6 +17,15 @@ import { maakScherm } from './ui/scherm.js';
 import { maakToetshulp } from './ui/toetshulp.js';
 import { maakTestfiguur } from './beeld/maak/testfiguur.js';
 import { maakVolgcamera } from './beeld/volgcamera.js';
+import { maakAnimatie } from './beeld/animatie.js';
+import { maakDeeltjes } from './beeld/deeltjes.js';
+import { EFFECTEN } from './data/effecten.js';
+import { maakBloesembeeld } from './beeld/bloesems.js';
+import { BLOESEMS } from './data/bloesems.js';
+import { maakHud } from './ui/hud.js';
+import { maakGeluid } from './geluid/geluid.js';
+import { GELUID } from './data/geluid.js';
+import { ANIMATIE } from './data/animatie.js';
 import { maakHibiscus } from './beeld/maak/hibiscus.js';
 import { maakHemel } from './beeld/hemel.js';
 import { maakZee } from './beeld/water.js';
@@ -85,8 +94,35 @@ if (stralen) scene.add(stralen.mesh);
 const stuifmeel = maakStuifmeel(K.stuifmeel, SCENE.stuifmeel);
 scene.add(stuifmeel.punten);
 
-const { figuur, lijf, schaduw, basisSchaal } = maakTestfiguur(TESTFIGUUR);
+const avonturier = maakTestfiguur(TESTFIGUUR);
+const { figuur, schaduw } = avonturier;
 scene.add(figuur, schaduw);
+// Geluid: start pas bij de eerste tik of toets (zo wil de browser het). M zet het aan of uit.
+const geluid = maakGeluid();
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyM') geluid.wissel();
+});
+const bodem = /** @type {any} */ ({});
+/** Waar staan de voeten op: zand, gras, rots of water? */
+function ondergrond(s) {
+  if (s.modus === 'zwemmen') return 'water';
+  const x = s.pos[0];
+  const z = s.pos[2];
+  if (sim.wereld.rotsOp(x, z) > raster.hoogteOp(x, z) + 0.03) return 'rots';
+  sim.wereld.vorm.bodem(x, z, bodem);
+  if (bodem.h < 0.05) return 'water';
+  return bodem.zand > 0.5 ? 'zand' : 'gras';
+}
+const animatie = maakAnimatie(avonturier, {
+  onStap() {
+    const s = sim.speler(LOKAAL);
+    geluid.stap(ondergrond(s), Math.min(1, Math.hypot(s.vel[0], s.vel[2]) / LOPEN.rensnelheid));
+  },
+});
+const deeltjes = maakDeeltjes();
+scene.add(deeltjes.punten, deeltjes.groep);
+const bloesems = maakBloesembeeld(sim.wereld.bloesems, BLOESEMS);
+scene.add(bloesems.groep);
 if (K.schaduw) {
   figuur.traverse((o) => (o.castShadow = true));
   schaduw.visible = false; // de echte schaduw neemt het over
@@ -112,11 +148,46 @@ const bloemY = bloemGrond + H.steelHoogte;
 bloem.position.set(bx, bloemY, bz);
 scene.add(bloem);
 
-const volgcamera = maakVolgcamera(camera, canvas, (x, z) => Math.max(raster.hoogteOp(x, z), 0.1));
+// De camera schuift niet in boomkruinen of door stammen: ze komt dan dichterbij.
+const begroeiing = sim.wereld.begroeiing;
+const kruinH = (FLORA.boom.hoogte[0] + FLORA.boom.hoogte[1]) / 2;
+function vrijeAfstand(van, naar) {
+  const dx = naar.x - van.x;
+  const dy = naar.y - van.y;
+  const dz = naar.z - van.z;
+  const lengte = Math.hypot(dx, dy, dz);
+  const T = raster.tegelGrootte;
+  const bomen = [];
+  const tx0 = Math.floor((Math.min(van.x, naar.x) - 7) / T);
+  const tx1 = Math.floor((Math.max(van.x, naar.x) + 7) / T);
+  const tz0 = Math.floor((Math.min(van.z, naar.z) - 7) / T);
+  const tz1 = Math.floor((Math.max(van.z, naar.z) + 7) / T);
+  for (let tz = tz0; tz <= tz1; tz++) for (let tx = tx0; tx <= tx1; tx++) bomen.push(...begroeiing.grote(tx, tz).boom);
+  if (!bomen.length) return lengte;
+  const stap = 0.25;
+  for (let d = 0.8; d <= lengte; d += stap) {
+    const f = d / lengte;
+    const x = van.x + dx * f;
+    const y = van.y + dy * f;
+    const z = van.z + dz * f;
+    for (const b of bomen) {
+      const ex = x - b.x;
+      const ez = z - b.z;
+      const k = b.schaal;
+      // Stam (een zuil) en kruin (een platte bol rond de top), met wat speling.
+      if (ex * ex + ez * ez < (FLORA.lagen.boom.stam * k + 0.35) ** 2 && y < b.y + kruinH * k) return d - stap;
+      const ey = (y - (b.y + (kruinH - 0.4) * k)) / (3.6 * k);
+      if ((ex * ex + ez * ez) / (6.2 * k) ** 2 + ey * ey < 1) return d - stap;
+    }
+  }
+  return lengte;
+}
+const volgcamera = maakVolgcamera(camera, canvas, (x, z) => Math.max(sim.wereld.grondOp(x, z), 0.1), vrijeAfstand);
 const toetsenbord = maakToetsenbord();
 const uiLaag = /** @type {HTMLElement} */ (document.getElementById('ui'));
 const touch = maakTouch(canvas, uiLaag, volgcamera);
 maakScherm(uiLaag, { touch: isTouchToestel() });
+const hud = maakHud(uiLaag);
 if (!isTouchToestel()) maakToetshulp(uiLaag);
 
 let pixel = 1;
@@ -147,7 +218,8 @@ const debug = maakDebugscherm(uiLaag, INSTELLINGEN.debug);
 /** Intentie die window.spel kan opleggen (voor tests); anders null. */
 let opgelegd = null;
 let tijd = 0;
-let pletten = 0; // 0..1, kort na een landing
+let kringTijd = 0;
+let bosRond = 0;
 const tekenpos = new THREE.Vector3();
 
 const lus = maakSpellus({
@@ -157,7 +229,30 @@ const lus = maakSpellus({
     const intentie = opgelegd ?? naarIntentie(invoer, volgcamera.hoek);
     sim.stap({ [LOKAAL]: intentie }, dt);
     for (const g of sim.neemGebeurtenissen()) {
-      if (g.soort === 'landing' && g.speler === LOKAAL) pletten = Math.min(1, g.snelheid / 12);
+      if (g.speler !== LOKAAL) continue;
+      if (g.soort === 'landing') {
+        animatie.land(g.snelheid / 12);
+        if (g.snelheid > 2) geluid.landing(g.snelheid);
+        else geluid.stap(ondergrond(sim.speler(LOKAAL)), 0.5);
+      } else if (g.soort === 'plons') {
+        deeltjes.spetters(g.pos[0], g.pos[2], Math.min(1.6, 0.5 + g.snelheid / 6));
+        geluid.plons(g.snelheid);
+      } else if (g.soort === 'opklimmen') geluid.opklimmen();
+      else if (g.soort === 'bloesem') {
+        bloesems.pak(g.id);
+        deeltjes.glinsters(g.pos[0], g.pos[1], g.pos[2], BLOESEMS.blaadjeKleur, 16);
+        deeltjes.blaadjes(g.pos[0], g.pos[1] - 0.5, g.pos[2], 6, [BLOESEMS.blaadjeKleur, BLOESEMS.randKleur], 0.5);
+        hud.bloesems(g.aantal);
+        geluid.bloesem(g.reeks);
+      } else if (g.soort === 'plof') deeltjes.blaadjes(g.pos[0], g.pos[1], g.pos[2]);
+      else if (g.soort === 'terug') deeltjes.blaadjes(g.pos[0], g.pos[1], g.pos[2], 30, undefined, 0.8);
+      else if (g.soort === 'sprong') {
+        if (g.uitWater) {
+          const p = sim.speler(LOKAAL).pos;
+          deeltjes.spetters(p[0], p[2], 0.6);
+          geluid.plons(0.5);
+        } else geluid.sprong();
+      }
     }
   },
 
@@ -176,16 +271,29 @@ const lus = maakSpellus({
     figuur.position.copy(tekenpos);
     figuur.rotation.y = s.vorigeRichting + dr * overgang;
 
-    // Pletten bij een landing, uitrekken tijdens het stijgen.
-    pletten = Math.max(0, pletten - dt * 6);
-    const rek = s.opGrond ? 0 : THREE.MathUtils.clamp(s.vel[1] / LOPEN.springSnelheid, -0.5, 1) * TESTFIGUUR.rekken;
-    const sy = 1 + rek - pletten * TESTFIGUUR.pletten;
-    lijf.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy)).multiplyScalar(basisSchaal);
-    // Een klein wiebeltje tijdens het lopen.
-    const v = Math.hypot(s.vel[0], s.vel[2]);
-    lijf.rotation.z = s.opGrond ? Math.sin(tijd * v * 2.2) * Math.min(v / 6, 1) * 0.12 : 0;
+    animatie.werkBij(s, dt, LOPEN.rensnelheid);
 
-    const grond = raster.hoogteOp(tekenpos.x, tekenpos.z);
+    const grond = sim.wereld.grondOp(tekenpos.x, tekenpos.z);
+    // In het water: geen schaduw op de bodem, wel kringetjes rond het lijfje.
+    const zwemt = s.modus === 'zwemmen';
+    schaduw.visible = !K.schaduw && !zwemt && grond > -0.3;
+    if (zwemt) {
+      kringTijd -= dt * (0.6 + Math.hypot(s.vel[0], s.vel[2]) * 0.4);
+      if (kringTijd <= 0) {
+        kringTijd = EFFECTEN.zwemKring;
+        deeltjes.kring(tekenpos.x, tekenpos.z, 0.9, 1.4);
+        if (Math.hypot(s.vel[0], s.vel[2]) > 0.4) geluid.zwemslag();
+      }
+    }
+    const beeldSchaal = (window.innerHeight * pixel) / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)));
+    deeltjes.werkBij(dt, beeldSchaal);
+
+    // Omgevingsgeluid: branding dicht bij de zee, jungle tussen de bomen.
+    sim.wereld.vorm.bodem(tekenpos.x, tekenpos.z, bodem);
+    const zeeDichtbij = THREE.MathUtils.clamp(1 - Math.max(0, bodem.d) / 55, 0, 1);
+    bosRond += (THREE.MathUtils.clamp(bodem.bos * 1.3 + bodem.kamp * 0.5, 0, 1) - bosRond) * Math.min(1, dt * 0.8);
+    geluid.omgeving(zeeDichtbij, bosRond);
+    bloesems.werkBij(tijd, dt, camera, beeldSchaal);
     schaduw.position.set(tekenpos.x, grond + 0.03, tekenpos.z);
     schaduw.scale.setScalar(THREE.MathUtils.clamp(1 - (tekenpos.y - grond) / 6, 0.4, 1));
 
@@ -246,17 +354,24 @@ window.spel = {
   renderer,
   scene,
   camera: volgcamera,
+  deeltjes,
+  geluid,
   get speler() {
     return sim.speler(LOKAAL);
   },
   /** Zet de speler op (x, z), op de grond. */
   zet(x, z) {
     const s = sim.speler(LOKAAL);
-    const y = raster.hoogteOp(x, z);
+    const y = sim.wereld.grondOp(x, z);
+    s.klimt = null;
     s.pos = [x, y, z];
     s.vorigePos = [x, y, z];
     s.vel = [0, 0, 0];
     s.opGrond = true;
+  },
+  /** Plof: terug naar de laatste veilige grond. */
+  terug() {
+    sim.terug(LOKAAL);
   },
   /** Zet de camera: hoek 0 = kijkt naar de zee (-z), PI = naar de jungle; kanteling in radialen. */
   zetCamera(hoek, kanteling = CAMERA.kanteling, afstand = CAMERA.afstand) {
@@ -282,7 +397,7 @@ window.spel = {
     }
   },
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, LOPEN, SCENE, WERELD, FLORA, K },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */

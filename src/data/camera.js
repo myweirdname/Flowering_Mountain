@@ -13,4 +13,6 @@ export const CAMERA = {
   rustNaSlepen: 1.2,     // seconden na rondkijken voor de camera weer zelf meedraait
   bovenGrond: 0.6,       // de camera zakt nooit lager dan dit boven het terrein
   beeldhoek: 55,
+  minAfstand: 1.6,       // zo dicht komt de camera als er een boom tussen zit
+  terugNaBoom: 3,        // hoe snel ze daarna terug naar achter schuift
 };

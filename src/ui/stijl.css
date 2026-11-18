@@ -26,7 +26,7 @@ html, body {
 
 .debugscherm {
   position: absolute;
-  top: calc(8px + env(safe-area-inset-top));
+  top: calc(84px + env(safe-area-inset-top));
   left: calc(8px + env(safe-area-inset-left));
   padding: 6px 10px;
   border-radius: 8px;
@@ -177,4 +177,40 @@ body.touch .toetshulp {
   border-bottom-width: 3px;
   font: 12px/1.4 system-ui, sans-serif;
   text-align: center;
+}
+
+/* --- HUD (GD 13): bloesemteller --- */
+.bloesemteller {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(14px + env(safe-area-inset-left));
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 56px;
+  padding: 0 20px 0 8px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 3px 10px rgba(194, 65, 122, 0.25);
+  color: #c2417a;
+  font: 800 30px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+.bloesemteller svg {
+  width: 46px;
+  height: 46px;
+}
+.bloesemteller.wip {
+  animation: wip 0.35s ease-out;
+}
+.bloesemteller.wip svg {
+  animation: draai 0.5s ease-out;
+}
+@keyframes wip {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.22); }
+  100% { transform: scale(1); }
+}
+@keyframes draai {
+  from { transform: rotate(-72deg); }
+  to { transform: rotate(0); }
 }

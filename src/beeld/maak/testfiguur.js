@@ -1,6 +1,6 @@
 // De speelfiguur: een kawaii-meisje in chibi-verhoudingen (groot hoofd, klein lijfje),
 // met lang, blond, zacht krullend haar en een hibiscus in het haar. Volledig uit code.
-// Ze kijkt naar +z. In stap 5 komt de echte animatie erbij.
+// Ze kijkt naar +z. De animatie zit in beeld/animatie.js.
 import * as THREE from 'three';
 import { maakHibiscus } from './hibiscus.js';
 import { maakBol } from './vorm.js';
@@ -17,15 +17,20 @@ export function maakTestfiguur(f) {
   // Huid met wat eigen gloed: zacht en egaal, zoals in een kawaii-tekening.
   const huid = new THREE.MeshLambertMaterial({ color: f.huidKleur, emissive: f.huidKleur, emissiveIntensity: 0.35 });
 
-  // --- Beentjes en bolle schoentjes ---
+  // --- Beentjes en bolle schoentjes, elk aan een heupscharnier zodat ze kunnen stappen ---
+  const benen = [];
   for (const kant of [-1, 1]) {
+    const heup = new THREE.Group();
+    heup.position.set(kant * 0.08, 0.21, 0);
     const been = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.16, 8), huid);
-    been.position.set(kant * 0.08, 0.13, 0);
-    lijf.add(been);
+    been.position.set(0, -0.08, 0);
+    heup.add(been);
     const schoen = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 8), mat(f.schoenKleur));
     schoen.scale.set(0.95, 0.7, 1.25);
-    schoen.position.set(kant * 0.08, 0.05, 0.02);
-    lijf.add(schoen);
+    schoen.position.set(0, -0.16, 0.02);
+    heup.add(schoen);
+    lijf.add(heup);
+    benen.push(heup);
   }
 
   // --- Jurkje: een kort klokje, met een wit kraagje ---
@@ -46,11 +51,16 @@ export function maakTestfiguur(f) {
   lijf.add(kraag);
 
   // --- Korte armpjes met bolle handjes ---
+  // Elk armpje hangt aan een schouderscharnier: zwaaien, omhoog bij een sprong, zwemslagen.
+  const armen = [];
   for (const kant of [-1, 1]) {
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.16, 4, 8), huid);
-    arm.position.set(kant * 0.16, 0.47, 0);
-    arm.rotation.z = kant * 0.45;
-    lijf.add(arm);
+    const schouder = new THREE.Group();
+    schouder.position.set(kant * 0.15, 0.55, 0.02);
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.17, 4, 8), huid);
+    arm.position.set(0, -0.12, 0);
+    schouder.add(arm);
+    lijf.add(schouder);
+    armen.push(schouder);
   }
 
   // --- Het grote hoofd ---
@@ -77,6 +87,7 @@ export function maakTestfiguur(f) {
     g.scale(rx, ry, 1);
     return g;
   };
+  const ogen = [];
   for (const kant of [-1, 1]) {
     const oog = new THREE.Group();
     const rand = new THREE.Mesh(ovaal(R * 0.2, R * 0.27), vlak(f.oogDonker));
@@ -102,7 +113,11 @@ export function maakTestfiguur(f) {
     const flapje = new THREE.Mesh(ovaal(R * 0.05, R * 0.02), vlak(f.oogDonker));
     flapje.position.set(kant * R * 0.21, R * 0.2, 0.005);
     flapje.rotation.z = kant * 0.6;
-    oog.add(rand, iris, gloed, pupil, glim1, glim2, wimper, flapje);
+    // Binnenste groep: die knijpen we plat om te knipperen.
+    const knipper = new THREE.Group();
+    knipper.add(rand, iris, gloed, pupil, glim1, glim2, wimper, flapje);
+    oog.add(knipper);
+    ogen.push(knipper);
     opGezicht(oog, kant * oogX, oogY, 0.012);
 
     // Roze wangetjes.
@@ -196,5 +211,5 @@ export function maakTestfiguur(f) {
   );
   schaduw.rotation.x = -Math.PI / 2;
 
-  return { figuur, lijf, schaduw, basisSchaal };
+  return { figuur, lijf, schaduw, basisSchaal, benen, armen, ogen, krullen };
 }

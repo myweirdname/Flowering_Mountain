@@ -1,5 +1,5 @@
 // Afsteltabel voor de speelfiguur: een kawaii-meisje (chibi) met lang, blond, zacht krullend haar.
-// In stap 5 krijgt ze echte loop-, ren- en springanimaties.
+// De bewegingen staan in data/animatie.js.
 
 export const TESTFIGUUR = {
   hoogte: 1.3,          // totale hoogte in meter
@@ -32,7 +32,4 @@ export const TESTFIGUUR = {
     openheid: 0.05,
     stijl: 0.38,      // kort en dik meeldraadje in plaats van een lange naald
   },
-
-  pletten: 0.25,        // hoeveel het lijfje plet bij een landing
-  rekken: 0.12,         // hoeveel het uitrekt tijdens het stijgen
 };

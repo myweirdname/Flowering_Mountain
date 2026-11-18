@@ -35,7 +35,9 @@ export const FLORA = {
     bladLengte: 3.3,
   },
 
-  rots: { kleuren: [0xc6b4e6, 0xe9c6d6, 0xbfc9e8], grootte: [0.4, 1.4] },
+  // Rotsen: de vorm is een afgeplatte bol; ongeveer 0,44 x de maat steekt boven de grond uit.
+  // grootKans = hoe vaak een rots groot is (een lage rand om op te klimmen).
+  rots: { kleuren: [0xc6b4e6, 0xe9c6d6, 0xbfc9e8], klein: [0.4, 1.4], grootte: [1.7, 2.4], grootKans: 0.07 },
 
   gras: { kleur: 0x6fd65e, punt: 0xc9f590, hoogte: 0.34 },
 
