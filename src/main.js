@@ -23,6 +23,7 @@ import { maakZee } from './beeld/water.js';
 import { maakVerreBerg } from './beeld/maak/berg.js';
 import { maakLichtstralen, maakStuifmeel } from './beeld/sfeer.js';
 import { maakWereldbeeld } from './beeld/wereldbeeld.js';
+import { maakGrens } from './beeld/grens.js';
 import { WIND } from './beeld/wind.js';
 import { maakDebugscherm } from './ui/debug.js';
 
@@ -75,6 +76,8 @@ scene.add(verreBerg.berg, verreBerg.gloed);
 
 // Het landschap en de jungle, in tegels rond de speler.
 const wereldbeeld = maakWereldbeeld(scene, sim, K);
+const grens = maakGrens(sim.wereld.vorm.hoogte, WERELD.speelGrens, WERELD.grensLint);
+scene.add(grens.lint, grens.gordijn);
 const zee = maakZee(sim.wereld.vorm.hoogte, SCENE, zonRichting, K.detail === 0);
 scene.add(zee.vlak);
 const stralen = K.lichtstralen ? maakLichtstralen(sim.wereld.vorm, SCENE.lichtstralen, lichtRichting) : null;
@@ -199,6 +202,7 @@ const lus = maakSpellus({
     WIND.uSpeler.value.copy(tekenpos);
     zee.werkBij(tijd, camera);
     stralen?.werkBij(tijd);
+    grens.werkBij(tijd);
     stuifmeel.werkBij(tijd, camera, pixel);
     if (K.schaduw) {
       zonlicht.target.position.copy(tekenpos);

@@ -30,7 +30,7 @@ export function maakBloemplant(gen, F, detail, toeval) {
   voetBlad.dispose();
 
   const kop = gen.familie === 'heliconia' ? maakHeliconia(fam, hart, blaadje, rand, detail) : maakBloemkop(fam, hart, blaadje, rand, detail);
-  const nBloem = detail ? fam.bloemen : Math.min(fam.bloemen, 2);
+  const nBloem = detail ? fam.bloemen : 1;
   for (let i = 0; i < nBloem; i++) {
     const a = (i / nBloem) * Math.PI * 2 + toeval() * 1.2;
     const uit = nBloem > 1 ? 0.12 + toeval() * 0.1 : 0.03;

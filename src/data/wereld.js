@@ -11,6 +11,8 @@ export const WERELD = {
   // Zo ver mag je lopen (een rechthoek; het echte eiland komt in stap 12).
   speelGrens: { minX: -118, maxX: 118, minZ: -110, maxZ: 115 },
   waterDiepteMax: 0.6,   // te voet niet dieper het water in (zwemmen komt in stap 5)
+  // Zo zie je waar de speelwereld ophoudt: een gestreept lint met een zacht gloeiend gordijntje.
+  grensLint: { kleur1: 0xff4d6d, kleur2: 0xffffff, breedte: 0.5, stap: 1, hoogte: 1.6, gloed: 0xff7fb0, gloedSterkte: 0.45 },
 
   kust: {
     z: -26,              // waar de kustlijn in het midden van de baai ligt

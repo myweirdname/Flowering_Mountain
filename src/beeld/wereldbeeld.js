@@ -185,6 +185,11 @@ export function maakWereldbeeld(scene, sim, K) {
     return data;
   }
 
+  /** Afstand van (x, z) tot het verste punt van tegel (tx, tz). */
+  function verste(tx, tz, x, z) {
+    return Math.hypot(Math.max(Math.abs(x - tx * T), Math.abs(x - (tx + 1) * T)), Math.max(Math.abs(z - tz * T), Math.abs(z - (tz + 1) * T)));
+  }
+
   /** Afstand van (x, z) tot de dichtstbijzijnde rand van tegel (tx, tz). */
   function afstand(tx, tz, x, z) {
     const dx = Math.max(tx * T - x, 0, x - (tx + 1) * T);
@@ -268,7 +273,8 @@ export function maakWereldbeeld(scene, sim, K) {
           for (let tx = cx - r; tx <= cx + r; tx++) {
             if (tx < minT || tx > maxT || tz < minT || tz > maxT) continue;
             const a = afstand(tx, tz, x, z);
-            if (a >= b.straal || a < binnen) continue;
+            // Tegel helemaal buiten deze band? (dichtste punt te ver, of verste punt nog te dichtbij)
+            if (a >= b.straal || verste(tx, tz, x, z) < binnen) continue;
             if (s.laag === 'kleine' && !(tegels.get(sleutel(tx, tz))?.stap >= 3)) continue;
             // Buiten beeld (naast of achter de camera): overslaan. Gemeten vanaf de camera zelf.
             if (a > 12) {

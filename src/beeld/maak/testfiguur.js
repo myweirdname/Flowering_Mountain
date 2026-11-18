@@ -3,6 +3,7 @@
 // Ze kijkt naar +z. In stap 5 komt de echte animatie erbij.
 import * as THREE from 'three';
 import { maakHibiscus } from './hibiscus.js';
+import { maakBol } from './vorm.js';
 
 /** @param {typeof import('../../data/figuur.js').TESTFIGUUR} f */
 export function maakTestfiguur(f) {
@@ -128,7 +129,8 @@ export function maakTestfiguur(f) {
   achter.position.set(0, hoofdY - R * 0.02, -R * 0.14);
   lijf.add(achter);
 
-  const krulVorm = new THREE.IcosahedronGeometry(f.krulGrootte, 2);
+  // Gladde bolletjes van 80 driehoeken: op deze grootte even rond als fijnere, en 4 keer goedkoper.
+  const krulVorm = maakBol(f.krulGrootte, 1);
   const ponyAantal = 9;
   const aantal = f.aantalLokken * f.krulInLok + ponyAantal;
   const krullen = new THREE.InstancedMesh(

@@ -79,19 +79,31 @@ export function stapLopen(s, int, wereld, L, dt, meld) {
   s.pos[1] += s.vel[1] * dt;
   s.pos[2] += s.vel[2] * dt;
 
-  // Binnen het speelveld blijven.
+  // Binnen het speelveld blijven: alleen de snelheid naar buiten verdwijnt, langs de rand lopen kan.
   const gr = wereld.grens;
   if (s.pos[0] < gr.minX || s.pos[0] > gr.maxX) { s.pos[0] = Math.min(Math.max(s.pos[0], gr.minX), gr.maxX); s.vel[0] = 0; }
   if (s.pos[2] < gr.minZ || s.pos[2] > gr.maxZ) { s.pos[2] = Math.min(Math.max(s.pos[2], gr.minZ), gr.maxZ); s.vel[2] = 0; }
 
-  // Niet dieper het water in dan je kan staan (zwemmen komt later). Langs de waterlijn schuiven mag.
+  // Niet dieper het water in dan je kan staan (zwemmen komt later).
+  // Vloeiend langs de waterlijn schuiven: terug naar de vorige plek, de snelheid richting dieper water
+  // wegnemen, en met de rest langs de oever verder (geen gewiebel).
   const diep = -wereld.maxDiepte;
   const r = wereld.raster;
   if (r.hoogteOp(s.pos[0], s.pos[2]) < diep) {
     const ox = s.vorigePos[0];
     const oz = s.vorigePos[2];
-    if (r.hoogteOp(s.pos[0], oz) >= diep) { s.pos[2] = oz; s.vel[2] = 0; }
-    else if (r.hoogteOp(ox, s.pos[2]) >= diep) { s.pos[0] = ox; s.vel[0] = 0; }
+    const helling = r.hellingOp(ox, oz);
+    let nx = -helling[0]; // de richting waarin het dieper wordt
+    let nz = -helling[1];
+    let nl = Math.hypot(nx, nz);
+    if (nl < 1e-6) { nx = s.pos[0] - ox; nz = s.pos[2] - oz; nl = Math.hypot(nx, nz) || 1; }
+    nx /= nl;
+    nz /= nl;
+    const vn = s.vel[0] * nx + s.vel[2] * nz;
+    if (vn > 0) { s.vel[0] -= vn * nx; s.vel[2] -= vn * nz; }
+    const tx = ox + s.vel[0] * dt;
+    const tz = oz + s.vel[2] * dt;
+    if (r.hoogteOp(tx, tz) >= diep) { s.pos[0] = tx; s.pos[2] = tz; }
     else { s.pos[0] = ox; s.pos[2] = oz; s.vel[0] = 0; s.vel[2] = 0; }
   }
 

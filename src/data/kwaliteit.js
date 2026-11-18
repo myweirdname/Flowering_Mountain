@@ -5,9 +5,9 @@ export const KWALITEIT = {
     pixelverhouding: 1,
     antialias: false,
     tegelStraal: 50,     // terreintegels rond de speler
-    fijnStraal: 30,      // tot hier het terrein op 1 m (zoals de simulatie), verder op 2 m
+    fijnStraal: 26,      // tot hier het terrein op 1 m (zoals de simulatie), verder op 2 m
     dichtbij: 22,        // bomen en palmen in vol detail
-    middenStraal: 36,    // bomen in eenvoudige vorm; verder: kruinbollen (allemaal dezelfde vorm, minder fijn)
+    middenStraal: 30,    // bomen in eenvoudige vorm; verder: kruinbollen (allemaal dezelfde vorm, minder fijn)
     dichtbijKlein: 0,    // struiken en bloemen in vol detail (0 = nergens)
     struikStraal: 44,
     bloemStraal: 36,
@@ -50,11 +50,11 @@ export const KWALITEIT = {
     antialias: true,
     tegelStraal: 110,
     fijnStraal: 45,
-    dichtbij: 36,
-    middenStraal: 75,
+    dichtbij: 30,
+    middenStraal: 60,
     dichtbijKlein: 22,
-    struikStraal: 64,
-    bloemStraal: 56,
+    struikStraal: 55,
+    bloemStraal: 50,
     grasStraal: 36,
     struiken: 0.9,
     bloemen: 1,
