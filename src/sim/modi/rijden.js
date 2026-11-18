@@ -33,7 +33,7 @@ function hash(n) {
 export function stapPony(p, stuur, wereld, R, dt, meld) {
   p.tikken++;
   p.boost = Math.max(0, p.boost - dt);
-  if (p.weigert > 0) stapWeigeren(p, wereld, R, dt, meld);
+  if (p.weigert > 0) stapWeigeren(p, stuur, wereld, R, dt, meld);
   else if (!p.opGrond) stapLucht(p, stuur, wereld, R, dt, meld);
   else stapGrond(p, stuur, wereld, R, dt, meld);
 
@@ -79,6 +79,13 @@ function stapGrond(p, stuur, wereld, R, dt, meld) {
     if (Math.abs(d) > R.scherpeBocht) doelV *= 0.35; // eerst draaien, dan pas weer vaart
   }
   if (p.diepte > R.waadDiepte) doelV = Math.min(doelV, p.zwemt ? R.zwemSnelheid : Math.max(R.stap, doelV * R.waadFactor));
+  // Net geweigerd: een paar tellen rustig stappen, zodat ze niet meteen opnieuw in volle vaart weigert.
+  // Stuur je een andere kant op, dan is het meteen voorbij.
+  if (p.rustig > 0) {
+    p.rustig -= dt;
+    if (stuur.richting !== null && Math.abs(hoekVerschil(stuur.richting, p.weigerRichting)) > 0.8) p.rustig = 0;
+    else doelV = Math.min(doelV, R.stap);
+  }
   if (p.boost > 0 && doelV > R.stap) doelV += R.perfectBoost * Math.min(1, p.boost / 0.4);
   p.snelheid = naderen(p.snelheid, doelV, (doelV > p.snelheid ? R.versnelling : R.remmen) * dt);
 
@@ -148,12 +155,8 @@ function verplaats(p, stuur, wereld, R, dt, meld) {
     return g - p.pos[1] <= R.stapHoogte && peil - g <= R.maxDiepte;
   };
   if (!kan(p.pos[0], p.pos[2])) {
-    if (stuur.gereden && p.snelheid > R.weigerVanaf && p.weigert <= 0) {
-      p.pos[0] = ox;
-      p.pos[2] = oz;
-      beginWeigeren(p, meld);
-      return;
-    }
+    // Een rots, een hoge rand of diep water: ze blijft er gewoon zacht voor staan (weigeren is alleen
+    // voor de hindernissen waar je over kan springen), en langs de rand schuiven mag.
     if (kan(p.pos[0], oz)) p.pos[2] = oz;
     else if (kan(ox, p.pos[2])) p.pos[0] = ox;
     else {
@@ -364,11 +367,15 @@ function beginWeigeren(p, meld) {
   p.boost = 0;
   p.sprong = null;
   p.opGrond = true;
+  p.weigerRichting = p.richting;
   meld({ soort: 'weigeren', pony: p.id, speler: p.ruiter ?? p.eigenaar, pos: [...p.pos] });
 }
 
-/** Weigeren: stoppen, hoofd schudden, zelf een stapje terug zetten. */
-function stapWeigeren(p, wereld, R, dt, meld) {
+/**
+ * Weigeren: stoppen, hoofd schudden, zelf een stapje terug zetten. Na het hoofdschudden kan je al
+ * sturen (ze draait dan ter plaatse), zodat je nooit het gevoel hebt dat de knoppen niet meer werken.
+ */
+function stapWeigeren(p, stuurIn, wereld, R, dt, meld) {
   if (p.weigerNieuw) {
     p.weigerNieuw = false;
     p.weigert = R.weigerDuur;
@@ -376,13 +383,19 @@ function stapWeigeren(p, wereld, R, dt, meld) {
   const t = R.weigerDuur - p.weigert;
   p.weigert -= dt;
   if (p.weigert < 1e-4) p.weigert = 0; // afrondingsrestjes wegwerken
+  if (t > R.schudTijd && stuurIn.richting !== null) {
+    const d = hoekVerschil(stuurIn.richting, p.richting);
+    const max = R.draaiStil * dt;
+    p.richting += Math.max(-max, Math.min(max, d));
+  }
   const stuur = { richting: null, snelheid: 0, spring: false, springNu: false, gereden: false };
-  if (t < 0.8) p.snelheid = 0;
-  else p.snelheid = -R.terugSnelheid * Math.sin(Math.min(1, (t - 0.8) / (R.weigerDuur - 0.8)) * Math.PI);
+  if (t < R.schudTijd) p.snelheid = 0;
+  else p.snelheid = -R.terugSnelheid * Math.sin(Math.min(1, (t - R.schudTijd) / (R.weigerDuur - R.schudTijd)) * Math.PI);
   verplaats(p, stuur, wereld, R, dt, meld);
   if (p.weigert <= 0) {
     p.weigert = 0;
     p.snelheid = 0;
+    p.rustig = R.rustigNa;
   }
 }
 

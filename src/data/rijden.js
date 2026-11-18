@@ -42,8 +42,10 @@ export const RIJDEN = {
 
   // --- Weigeren (in plaats van vallen) ---
   weigerVanaf: 2.9,       // sneller dan dit tegen een hindernis: ze weigert; trager: ze stopt gewoon
-  weigerDuur: 1.5,        // stoppen, hoofd schudden, een stap terug
-  terugSnelheid: 1.3,
+  weigerDuur: 1.15,       // stoppen, hoofd schudden, een stap terug
+  schudTijd: 0.55,        // zo lang schudt ze haar hoofd; daarna kan je al sturen
+  terugSnelheid: 1.6,
+  rustigNa: 2.0,          // daarna nog zo lang rustig stappen (tenzij je een andere kant op stuurt)
   borst: 0.62,            // van het midden van de pony tot haar borst
   lijfBreedte: 0.35,
   stapHoogte: 0.45,       // zo hoog stapt ze zonder springen ergens op

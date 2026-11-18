@@ -27,6 +27,8 @@ export function maakPony(id, eigenaar, x, y, z, richting, galop) {
     springVorige: false,
     weigert: 0,           // resterende tijd van een weigering
     weigerNieuw: false,   // net begonnen met weigeren (de duur wordt dan gezet)
+    weigerRichting: 0,    // waar ze heen keek toen ze weigerde
+    rustig: 0,            // na een weigering: zo lang nog rustig stappen
     naBots: false,        // landde na een bots tegen een hindernis: weigeren
     diepte: 0,            // hoe diep ze in het water staat
     zwemt: false,
