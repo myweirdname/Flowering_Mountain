@@ -1,5 +1,6 @@
 // Debugscherm: beelden per seconde, tekenopdrachten en driehoeken, plus vrije extra regels.
 // Zichtbaar met ?debug=1, of aan/uit door drie keer snel linksboven in de hoek te tikken (op pc: F3).
+import { VERSIE } from '../versie.js';
 
 export function maakDebugscherm(ouder, zichtbaar) {
   const el = document.createElement('div');
@@ -52,6 +53,7 @@ export function maakDebugscherm(ouder, zichtbaar) {
         const bps = (beelden * 1000) / (nu - sinds);
         if (nu - start > 3000) laagste = Math.min(laagste, bps);
         el.textContent =
+          `versie         ${VERSIE}\n` +
           `beelden/s      ${bps.toFixed(0)}  (laagste ${laagste === Infinity ? '-' : laagste.toFixed(0)})\n` +
           `tekenopdr.     ${info.render.calls}\n` +
           `driehoeken     ${info.render.triangles.toLocaleString('nl-BE')}\n` +
