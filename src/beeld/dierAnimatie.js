@@ -22,6 +22,8 @@ const KARAKTER = {
   pony: { knik: 0.07, staartZwaai: 0.18, staartAs: 'z', oorDraai: 0.9, oorRust: [0.15, 0.25], schoudersRol: 0.02, hoefKnik: 1.2, kopLaag: 0 },
   tijger: { knik: 0.025, staartZwaai: 0.32, staartAs: 'y', oorDraai: 0.45, oorRust: [0.05, 0.1], schoudersRol: 0.06, hoefKnik: 0.8, kopLaag: 0 },
   tijgerEcht: { knik: 0.04, staartZwaai: 0.1, staartAs: 'zij', oorDraai: 0.55, oorRust: [0.06, 0.04], schoudersRol: 0.09, hoefKnik: 0.9, kopLaag: 0.2 },
+  // De echte welp: nieuwsgierig, kop omhoog, een staartje dat meer zwaait en oren die alles horen.
+  tijgerWelp: { knik: 0.06, staartZwaai: 0.22, staartAs: 'zij', oorDraai: 0.8, oorRust: [0.08, 0.05], schoudersRol: 0.05, hoefKnik: 1.0, kopLaag: 0 },
 };
 const _q = new THREE.Quaternion();
 const _qx = new THREE.Quaternion();
@@ -154,7 +156,7 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
           geeuwTijd = Math.max(0, geeuwTijd - dt);
           const x = 1 - geeuwTijd / LEVEN.geeuwDuur;
           const open = glad(x, 0.04, 0.38) * (1 - glad(x, 0.7, 0.97));
-          bek = open * 0.85;
+          bek = open * 0.62;
           kopOp = open * 0.32;
           oorPlat = open * 0.55;
           ogenSmal = open * 0.8;
@@ -166,7 +168,7 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
           const x = 1 - brulTijd / LEVEN.brulDuur;
           const inademen = glad(x, 0, 0.12) * (1 - glad(x, 0.14, 0.24));
           const open = glad(x, 0.12, 0.26) * (1 - glad(x, 0.76, 1));
-          bek = Math.max(bek, inademen * 0.1 + open * (0.74 + Math.sin(tijd * 31) * 0.03));
+          bek = Math.max(bek, inademen * 0.08 + open * (0.58 + Math.sin(tijd * 31) * 0.025));
           kopOp = inademen * 0.22 + open * 0.12;
           kopVoor = open;
           oorPlat = Math.max(oorPlat, Math.max(inademen, open));

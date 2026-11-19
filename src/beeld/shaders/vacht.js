@@ -66,7 +66,19 @@ float tijgerStreep(vec3 s) {
   float d2 = abs(fract(w + 0.26 * sign(h2 - 0.5)) - 0.5);
   float vork = step(0.62, h2) * (1.0 - smoothstep(dikte * 0.22 - aa, dikte * 0.22 + aa, d2)) * (1.0 - smoothstep(0.15, einde - 0.1, v));
 #endif
+#ifdef VACHT_FIJN
+  // Naden: waar u onnatuurlijk snel verandert over het lijf (twee buurpunten met een ander streeppatroon),
+  // zou één driehoekje een bundel dunne lijntjes krijgen. Daar geen strepen. Gewone strepen veranderen
+  // hoogstens ±3 per meter (gemeten ±4); zo'n naad 20 of meer. Hangt niet af van hoe ver je kijkt.
+  float snel = fwidth(s.x) / max(length(fwidth(vRust)), 1e-6);
+  streep *= 1.0 - smoothstep(4.5, 7.0, snel);
+  vork *= 1.0 - smoothstep(4.5, 7.0, snel);
+  // Echte strepen zijn diepzwart, ook waar ze zwakker gezet zijn (anders worden ze grijs op witte vacht):
+  // alleen helemaal aan de rand van een streepgebied vervagen ze.
+  return max(streep, vork) * smoothstep(0.0, 0.55, s.z) * uStreep.w;
+#else
   return max(streep, vork) * s.z * uStreep.w;
+#endif
 }
 `;
 
@@ -97,13 +109,16 @@ export function maakVachtMateriaal(o = {}) {
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nattribute vec3 streep;\nvarying vec3 vStreep;${fijn ? '\nvarying vec3 vRust;\nattribute vec2 teken;\nvarying vec2 vTeken;' : ''}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvStreep = streep;${fijn ? '\nvRust = position;\nvTeken = teken;' : ''}`);
+      .replace(
+        '#include <common>',
+        `#include <common>\nattribute vec3 streep;\nvarying vec3 vStreep;${fijn ? '\nvarying vec3 vRust;\nattribute vec4 teken;\nattribute vec4 tekenAfstand;\nvarying vec4 vTeken;\nvarying vec4 vTekenAfstand;' : ''}`
+      )
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvStreep = streep;${fijn ? '\nvRust = position;\nvTeken = teken;\nvTekenAfstand = tekenAfstand;' : ''}`);
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
-${fijn ? '#define VACHT_FIJN\nvarying vec3 vRust;\nvarying vec2 vTeken;' : ''}
+${fijn ? '#define VACHT_FIJN\nvarying vec3 vRust;\nvarying vec4 vTeken;\nvarying vec4 vTekenAfstand;' : ''}
 varying vec3 vStreep;
 uniform vec4 uStreep;
 uniform vec3 uStreepKleur;
@@ -126,11 +141,15 @@ ${
   float korrel = length(fwidth(vRust)) * 110.0;
   float haar = vRuis3(vRust * vec3(120.0, 120.0, 38.0)) * 0.65 + vRuis3(vRust * 260.0) * 0.35;
   diffuseColor.rgb *= 1.0 + (haar - 0.5) * 2.0 * uFijn.x * (1.0 - smoothstep(0.5, 1.4, korrel));
-  // Vaste tekening (de strepen van het gezicht): vTeken.x = afstand tot het midden van de streep in
-  // halve streepbreedtes (binnen < 1). Scherp per beeldpunt, met een licht rafelige rand.
-  float td = abs(vTeken.x) + (vRuis3(vRust * 90.0) - 0.5) * 0.35 * uFijn.y;
-  float taa = fwidth(vTeken.x) + 0.03;
-  diffuseColor.rgb = mix(diffuseColor.rgb, uStreepKleur, (1.0 - smoothstep(1.0 - taa, 1.0 + taa, td)) * clamp(vTeken.y, 0.0, 1.0) * uStreep.w);
+  // Vaste tekening (de strepen van het gezicht), in vier kanalen: vTeken = afstand tot het midden van de
+  // dichtstbijzijnde streep van elk kanaal met teken, vTekenAfstand = zonder teken, in halve
+  // streepbreedtes (binnen < 1). De eerste geeft rechte, scherpe randen; de tweede schakelt de tekening
+  // uit waar de eerste verspringt (tussen twee strepen van hetzelfde kanaal). Licht rafelige rand.
+  vec4 td = abs(vTeken) + (vRuis3(vRust * 90.0) - 0.5) * 0.3 * uFijn.y;
+  vec4 taa = fwidth(vTeken) + 0.03;
+  vec4 tk4 = (1.0 - smoothstep(1.0 - taa, 1.0 + taa, td)) * (1.0 - smoothstep(2.4, 3.2, vTekenAfstand));
+  float tk = max(max(tk4.x, tk4.y), max(tk4.z, tk4.w));
+  diffuseColor.rgb = mix(diffuseColor.rgb, uStreepKleur, tk * uStreep.w);
 }`
     : ''
 }

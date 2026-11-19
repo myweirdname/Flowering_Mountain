@@ -123,11 +123,82 @@ export const TIJGERS = {
   },
 };
 
+// --- De echte welpen (verbeterronde stap 6, plan van de gebruiker) ---
+// Een welp is van nature al schattig. Nagemeten op foto's van welpen van ±3 à 4 maanden (Wikimedia
+// Commons, zie OVERDRACHT_TIJGERS.md): de kop is ±0,43 van de schouderhoogte (volwassen ±0,33), rond, met
+// een hoog bol voorhoofd, een korte kleine snuit, grote ogen en grote ronde oren; een mollig, diep lijf (de
+// pootjes lijken kort), dikke poten met heel grote voeten en een korte, dikke staart. Dezelfde technieken
+// en dezelfde gezichtstekening als de volwassen tijger (maakTijger), met deze verhoudingen.
+export const WELPVORM = {
+  ...TIJGERVORM,
+  schofthoogte: 0.42,      // een welp van een paar maanden: tot aan je knie
+  rompLengte: 0.8,         // het lijf is ±1,3 keer zo lang als hoog (volwassen ±1,45)
+  rompDikte: 1.12,         // mollig
+  rompDiepte: 1.25,        // een diepe buik: de pootjes lijken korter
+  pootDikte: 1.45,         // dikke pootjes, tot onderaan
+  pootGrootte: 1.45,       // heel grote voeten (daar groeit hij nog in)
+  hoofdGrootte: 1.4,       // grote kop (met de pluizige vacht erbij)
+  kopOp: 0.07,             // de kop hoog, nieuwsgierig (volwassen 0: iets lager dan de rug)
+  nekKort: 0.08,           // een korte nek
+  kopBreedte: 1.08,        // een breed, rond gezicht
+  snuit: 0.56,             // korte snuit
+  snuitHoogte: 0.72,       // en de neus dicht bij de ogen
+  bekMaat: 0.8,            // een klein snoetje en een kleine onderkaak
+  zacht: 1.7,              // mollig: de spieren lopen zacht in elkaar over
+  schedel: 1.1,            // bol voorhoofd
+  neus: 0.85,              // een klein roze neusje
+  oogGrootte: 0.04,        // grote ogen (volwassen 0.028)
+  oogAfstand: 1.1,
+  oogVorm: [0.62, 0.55, 0.05], // rond en open (bovenooglid, onderooglid, schuinte), volwassen [0.44, 0.38, 0.17]
+  pupil: 0.3,              // grote pupillen (volwassen 0.2)
+  frons: 0.35,             // nog niet streng
+  oorGrootte: 1.45,        // grote ronde oren
+  staartLengte: 0.62,      // kort en dik staartje
+  staartDikte: 0.062,
+  staartHang: 0.45,        // hangt niet tot op de grond
+  wangkraag: 0.85,         // pluizige wangen
+  hoektand: 0.024,         // melktandjes
+  holteSterkte: 0.35,
+  rand: 0.45,              // pluizige vacht: veel zacht licht langs de randen
+  keelBreedte: 0.15,       // alleen het midden van keel en borst is wit (de schouders oranje)
+  vachtRuis: 0.1,
+  rafelFijn: 1.5,          // zachtere, pluizige streepranden
+  karakter: 'tijgerWelp',
+};
+
+// Kleuren van de welpen: zoals hun ouders, iets zachter. Heel jonge welpen hebben nog blauwgrijze ogen.
+export const WELPEN = {
+  bengaals: {
+    ...TIJGERS.bengaals,
+    naam: 'Bengaalse welp',
+    vachtKleur: 0xd8823a,
+    rugKleur: 0xbc6624,
+    flankKleur: 0xebb070,
+    oogKleur: 0x6f94ab,     // blauwgrijs
+    oogRand: 0x2c4352,
+    strepen: { dichtheid: 11.5, dikte: 0.27, rafel: 1.4, sterkte: 0.95, zaad: 5.3 },
+  },
+  wit: {
+    ...TIJGERS.wit,
+    naam: 'Witte welp',
+    strepen: { dichtheid: 11.0, dikte: 0.25, rafel: 1.5, sterkte: 0.9, zaad: 9.2 },
+  },
+  goud: {
+    ...TIJGERS.goud,
+    naam: 'Gouden welp',
+    oogKleur: 0x7f9c8a,     // grijsgroen
+    oogRand: 0x34483c,
+    strepen: { dichtheid: 10.0, dikte: 0.25, rafel: 1.5, sterkte: 0.8, zaad: 14.8 },
+  },
+};
+
 // --- De knuffeltijgers (eerste versie, kawaii) ---
 // Bewaard voor later (welpjes, knuffels, pictogrammen). Gebruikt door maak/tijgerKawaii.js.
 // Gedeelde vorm: rond, mollig en vriendelijk, met grote zachte poten.
 export const KAWAII_TIJGERVORM = {
-  schofthoogte: 0.82,
+  // Op vraag van de gebruiker zo groot als een welp (was 0.82, zo groot als de pony). Alle maten van de
+  // knuffel schalen mee: zijn vorm blijft precies dezelfde.
+  schofthoogte: 0.4,
   rompLengte: 1.05,
   rompDikte: 0.27,
   pootDikte: 0.085,
@@ -173,6 +244,57 @@ export const KAWAII_TIJGERS = {
     oogKleur: 0x8cc84a,     // groen
     streepKleur: 0xc6763e,  // zachte roodbruine strepen
     strepen: { dichtheid: 5.6, dikte: 0.3, rafel: 1.1, sterkte: 0.85, zaad: 12.4 },
+  },
+};
+
+// --- De knuffelwelpen (verbeterronde stap 6, op vraag van de gebruiker) ---
+// "Een knuffel met de echte bouw, in welpgrootte": de bouw en de verhoudingen van de echte welp (WELPVORM),
+// maar als speelgoed, passend bij de kawaii-wereld: een gladde vacht zonder haartjes, snoepkleuren met een
+// zachte gloed, grote glanzende ogen, een roze neusje, een lachend mondje en blosjes. Gemaakt in
+// maak/knuffelWelp.js. De eerste knuffeltijger (hierboven) blijft ongewijzigd bewaard.
+export const KNUFFELWELPVORM = {
+  ...WELPVORM,
+  zacht: 2.1,              // nog ronder en zachter: speelgoed heeft geen spieren
+  oogGrootte: 0.052,       // grote kawaii-ogen
+  oogAfstand: 1.24,
+  oogKring: 0,             // geen donkere kring rond de ogen (het kawaii-oog heeft zijn eigen randje)
+  frons: 0,                // helemaal niet streng
+  hoektand: 0.018,
+  holteSterkte: 0.18,      // bijna geen donkere plooien: een knuffel is overal zacht
+  vachtRuis: 0,            // een gladde vacht, zonder haartjes
+  rafelFijn: 0.25,         // strepen met zachte, gladde randen
+  rand: 0.34,              // zacht licht langs de randen, zoals de pony en de eerste knuffeltijger
+  gloed: 0.15,             // een beetje eigen gloed (kawaii)
+  neusKleur: 0xff8fa8,     // roze neusje
+  neusRand: 0xe0708a,
+  lipKleur: 0xf2e8de,      // geen zwarte lippen: de mondspleet valt weg in de witte snoet
+  lachKleur: 0x5a2a2a,     // het lachende mondje en de snorhaarpuntjes
+  oogDonker: 0x231616,
+  wangKleur: 0xff9ab0,     // blosjes
+};
+
+// Snoepkleuren van de knuffelwelpen (zoals de eerste knuffeltijgers), met weinig maar vette strepen.
+export const KNUFFELWELPEN = {
+  bengaals: {
+    ...KAWAII_TIJGERS.bengaals,
+    naam: 'Bengaalse knuffelwelp',
+    flankKleur: 0xffc07a,
+    oogRand: 0x8a5a10,
+    strepen: { dichtheid: 7.5, dikte: 0.34, rafel: 0.8, sterkte: 1.0, zaad: 3.1 },
+  },
+  wit: {
+    ...KAWAII_TIJGERS.wit,
+    naam: 'Witte knuffelwelp',
+    flankKleur: 0xfbf7f2,
+    oogRand: 0x2a5a8a,
+    strepen: { dichtheid: 7.8, dikte: 0.3, rafel: 0.9, sterkte: 0.95, zaad: 7.7 },
+  },
+  goud: {
+    ...KAWAII_TIJGERS.goud,
+    naam: 'Gouden knuffelwelp',
+    flankKleur: 0xffe0a8,
+    oogRand: 0x4e6a1a,
+    strepen: { dichtheid: 7.0, dikte: 0.32, rafel: 0.9, sterkte: 0.85, zaad: 12.4 },
   },
 };
 

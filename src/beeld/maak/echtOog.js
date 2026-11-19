@@ -13,6 +13,7 @@ uniform vec3 uIrisRand;
 uniform vec3 uDonker;
 uniform vec3 uVorm;
 uniform vec2 uGlim;
+uniform float uPupil;
 // q: plaats in het oog, x van -1 (binnenhoek) tot 1 (buitenhoek), y omhoog, in halve oogbreedtes.
 vec3 oogKleur(vec2 q) {
   float x = clamp(q.x, -1.0, 1.0);
@@ -27,7 +28,7 @@ vec3 oogKleur(vec2 q) {
   float r = length(d);
   float aa = fwidth(r) + 0.004;
   const float irisR = 0.66;
-  const float pupilR = 0.2;
+  float pupilR = uPupil;
   float hoek = atan(d.y, d.x);
   float vezel = sin(hoek * 41.0 + sin(hoek * 9.0) * 1.7) * 0.5 + 0.5;
   vec3 iris = mix(uIris * 1.2 + 0.03, uIris, smoothstep(pupilR, irisR * 0.8, r));
@@ -51,10 +52,11 @@ vec3 oogKleur(vec2 q) {
 
 /**
  * @param {{ breedte: number, kant: number, iris: number, irisRand: number, donker: number,
- *           kromming: number, boven?: number, onder?: number, kanteling?: number }} o
+ *           kromming: number, boven?: number, onder?: number, kanteling?: number, pupil?: number }} o
  *   breedte: halve breedte van het oog (meter); kant: 1 = linkeroog (+x), -1 = rechteroog;
  *   kromming: straal waarmee het oog meebuigt met het hoofd;
- *   boven/onder: hoe bol het boven- en onderooglid is; kanteling: buitenhoek hoger (streng)
+ *   boven/onder: hoe bol het boven- en onderooglid is; kanteling: buitenhoek hoger (streng);
+ *   pupil: straal van de pupil (in halve oogbreedtes; een welp heeft grote pupillen)
  */
 export function maakEchtOog(o) {
   const R = o.breedte;
@@ -100,6 +102,7 @@ export function maakEchtOog(o) {
     uVorm: { value: new THREE.Vector3(hB, hO, kant) },
     // Het glimlichtje staat bij beide ogen aan dezelfde kant (zelfde licht).
     uGlim: { value: new THREE.Vector2(-0.22 * o.kant, 0.24) },
+    uPupil: { value: o.pupil ?? 0.2 },
   };
   const mat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
   mat.onBeforeCompile = (shader) => {

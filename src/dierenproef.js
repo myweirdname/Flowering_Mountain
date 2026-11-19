@@ -1,19 +1,24 @@
 // Dierenproef (BOUWPLAN stap 6): een draaitafel om de pony en de tijgers los te bekijken,
 // met stap- en drafanimatie, knipperen, oren en staart. Open dieren.html.
 // Slepen = rondkijken, scrollen of knijpen = in- en uitzoomen, tik op een dier = blij dier.
-// "Brul" laat de tijgers brullen; "Knuffel" toont de eerste, schattige tijgers (bewaard voor later).
-// Snelkoppelingen: ?dier=pony|bengaals|wit|goud|alle  ?gang=stil|stap|draf  ?tijger=knuffel
+// Dubbeltik (of dubbelklik) = daar inzoomen; rechts slepen, Shift + slepen of met twee vingers = verschuiven.
+// "Kop" = de kop van dichtbij; "Pauze" = het dier staat stil (handig om rustig te bekijken).
+// "Brul" laat de tijgers brullen; "Welp" toont de echte welpen; "Knuffelwelp" de knuffels met de echte
+// bouw van een welp; "Knuffel" toont de eerste, schattige
+// tijgers (bewaard voor later).
+// Snelkoppelingen: ?dier=pony|bengaals|wit|goud|alle  ?gang=stil|stap|draf  ?tijger=welp|knuffelwelp|knuffel
 //                  ?debug=1  ?kwaliteit=laag
 import * as THREE from 'three';
 import { INSTELLINGEN } from './kern/instellingen.js';
 import { KWALITEIT } from './data/kwaliteit.js';
 import { SCENE } from './data/scene.js';
-import { PONY, PONYKLEUREN, TIJGERVORM, TIJGERS, KAWAII_TIJGERVORM, KAWAII_TIJGERS } from './data/dieren.js';
+import { PONY, PONYKLEUREN, TIJGERVORM, TIJGERS, WELPVORM, WELPEN, KNUFFELWELPVORM, KNUFFELWELPEN, KAWAII_TIJGERVORM, KAWAII_TIJGERS } from './data/dieren.js';
 import { laadPonyKleur, bewaarPonyKleur, ponyMetKleur } from './kern/ponyKleur.js';
 import { TESTFIGUUR } from './data/figuur.js';
 import { maakPony } from './beeld/maak/pony.js';
 import { maakTijger } from './beeld/maak/tijger.js';
 import { maakKawaiiTijger } from './beeld/maak/tijgerKawaii.js';
+import { maakKnuffelWelp } from './beeld/maak/knuffelWelp.js';
 import { maakTestfiguur } from './beeld/maak/testfiguur.js';
 import { maakHibiscus } from './beeld/maak/hibiscus.js';
 import { maakDierAnimatie } from './beeld/dierAnimatie.js';
@@ -132,7 +137,7 @@ function schaduwVlek(straal, lengte) {
 }
 
 // --- De dieren ---
-// stijl: alleen bij de tijgers ('echt' of 'knuffel'); de pony heeft er geen.
+// stijl: alleen bij de tijgers ('echt', 'welp', 'knuffelwelp' of 'knuffel'); de pony heeft er geen.
 /** @type {{ sleutel: string, naam: string, kleur: string, dier: any, anim: any, houder: THREE.Group, stijl?: string }[]} */
 const dieren = [];
 function voegDierToe(sleutel, naam, kleur, dier, i, stijl) {
@@ -140,7 +145,7 @@ function voegDierToe(sleutel, naam, kleur, dier, i, stijl) {
   houder.add(dier.groep);
   houder.add(schaduwVlek(dier.breedte * 0.95, dier.lengte * 0.5));
   // De vlek onder het midden van het lijf, niet onder de heupen.
-  houder.children[1].position.z = dier.soort === 'tijger' && stijl === 'echt' ? 0.12 : 0;
+  houder.children[1].position.z = dier.soort === 'tijger' && stijl === 'echt' ? 0.12 : ['welp', 'knuffelwelp', 'knuffel'].includes(stijl) ? 0.04 : 0;
   dier.mesh.castShadow = schaduw;
   tafel.add(houder);
   dieren.push({ sleutel, naam, kleur, dier, anim: maakDierAnimatie(dier, i + 1), houder, stijl });
@@ -154,10 +159,19 @@ Object.entries(TIJGERS).forEach(([sleutel, T], i) => {
   voegDierToe(sleutel, T.naam, hex(T.vachtKleur), maakTijger(TIJGERVORM, T, i), i + 1, 'echt');
 });
 const bouwEcht = performance.now() - bouwStart;
+const welpStart = performance.now();
+Object.entries(WELPEN).forEach(([sleutel, T], i) => {
+  voegDierToe(sleutel, T.naam, hex(T.vachtKleur), maakTijger(WELPVORM, T, i + 5), i + 4, 'welp');
+});
+const bouwWelp = performance.now() - welpStart;
+Object.entries(KNUFFELWELPEN).forEach(([sleutel, T], i) => {
+  voegDierToe(sleutel, T.naam, hex(T.vachtKleur), maakKnuffelWelp(KNUFFELWELPVORM, T, i + 9), i + 7, 'knuffelwelp');
+});
 Object.entries(KAWAII_TIJGERS).forEach(([sleutel, T], i) => {
   voegDierToe(sleutel, T.naam, hex(T.vachtKleur), maakKawaiiTijger(KAWAII_TIJGERVORM, T, i), i + 1, 'knuffel');
 });
-let knuffel = url.get('tijger') === 'knuffel';
+/** Welke tijgers je ziet: de echte, de welpen, de knuffelwelpen of de eerste knuffels. */
+let tijgerStijl = ['welp', 'knuffelwelp', 'knuffel'].includes(url.get('tijger')) ? url.get('tijger') : 'echt';
 
 // De avonturier, om te zien hoe groot de dieren zijn (alleen bij "allemaal").
 const meisje = maakTestfiguur(TESTFIGUUR);
@@ -181,7 +195,7 @@ function zetKeuze(k) {
   const alle = k === 'alle';
   // In een rij, van klein naar groot, met de avonturier ernaast.
   const rij = ['pony', 'bengaals', 'wit', 'goud'];
-  const stijl = knuffel ? 'knuffel' : 'echt';
+  const stijl = tijgerStijl;
   dieren.forEach((d) => {
     d.houder.visible = (alle || d.sleutel === k) && (!d.stijl || d.stijl === stijl);
     if (alle) d.houder.position.set((rij.indexOf(d.sleutel) - 1.2) * 1.05, 0, 0);
@@ -189,11 +203,13 @@ function zetKeuze(k) {
   });
   meisjeHouder.visible = alle;
   meisjeHouder.position.set(2.85, 0, 0.15);
-  // De echte tijgers zijn lang: dan wat verder weg.
-  const groot = k !== 'pony' && !knuffel;
+  // De echte tijgers zijn lang: dan wat verder weg. De welpen zijn klein: dichterbij.
+  const tijger = k !== 'pony';
+  const groot = tijger && stijl === 'echt';
+  const welp = tijger && ['welp', 'knuffelwelp', 'knuffel'].includes(stijl); // allemaal welpgrootte
   if (alle) Object.assign(camDoel, { afstand: 7.6, hoogte: 0.28 });
-  else Object.assign(camDoel, { afstand: groot ? 4.3 : 3.4, hoogte: 0.3 });
-  camDoel.doel.set(alle ? 0.45 : 0, alle ? 0.55 : groot ? 0.6 : 0.62, groot ? 0.15 : 0);
+  else Object.assign(camDoel, { afstand: groot ? 4.3 : welp ? 2.0 : 3.4, hoogte: 0.3 });
+  camDoel.doel.set(alle ? 0.45 : 0, alle ? 0.55 : groot ? 0.6 : welp ? 0.28 : 0.62, groot ? 0.15 : welp ? 0.06 : 0);
   if (alle) {
     tafel.rotation.y = 0;
     camDoel.hoek = 0;
@@ -229,7 +245,7 @@ function knop(ouder, tekst, kleur, actief, klik) {
   knoppen.push({ b, actief });
   return b;
 }
-for (const d of dieren.filter((q) => q.stijl !== 'knuffel')) {
+for (const d of dieren.filter((q) => !q.stijl || q.stijl === 'echt')) {
   knop(boven, d.naam.replace(' tijger', '').replace('Bengaalse', 'Bengaals'), d.kleur, () => keuze === d.sleutel, () => zetKeuze(d.sleutel));
 }
 knop(boven, 'Allemaal', 'conic-gradient(#d98a4e 0 25%, #dc7a26 0 50%, #ece5d8 0 75%, #e6b35e 0)', () => keuze === 'alle', () => zetKeuze('alle'));
@@ -237,14 +253,31 @@ knop(onder, 'Stil', null, () => gang === 'stil', () => ((gang = 'stil'), werkKno
 knop(onder, 'Stap', null, () => gang === 'stap', () => ((gang = 'stap'), werkKnoppenBij()));
 knop(onder, 'Draf', null, () => gang === 'draf', () => ((gang = 'draf'), werkKnoppenBij()));
 knop(onder, 'Draaien', null, () => draaien, () => ((draaien = !draaien), werkKnoppenBij()));
+knop(onder, 'Kop', null, () => false, naarKop);
+knop(onder, 'Pauze', null, () => bevroren, () => ((bevroren = !bevroren), werkKnoppenBij()));
 const brulKnop = knop(onder, 'Brul', null, () => false, brul);
-const knuffelKnop = knop(onder, 'Knuffel', null, () => knuffel, () => ((knuffel = !knuffel), zetKeuze(keuze)));
+const welpKnop = knop(onder, 'Welp', null, () => tijgerStijl === 'welp', () => ((tijgerStijl = tijgerStijl === 'welp' ? 'echt' : 'welp'), zetKeuze(keuze)));
+const knuffelWelpKnop = knop(onder, 'Knuffelwelp', null, () => tijgerStijl === 'knuffelwelp', () => ((tijgerStijl = tijgerStijl === 'knuffelwelp' ? 'echt' : 'knuffelwelp'), zetKeuze(keuze)));
+const knuffelKnop = knop(onder, 'Knuffel', null, () => tijgerStijl === 'knuffel', () => ((tijgerStijl = tijgerStijl === 'knuffel' ? 'echt' : 'knuffel'), zetKeuze(keuze)));
 const kleurKnop = knop(onder, 'Kleuren', 'conic-gradient(#ff8cc6, #ffd84d, #7ee08a, #7ec8f0, #b9a3e3, #ff8cc6)', () => paneelOpen, () => {
   paneelOpen = !paneelOpen;
   werkKnoppenBij();
 });
 function brul() {
+  bevroren = false;
   for (const d of dieren) if (d.houder.visible) d.anim.brul?.();
+  werkKnoppenBij();
+}
+let bevroren = false;
+/** De camera dicht bij de kop van het gekozen dier (of het eerste zichtbare). */
+function naarKop() {
+  const d = dieren.find((q) => q.houder.visible && q.sleutel === keuze) ?? dieren.find((q) => q.houder.visible);
+  if (!d) return;
+  d.dier.bot.hoofd.getWorldPosition(camDoel.doel);
+  camDoel.afstand = d.dier.soort !== 'tijger' ? 1.3 : ['welp', 'knuffelwelp', 'knuffel'].includes(d.stijl) ? 0.6 : 1.1;
+  camDoel.hoogte = 0.12;
+  draaien = false;
+  werkKnoppenBij();
 }
 
 // --- Kleuren van de pony: zelf kiezen uit kleurstalen, of zelf mengen met de regenboog ---
@@ -336,6 +369,8 @@ function werkKnoppenBij() {
   const pony = keuze === 'pony';
   if (!pony) paneelOpen = false;
   brulKnop.style.display = pony ? 'none' : '';
+  welpKnop.style.display = pony ? 'none' : '';
+  knuffelWelpKnop.style.display = pony ? 'none' : '';
   knuffelKnop.style.display = pony ? 'none' : '';
   kleurKnop.style.display = pony ? '' : 'none';
   paneel.style.display = paneelOpen ? '' : 'none';
@@ -351,7 +386,7 @@ function werkKnoppenBij() {
 }
 const uitleg = document.createElement('div');
 uitleg.className = 'dierenuitleg';
-uitleg.textContent = 'Sleep om rond te kijken · tik op een dier';
+uitleg.textContent = 'Sleep om rond te kijken · dubbeltik om in te zoomen · tik op een dier';
 ui.append(uitleg);
 setTimeout(() => (uitleg.style.opacity = '0'), 6000);
 zetKeuze(keuze);
@@ -361,16 +396,30 @@ const wijzers = new Map();
 let knijpStart = 0;
 let knijpAfstand = 0;
 let gesleept = 0;
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+let schuiven = false;
+let knijpMidden = { x: 0, y: 0 };
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
   wijzers.set(e.pointerId, { x: e.clientX, y: e.clientY });
   gesleept = 0;
+  schuiven = e.button === 2 || e.shiftKey;
   if (wijzers.size === 2) {
     const [a, b] = [...wijzers.values()];
     knijpStart = Math.hypot(a.x - b.x, a.y - b.y);
     knijpAfstand = camDoel.afstand;
+    knijpMidden = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
 });
+/** Het kijkpunt verschuiven in het vlak van het scherm. */
+const _rechts = new THREE.Vector3();
+const _op = new THREE.Vector3();
+function verschuif(dx, dy) {
+  camera.matrixWorld.extractBasis(_rechts, _op, new THREE.Vector3());
+  const k = cam.afstand * 0.0016;
+  camDoel.doel.addScaledVector(_rechts, -dx * k).addScaledVector(_op, dy * k);
+  draaien = false;
+}
 canvas.addEventListener('pointermove', (e) => {
   const w = wijzers.get(e.pointerId);
   if (!w) return;
@@ -380,16 +429,34 @@ canvas.addEventListener('pointermove', (e) => {
   w.y = e.clientY;
   gesleept += Math.abs(dx) + Math.abs(dy);
   if (wijzers.size === 1) {
-    camDoel.hoek -= dx * 0.008;
-    camDoel.hoogte = THREE.MathUtils.clamp(camDoel.hoogte + dy * 0.004, -0.05, 1.2);
+    if (schuiven || e.shiftKey) verschuif(dx, dy);
+    else {
+      camDoel.hoek -= dx * 0.008;
+      camDoel.hoogte = THREE.MathUtils.clamp(camDoel.hoogte + dy * 0.004, -0.6, 1.3);
+    }
   } else if (wijzers.size === 2) {
     const [a, b] = [...wijzers.values()];
     const d = Math.hypot(a.x - b.x, a.y - b.y);
-    camDoel.afstand = THREE.MathUtils.clamp(knijpAfstand * (knijpStart / Math.max(d, 1)), 1.2, 12);
+    camDoel.afstand = THREE.MathUtils.clamp(knijpAfstand * (knijpStart / Math.max(d, 1)), 0.35, 12);
+    // Met twee vingers samen schuiven = verschuiven.
+    const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    verschuif(m.x - knijpMidden.x, m.y - knijpMidden.y);
+    knijpMidden = m;
   }
 });
+let vorigeTik = { t: 0, x: 0, y: 0 };
 const los = (e) => {
-  if (wijzers.size === 1 && gesleept < 8) tik(e.clientX, e.clientY);
+  if (wijzers.size === 1 && gesleept < 8) {
+    const nu = performance.now();
+    // Dubbeltik: inzoomen op die plek.
+    if (nu - vorigeTik.t < 350 && Math.hypot(e.clientX - vorigeTik.x, e.clientY - vorigeTik.y) < 30) {
+      zoomOp(e.clientX, e.clientY);
+      vorigeTik.t = 0;
+    } else {
+      tik(e.clientX, e.clientY);
+      vorigeTik = { t: nu, x: e.clientX, y: e.clientY };
+    }
+  }
   wijzers.delete(e.pointerId);
 };
 canvas.addEventListener('pointerup', los);
@@ -398,7 +465,7 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
-    camDoel.afstand = THREE.MathUtils.clamp(camDoel.afstand * Math.exp(e.deltaY * 0.001), 1.2, 12);
+    camDoel.afstand = THREE.MathUtils.clamp(camDoel.afstand * Math.exp(e.deltaY * 0.001), 0.35, 12);
   },
   { passive: false }
 );
@@ -412,6 +479,18 @@ function tik(x, y) {
   const raak = straal.intersectObjects(zichtbaar.map((d) => d.dier.mesh), false)[0];
   const d = raak && zichtbaar.find((q) => q.dier.mesh === raak.object);
   if (d) d.anim.blij();
+}
+/** Inzoomen op het punt van een dier waar je dubbeltikte. */
+function zoomOp(x, y) {
+  muis.set((x / innerWidth) * 2 - 1, -(y / innerHeight) * 2 + 1);
+  straal.setFromCamera(muis, camera);
+  const zichtbaar = dieren.filter((d) => d.houder.visible);
+  const raak = straal.intersectObjects(zichtbaar.map((d) => d.dier.mesh), false)[0];
+  if (!raak) return;
+  camDoel.doel.copy(raak.point);
+  camDoel.afstand = Math.min(camDoel.afstand * 0.55, 1.2);
+  draaien = false;
+  werkKnoppenBij();
 }
 
 function pasAan() {
@@ -457,7 +536,7 @@ function beeld(nu) {
   );
   camera.lookAt(cam.doel);
 
-  for (const d of dieren) if (d.houder.visible) d.anim.werkBij(dt, gang, camera);
+  if (!bevroren) for (const d of dieren) if (d.houder.visible) d.anim.werkBij(dt, gang, camera);
   if (meisjeHouder.visible) meisjeAnim.werkBij(meisjeToestand, dt, 5);
 
   renderer.render(scene, camera);
@@ -470,9 +549,12 @@ window.dieren = {
   kies: zetKeuze,
   gang: (g) => ((gang = g), werkKnoppenBij()),
   draai: (aan) => ((draaien = aan), werkKnoppenBij()),
-  knuffel: (aan) => ((knuffel = aan), zetKeuze(keuze)),
+  knuffel: (aan) => ((tijgerStijl = aan ? 'knuffel' : 'echt'), zetKeuze(keuze)),
+  welp: (aan) => ((tijgerStijl = aan ? 'welp' : 'echt'), zetKeuze(keuze)),
+  knuffelwelp: (aan) => ((tijgerStijl = aan ? 'knuffelwelp' : 'echt'), zetKeuze(keuze)),
   brul,
   bouwtijd: Math.round(bouwEcht),
+  bouwtijdWelpen: Math.round(bouwWelp),
   // Springt meteen (handig voor schermafdrukken); doel = [x, y, z] waar de camera naar kijkt.
   camera: (hoek, hoogte, afstand, doel) => {
     Object.assign(camDoel, { hoek, hoogte, afstand });

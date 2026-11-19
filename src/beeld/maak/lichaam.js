@@ -38,16 +38,19 @@ function afstandTotSegment(p, a, b) {
  *   scherpte?: number,
  *   botGewicht?: (p: THREE.Vector3, i: Info) => [string, number][],
  *   holte?: { veld: import('./vormveld.js').Veld, bereik: number, sterkte: number },
- *   teken?: (p: THREE.Vector3, n: THREE.Vector3) => [number, number],
+ *   teken?: (p: THREE.Vector3, n: THREE.Vector3) => number[],
  * }} Opties
  *   botten: aan welke botten dit deel mag hangen (met zachte overgang ertussen);
  *   streep: [u, v, sterkte] voor de strepenshader (u = langs de streeprichting in meter);
  *   botGewicht: zelf kiezen hoe sterk elk punt aan welk bot hangt (bv. de bek: boven aan het
  *     hoofd, onder aan de kaak), in plaats van volgens de afstand;
  *   holte: plooien en holtes donkerder maken, gemeten met een vormveld van het hele lichaam;
- *   teken: vaste, scherpe tekening (de strepen van het gezicht): [afstand tot de streep in
- *     streepbreedtes (binnen < 1), sterkte]; de vachtshader tekent ze per beeldpunt
+ *   teken: vaste, scherpe tekening (de strepen van het gezicht), in vier kanalen: [vier afstanden tot
+ *     de dichtstbijzijnde streep van elk kanaal met teken, dezelfde vier afstanden zonder teken], in
+ *     halve streepbreedtes (binnen < 1); de vachtshader tekent ze. Strepen die dicht bij elkaar liggen,
+ *     zitten in een ander kanaal (anders verspringt de tekening in de smalle strook ertussen).
  */
+const GEEN_TEKEN = [9, 9, 9, 9, 9, 9, 9, 9];
 export class Lichaam {
   constructor() {
     /** @type {{ naam: string, ouder: number, pos: THREE.Vector3, eind: THREE.Vector3 }[]} */
@@ -58,6 +61,7 @@ export class Lichaam {
     this.kleur = [];
     this.streep = [];
     this.teken = [];
+    this.tekenAfstand = [];
     this.tekenGebruikt = false;
     this.skinI = [];
     this.skinW = [];
@@ -278,9 +282,10 @@ export class Lichaam {
       this.kleur.push(_kl.r * donker, _kl.g * donker, _kl.b * donker);
       const st = o.streep ? o.streep(p, n, I[k]) : [0, 0, 0];
       this.streep.push(st[0], st[1], st[2]);
-      const tk = o.teken ? o.teken(p, n) : [9, 0];
+      const tk = o.teken ? o.teken(p, n) : GEEN_TEKEN;
       if (o.teken) this.tekenGebruikt = true;
-      this.teken.push(tk[0], tk[1]);
+      this.teken.push(tk[0], tk[1], tk[2], tk[3]);
+      this.tekenAfstand.push(tk[4], tk[5], tk[6], tk[7]);
       if (o.botGewicht) {
         // Zelf gekozen gewichten (hoogstens vier botten).
         const lijst = o.botGewicht(p, I[k]).slice(0, 4);
@@ -312,9 +317,14 @@ export class Lichaam {
         this.skinW.push(b === undefined ? 0 : gewichten[b] / som4);
       }
     }
-    // Driehoeken, altijd met de buitenkant naar buiten (we controleren met de normaal).
+    // Driehoeken, met de buitenkant naar buiten. Het rooster zelf (ring na ring, straal na straal) geeft
+    // overal dezelfde draairichting; welke kant buiten is, beslissen alle driehoeken samen met hun
+    // normalen. Niet per driehoek: in een smalle plooi (onder de wangkraag) zou dat om en om fout gaan,
+    // en dan zie je door rijtjes driehoekjes heen.
     const A = new THREE.Vector3();
     const B = new THREE.Vector3();
+    const driehoeken = [];
+    let stem = 0;
     for (let i = 0; i < rijen - 1; i++) {
       for (let j = 0; j < kolommen - 1; j++) {
         const a = i * kolommen + j;
@@ -326,12 +336,17 @@ export class Lichaam {
           A.subVectors(P[y], P[x]);
           B.subVectors(P[z], P[x]);
           const kruis = A.cross(B);
-          if (kruis.lengthSq() < 1e-14) continue; // samengevallen punt aan een uiteinde
-          const goed = kruis.dot(N[x]) + kruis.dot(N[y]) + kruis.dot(N[z]) > 0;
-          if (goed) this.index.push(start + x, start + y, start + z);
-          else this.index.push(start + x, start + z, start + y);
+          const l = kruis.length();
+          if (l < 1e-7) continue; // samengevallen punt aan een uiteinde
+          stem += Math.sign(kruis.dot(N[x]) + kruis.dot(N[y]) + kruis.dot(N[z])) * l;
+          driehoeken.push(x, y, z);
         }
       }
+    }
+    const om = stem < 0;
+    for (let t = 0; t < driehoeken.length; t += 3) {
+      if (om) this.index.push(start + driehoeken[t], start + driehoeken[t + 2], start + driehoeken[t + 1]);
+      else this.index.push(start + driehoeken[t], start + driehoeken[t + 1], start + driehoeken[t + 2]);
     }
   }
 
@@ -346,7 +361,10 @@ export class Lichaam {
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.kleur, 3));
     geo.setAttribute('streep', new THREE.Float32BufferAttribute(this.streep, 3));
-    if (this.tekenGebruikt) geo.setAttribute('teken', new THREE.Float32BufferAttribute(this.teken, 2));
+    if (this.tekenGebruikt) {
+      geo.setAttribute('teken', new THREE.Float32BufferAttribute(this.teken, 4));
+      geo.setAttribute('tekenAfstand', new THREE.Float32BufferAttribute(this.tekenAfstand, 4));
+    }
     geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.skinI, 4));
     geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.skinW, 4));
     geo.setIndex(this.index);
