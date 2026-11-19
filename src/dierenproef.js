@@ -1,15 +1,19 @@
 // Dierenproef (BOUWPLAN stap 6): een draaitafel om de pony en de tijgers los te bekijken,
 // met stap- en drafanimatie, knipperen, oren en staart. Open dieren.html.
 // Slepen = rondkijken, scrollen of knijpen = in- en uitzoomen, tik op een dier = blij dier.
-// Snelkoppelingen: ?dier=pony|bengaals|wit|goud|alle  ?gang=stil|stap|draf  ?debug=1  ?kwaliteit=laag
+// "Brul" laat de tijgers brullen; "Knuffel" toont de eerste, schattige tijgers (bewaard voor later).
+// Snelkoppelingen: ?dier=pony|bengaals|wit|goud|alle  ?gang=stil|stap|draf  ?tijger=knuffel
+//                  ?debug=1  ?kwaliteit=laag
 import * as THREE from 'three';
 import { INSTELLINGEN } from './kern/instellingen.js';
 import { KWALITEIT } from './data/kwaliteit.js';
 import { SCENE } from './data/scene.js';
-import { PONY, TIJGERVORM, TIJGERS } from './data/dieren.js';
+import { PONY, PONYKLEUREN, TIJGERVORM, TIJGERS, KAWAII_TIJGERVORM, KAWAII_TIJGERS } from './data/dieren.js';
+import { laadPonyKleur, bewaarPonyKleur, ponyMetKleur } from './kern/ponyKleur.js';
 import { TESTFIGUUR } from './data/figuur.js';
 import { maakPony } from './beeld/maak/pony.js';
 import { maakTijger } from './beeld/maak/tijger.js';
+import { maakKawaiiTijger } from './beeld/maak/tijgerKawaii.js';
 import { maakTestfiguur } from './beeld/maak/testfiguur.js';
 import { maakHibiscus } from './beeld/maak/hibiscus.js';
 import { maakDierAnimatie } from './beeld/dierAnimatie.js';
@@ -128,21 +132,32 @@ function schaduwVlek(straal, lengte) {
 }
 
 // --- De dieren ---
-/** @type {{ sleutel: string, naam: string, kleur: string, dier: any, anim: any, houder: THREE.Group }[]} */
+// stijl: alleen bij de tijgers ('echt' of 'knuffel'); de pony heeft er geen.
+/** @type {{ sleutel: string, naam: string, kleur: string, dier: any, anim: any, houder: THREE.Group, stijl?: string }[]} */
 const dieren = [];
-function voegDierToe(sleutel, naam, kleur, dier, i) {
+function voegDierToe(sleutel, naam, kleur, dier, i, stijl) {
   const houder = new THREE.Group();
   houder.add(dier.groep);
   houder.add(schaduwVlek(dier.breedte * 0.95, dier.lengte * 0.5));
+  // De vlek onder het midden van het lijf, niet onder de heupen.
+  houder.children[1].position.z = dier.soort === 'tijger' && stijl === 'echt' ? 0.12 : 0;
   dier.mesh.castShadow = schaduw;
   tafel.add(houder);
-  dieren.push({ sleutel, naam, kleur, dier, anim: maakDierAnimatie(dier, i + 1), houder });
+  dieren.push({ sleutel, naam, kleur, dier, anim: maakDierAnimatie(dier, i + 1), houder, stijl });
 }
 const hex = (c) => '#' + new THREE.Color(c).getHexString();
-voegDierToe('pony', PONY.naam, hex(PONY.vachtKleur), maakPony(PONY), 0);
+const bouwStart = performance.now();
+// De pony met de kleuren die het kind zelf koos (knop "Kleuren").
+let ponyKleur = laadPonyKleur();
+voegDierToe('pony', PONY.naam, hex(ponyMetKleur(PONY, ponyKleur).vachtKleur), maakPony(ponyMetKleur(PONY, ponyKleur)), 0);
 Object.entries(TIJGERS).forEach(([sleutel, T], i) => {
-  voegDierToe(sleutel, T.naam, hex(T.vachtKleur), maakTijger(TIJGERVORM, T, i), i + 1);
+  voegDierToe(sleutel, T.naam, hex(T.vachtKleur), maakTijger(TIJGERVORM, T, i), i + 1, 'echt');
 });
+const bouwEcht = performance.now() - bouwStart;
+Object.entries(KAWAII_TIJGERS).forEach(([sleutel, T], i) => {
+  voegDierToe(sleutel, T.naam, hex(T.vachtKleur), maakKawaiiTijger(KAWAII_TIJGERVORM, T, i), i + 1, 'knuffel');
+});
+let knuffel = url.get('tijger') === 'knuffel';
 
 // De avonturier, om te zien hoe groot de dieren zijn (alleen bij "allemaal").
 const meisje = maakTestfiguur(TESTFIGUUR);
@@ -166,16 +181,19 @@ function zetKeuze(k) {
   const alle = k === 'alle';
   // In een rij, van klein naar groot, met de avonturier ernaast.
   const rij = ['pony', 'bengaals', 'wit', 'goud'];
+  const stijl = knuffel ? 'knuffel' : 'echt';
   dieren.forEach((d) => {
-    d.houder.visible = alle || d.sleutel === k;
+    d.houder.visible = (alle || d.sleutel === k) && (!d.stijl || d.stijl === stijl);
     if (alle) d.houder.position.set((rij.indexOf(d.sleutel) - 1.2) * 1.05, 0, 0);
     else d.houder.position.set(0, 0, 0);
   });
   meisjeHouder.visible = alle;
   meisjeHouder.position.set(2.85, 0, 0.15);
+  // De echte tijgers zijn lang: dan wat verder weg.
+  const groot = k !== 'pony' && !knuffel;
   if (alle) Object.assign(camDoel, { afstand: 7.6, hoogte: 0.28 });
-  else Object.assign(camDoel, { afstand: 3.4, hoogte: 0.3 });
-  camDoel.doel.set(alle ? 0.45 : 0, alle ? 0.55 : 0.62, 0);
+  else Object.assign(camDoel, { afstand: groot ? 4.3 : 3.4, hoogte: 0.3 });
+  camDoel.doel.set(alle ? 0.45 : 0, alle ? 0.55 : groot ? 0.6 : 0.62, groot ? 0.15 : 0);
   if (alle) {
     tafel.rotation.y = 0;
     camDoel.hoek = 0;
@@ -211,14 +229,125 @@ function knop(ouder, tekst, kleur, actief, klik) {
   knoppen.push({ b, actief });
   return b;
 }
-for (const d of dieren) knop(boven, d.naam.replace(' tijger', '').replace('Bengaalse', 'Bengaals'), d.kleur, () => keuze === d.sleutel, () => zetKeuze(d.sleutel));
-knop(boven, 'Allemaal', 'conic-gradient(#d98a4e 0 25%, #ff9d3f 0 50%, #f6f1ea 0 75%, #ffcf7e 0)', () => keuze === 'alle', () => zetKeuze('alle'));
+for (const d of dieren.filter((q) => q.stijl !== 'knuffel')) {
+  knop(boven, d.naam.replace(' tijger', '').replace('Bengaalse', 'Bengaals'), d.kleur, () => keuze === d.sleutel, () => zetKeuze(d.sleutel));
+}
+knop(boven, 'Allemaal', 'conic-gradient(#d98a4e 0 25%, #dc7a26 0 50%, #ece5d8 0 75%, #e6b35e 0)', () => keuze === 'alle', () => zetKeuze('alle'));
 knop(onder, 'Stil', null, () => gang === 'stil', () => ((gang = 'stil'), werkKnoppenBij()));
 knop(onder, 'Stap', null, () => gang === 'stap', () => ((gang = 'stap'), werkKnoppenBij()));
 knop(onder, 'Draf', null, () => gang === 'draf', () => ((gang = 'draf'), werkKnoppenBij()));
 knop(onder, 'Draaien', null, () => draaien, () => ((draaien = !draaien), werkKnoppenBij()));
+const brulKnop = knop(onder, 'Brul', null, () => false, brul);
+const knuffelKnop = knop(onder, 'Knuffel', null, () => knuffel, () => ((knuffel = !knuffel), zetKeuze(keuze)));
+const kleurKnop = knop(onder, 'Kleuren', 'conic-gradient(#ff8cc6, #ffd84d, #7ee08a, #7ec8f0, #b9a3e3, #ff8cc6)', () => paneelOpen, () => {
+  paneelOpen = !paneelOpen;
+  werkKnoppenBij();
+});
+function brul() {
+  for (const d of dieren) if (d.houder.visible) d.anim.brul?.();
+}
+
+// --- Kleuren van de pony: zelf kiezen uit kleurstalen, of zelf mengen met de regenboog ---
+let paneelOpen = false;
+const paneel = document.createElement('div');
+paneel.className = 'kleurpaneel';
+paneel.addEventListener('pointerdown', (e) => e.stopPropagation());
+ui.append(paneel);
+const ONDERDELEN = [
+  ['vacht', 'Vacht', PONY.vachtKleur],
+  ['manen', 'Manen', PONY.maanKleur],
+  ['sokjes', 'Sokjes', PONY.sokKleur],
+  ['bles', 'Bles', PONY.blesKleur],
+];
+/** @type {{ deel: string, kleur: number, b: HTMLElement }[]} */
+const stalen = [];
+const css = (c) => '#' + c.toString(16).padStart(6, '0');
+for (const [deel, naam, standaard] of ONDERDELEN) {
+  const rij = document.createElement('div');
+  rij.className = 'kleurrij';
+  const label = document.createElement('span');
+  label.className = 'kleurnaam';
+  label.textContent = naam;
+  rij.append(label);
+  const kleuren = [standaard, ...PONYKLEUREN[deel].filter((c) => c !== standaard)];
+  for (const kleur of kleuren) {
+    const b = document.createElement('button');
+    b.className = 'staal';
+    b.style.background = css(kleur);
+    b.addEventListener('click', () => kiesKleur(deel, kleur));
+    rij.append(b);
+    stalen.push({ deel, kleur, b });
+  }
+  // Zelf mengen: de regenboog opent een kleurenschijf.
+  const meng = document.createElement('label');
+  meng.className = 'staal regenboog';
+  const invoer = document.createElement('input');
+  invoer.type = 'color';
+  invoer.value = css(ponyKleur[deel] ?? standaard);
+  invoer.addEventListener('input', () => kiesKleur(deel, parseInt(invoer.value.slice(1), 16)));
+  meng.append(invoer);
+  rij.append(meng);
+  stalen.push({ deel, kleur: -1, b: meng });
+  paneel.append(rij);
+}
+const terug = document.createElement('button');
+terug.className = 'dierknop klein kleurterug';
+terug.textContent = 'Zoals eerst';
+terug.addEventListener('click', () => {
+  ponyKleur = {};
+  bewaarPonyKleur(ponyKleur);
+  herbouwPony();
+});
+paneel.append(terug);
+// De gekozen kleurcodes, klein onderaan: voor papa om af te lezen, zodat Claude ze als standaard kan
+// instellen in de afsteltabel (PONY in src/data/dieren.js).
+const codes = document.createElement('div');
+codes.className = 'kleurcodes';
+paneel.append(codes);
+
+function kiesKleur(deel, kleur) {
+  ponyKleur = { ...ponyKleur, [deel]: kleur };
+  bewaarPonyKleur(ponyKleur);
+  herbouwPony();
+}
+
+/** Bouw de pony opnieuw met de gekozen kleuren (gaat snel genoeg om meteen te zien). */
+function herbouwPony() {
+  const d = dieren.find((q) => q.sleutel === 'pony');
+  const P = ponyMetKleur(PONY, ponyKleur);
+  d.houder.remove(d.dier.groep);
+  d.dier.groep.traverse((o) => {
+    if (o.isMesh) {
+      o.geometry.dispose();
+      o.material.dispose();
+    }
+  });
+  d.dier = maakPony(P);
+  d.dier.mesh.castShadow = schaduw;
+  d.houder.add(d.dier.groep);
+  d.anim = maakDierAnimatie(d.dier, 1);
+  ponyStip.style.background = hex(P.vachtKleur);
+  werkKnoppenBij();
+}
+const ponyStip = /** @type {HTMLElement} */ (knoppen[0].b.querySelector('.stip'));
 function werkKnoppenBij() {
   for (const k of knoppen) k.b.classList.toggle('aan', k.actief());
+  // Brul en Knuffel horen bij de tijgers, Kleuren bij de pony.
+  const pony = keuze === 'pony';
+  if (!pony) paneelOpen = false;
+  brulKnop.style.display = pony ? 'none' : '';
+  knuffelKnop.style.display = pony ? 'none' : '';
+  kleurKnop.style.display = pony ? '' : 'none';
+  paneel.style.display = paneelOpen ? '' : 'none';
+  pasAan(); // met het paneel open schuift het beeld naar rechts, zodat de pony vrij staat
+  uitleg.style.display = paneelOpen ? 'none' : '';
+  for (const s of stalen) {
+    const gekozen = ponyKleur[s.deel];
+    const standaard = ONDERDELEN.find((o) => o[0] === s.deel)[2];
+    const aan = s.kleur === -1 ? gekozen !== undefined && !PONYKLEUREN[s.deel].includes(gekozen) && gekozen !== standaard : (gekozen ?? standaard) === s.kleur;
+    s.b.classList.toggle('aan', aan);
+  }
+  codes.textContent = 'Code: ' + ONDERDELEN.map(([deel, naam, standaard]) => `${naam.toLowerCase()} ${css(ponyKleur[deel] ?? standaard).slice(1)}`).join(' · ');
 }
 const uitleg = document.createElement('div');
 uitleg.className = 'dierenuitleg';
@@ -290,6 +419,8 @@ function pasAan() {
   camera.aspect = innerWidth / innerHeight;
   // Op een smal (staand) scherm wat verder weg, zodat alles in beeld blijft.
   camera.fov = camera.aspect < 1 ? 52 : 38;
+  if (paneelOpen) camera.setViewOffset(innerWidth, innerHeight, -Math.min(innerWidth * 0.22, 230), 0, innerWidth, innerHeight);
+  else camera.clearViewOffset();
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', pasAan);
@@ -339,7 +470,16 @@ window.dieren = {
   kies: zetKeuze,
   gang: (g) => ((gang = g), werkKnoppenBij()),
   draai: (aan) => ((draaien = aan), werkKnoppenBij()),
-  camera: (hoek, hoogte, afstand) => Object.assign(camDoel, { hoek, hoogte, afstand }),
+  knuffel: (aan) => ((knuffel = aan), zetKeuze(keuze)),
+  brul,
+  bouwtijd: Math.round(bouwEcht),
+  // Springt meteen (handig voor schermafdrukken); doel = [x, y, z] waar de camera naar kijkt.
+  camera: (hoek, hoogte, afstand, doel) => {
+    Object.assign(camDoel, { hoek, hoogte, afstand });
+    if (doel) camDoel.doel.set(doel[0], doel[1], doel[2]);
+    Object.assign(cam, { hoek, hoogte, afstand });
+    cam.doel.copy(camDoel.doel);
+  },
   tafel,
   lijst: dieren,
   renderer,

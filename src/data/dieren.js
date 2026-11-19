@@ -38,8 +38,95 @@ export const PONY = {
   pluimen: true,           // pluizige haren boven de hoefjes
 };
 
-// Gedeelde vorm van de tijgers: rond, mollig en vriendelijk, met grote zachte poten.
+// Kleurstalen voor de pony: de kinderen kiezen zelf (knop "Kleuren" in de dierenproef; later in de stal).
+// Alleen deze vier onderdelen, met weinig maar mooie keuzes (de jongste is 6). Het laatste bolletje in
+// het paneel is altijd "zelf mengen" (een kleurenschijf). De eerste kleur van elke rij is de standaard.
+// Buik, snoet en de schaduw in de manen worden vanzelf afgeleid van de gekozen kleuren.
+export const PONYKLEUREN = {
+  vacht: [0xd98a4e, 0xa0522d, 0x7a4e34, 0x3a2a26, 0xe8c27a, 0xdcd6d0, 0xf2a6c8, 0xb9a3e3],
+  manen: [0xfff0b8, 0xffffff, 0xd9a050, 0x5a3a2a, 0x2a2224, 0xff8cc6, 0x9b7be0, 0x7ec8f0],
+  sokjes: [0xfff4e6, 0xfff0b8, 0x3a2a26, 0xff8cc6, 0x9b7be0, 0x7ec8f0],
+  bles: [0xfff4e6, 0xfff0b8, 0xff8cc6, 0x9b7be0, 0x7ec8f0],
+};
+
+// --- De echte tijgers (verbeterronde stap 6, wens van de kinderen) ---
+// "De wereld is kawaii, maar de tijgers moeten er veel echter uitzien: niet schattig, maar gevaarlijk
+// (ook al zijn ze lief)." Echte verhoudingen: een lang, laag, gespierd lijf, zware schouders, grote
+// poten, een kleiner hoofd met wangkraag, smalle amberkleurige ogen onder een zware wenkbrauw, en
+// hoektanden die je ziet als hij geeuwt of brult. In het spel blijven ze altijd vrienden (GD 8).
 export const TIJGERVORM = {
+  schofthoogte: 0.95,      // tot de bovenkant van de schouders: zo hoog als de pony
+  rompLengte: 1.0,         // 1 = echte verhouding (lijf ongeveer anderhalve keer zo lang als hoog)
+  rompDikte: 1.0,          // 1 = echte breedte; hoger = zwaarder, lager = slanker
+  pootDikte: 1.0,          // hoe zwaar de poten zijn
+  pootGrootte: 1.0,        // hoe groot de voeten zijn
+  hoofdGrootte: 1.15,      // 1 = de maat van een echte tijger; iets groter leest beter in een spel
+  oogGrootte: 0.028,       // halve breedte van een oog (een echte tijger: ±0,02; iets groter leest beter)
+  staartLengte: 1.0,
+  staartDikte: 0.05,
+  wangkraag: 1.0,          // hoe ver de witte bakkebaarden uitsteken
+  hoektand: 0.058,         // lengte van de bovenste hoektanden
+  neusKleur: 0xc4786c,     // baksteenroze neus met een donkere rand
+  neusRand: 0x2a1a18,
+  lipKleur: 0x1c1212,      // zwarte lippen
+  mondKleur: 0x6e1e26,     // binnenkant van de bek
+  tongKleur: 0xd8707a,
+  tandKleur: 0xf6efdc,
+  snorKleur: 0xffffff,
+  oogDonker: 0x0b0806,
+  // Hoe donker de plooien en holtes zijn (oksels, onder de kin, tussen de poten): geeft diepte.
+  holteSterkte: 0.45,
+  // Vacht: fijne haartjes in het licht en rafelige streepranden.
+  vachtRuis: 0.08,
+  rafelFijn: 1.0,
+  gloed: 0.03,             // de knuffeltijger had 0.15: echte vacht gloeit niet
+  rand: 0.2,               // zacht licht langs de randen (haartjes in tegenlicht)
+};
+
+// Elke soort is een ander kleurpalet en andere streepwaarden (TP 5.7). Natuurlijke kleuren.
+export const TIJGERS = {
+  bengaals: {
+    naam: 'Bengaalse tijger',
+    vachtKleur: 0xdc7a26,   // diep roestoranje
+    rugKleur: 0xb85a16,     // donkerder op de rug
+    flankKleur: 0xeaa45c,   // lichter goud waar het oranje naar het wit overgaat
+    buikKleur: 0xf3ece0,
+    oorBinnen: 0xf2ece2,
+    oogKleur: 0xe8a81e,     // amber
+    oogRand: 0x8a4a10,      // donkere ring rond de iris
+    streepKleur: 0x140d0b,
+    strepen: { dichtheid: 10.5, dikte: 0.3, rafel: 1.1, sterkte: 1.0, zaad: 3.1 },
+  },
+  wit: {
+    naam: 'Witte tijger',
+    vachtKleur: 0xece5d8,
+    rugKleur: 0xd8cebe,
+    flankKleur: 0xf4efe6,
+    buikKleur: 0xfbf9f4,
+    oorBinnen: 0xf8f4ee,
+    oogKleur: 0x79b4e6,     // ijsblauw
+    oogRand: 0x2a5a8a,
+    streepKleur: 0x2e2420,  // donker chocoladebruin
+    strepen: { dichtheid: 10.0, dikte: 0.27, rafel: 1.2, sterkte: 0.95, zaad: 7.7 },
+  },
+  goud: {
+    naam: 'Gouden tijger',
+    vachtKleur: 0xe6b35e,   // bleek goud (een "golden tabby")
+    rugKleur: 0xd09640,
+    flankKleur: 0xf0cd8a,
+    buikKleur: 0xfaf3e2,
+    oorBinnen: 0xfaf3e6,
+    oogKleur: 0x9db23a,     // groenig amber
+    oogRand: 0x4e5a1a,
+    streepKleur: 0x9a5426,  // zacht roodbruin
+    strepen: { dichtheid: 9.0, dikte: 0.26, rafel: 1.2, sterkte: 0.85, zaad: 12.4 },
+  },
+};
+
+// --- De knuffeltijgers (eerste versie, kawaii) ---
+// Bewaard voor later (welpjes, knuffels, pictogrammen). Gebruikt door maak/tijgerKawaii.js.
+// Gedeelde vorm: rond, mollig en vriendelijk, met grote zachte poten.
+export const KAWAII_TIJGERVORM = {
   schofthoogte: 0.82,
   rompLengte: 1.05,
   rompDikte: 0.27,
@@ -55,8 +142,8 @@ export const TIJGERVORM = {
   oogDonker: 0x231616,
 };
 
-// Elke soort is een ander kleurpalet en andere streepwaarden (TP 5.7).
-export const TIJGERS = {
+// Kleurpaletten van de knuffeltijgers: helder en snoepachtig.
+export const KAWAII_TIJGERS = {
   bengaals: {
     naam: 'Bengaalse tijger',
     vachtKleur: 0xff9d3f,
@@ -111,4 +198,8 @@ export const LEVEN = {
   kijkTussen: [1.5, 4],       // af en toe ergens anders heen kijken (soms naar jou)
   kijkNaarJou: 0.45,          // kans dat het dier naar de camera kijkt
   overgang: 3,                // hoe snel een dier van gang wisselt
+  // Alleen dieren met een beweegbare kaak (de echte tijgers):
+  geeuwTussen: [12, 26],      // af en toe een grote geeuw als hij stilstaat: dan zie je de hoektanden
+  geeuwDuur: 2.8,
+  brulDuur: 1.8,              // een brul (knop in de dierenproef; later de brulknop in het spel)
 };

@@ -36,6 +36,7 @@ import { maakGrens } from './beeld/grens.js';
 import { WIND } from './beeld/wind.js';
 import { maakDebugscherm } from './ui/debug.js';
 import { PONY } from './data/dieren.js';
+import { laadPonyKleur, ponyMetKleur } from './kern/ponyKleur.js';
 import { RIJDEN } from './data/rijden.js';
 import { WEIDE } from './data/springweide.js';
 import { maakPony as maakPonyVorm } from './beeld/maak/pony.js';
@@ -145,7 +146,8 @@ const bloeispoor = maakBloeispoor(K.detail ? 1600 : 700, K.detail, RIJDEN.spoorL
 scene.add(bloeispoor.mesh);
 
 // --- De pony ---
-const ponyVorm = maakPonyVorm(PONY);
+// Met de kleuren die het kind zelf koos in de dierenproef (bewaard op dit toestel).
+const ponyVorm = maakPonyVorm(ponyMetKleur(PONY, laadPonyKleur()));
 const ponyHouder = new THREE.Group();
 ponyHouder.scale.setScalar(RIJDEN.ponySchaal);
 ponyHouder.add(ponyVorm.groep);

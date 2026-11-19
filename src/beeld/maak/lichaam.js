@@ -2,7 +2,10 @@
 // vastgemaakt aan een gewrichtenboom. Alles wordt één huid op een skelet: één tekenopdracht
 // per dier, en de gewrichten buigen zacht mee. Geen skeletbestanden, geen modellen.
 // Assen: het dier kijkt naar +z, y is omhoog, x is opzij. Maten in meter.
+// Naast lobben en bollen kan een lichaam ook gebouwd worden uit vormvelden (vormveld.js): dan
+// versmelten spieren en botten vloeiend, zoals bij de echte tijger.
 import * as THREE from 'three';
+import { zoekRand, veldNormaal, vrijheid } from './vormveld.js';
 
 const _ab = new THREE.Vector3();
 const _ap = new THREE.Vector3();
@@ -23,17 +26,24 @@ function afstandTotSegment(p, a, b) {
 }
 
 /**
- * @typedef {{ t: number, v: number, lokaal: THREE.Vector3 }} Info
+ * @typedef {{ t: number, v: number, lokaal: THREE.Vector3, hoek?: number, boog?: number, holte?: number }} Info
  *   t: plaats langs de lob (0..1); v: rond de lob (0 = bovenkant, 1 = onderkant);
- *   lokaal: de eenheidsrichting in de bol of doorsnede (voor kleuren per kant)
+ *   lokaal: de eenheidsrichting in de bol of doorsnede (voor kleuren per kant);
+ *   hoek: hoek rond de lijn (0..2π, 0 = boven); boog: afstand langs de lijn in meter;
+ *   holte: 1 = vrij, 0 = diep in een plooi (alleen met de optie `holte`)
  * @typedef {{
  *   botten: string[],
  *   kleur?: number | ((p: THREE.Vector3, n: THREE.Vector3, i: Info) => number | THREE.Color),
  *   streep?: (p: THREE.Vector3, n: THREE.Vector3, i: Info) => [number, number, number],
  *   scherpte?: number,
+ *   botGewicht?: (p: THREE.Vector3, i: Info) => [string, number][],
+ *   holte?: { veld: import('./vormveld.js').Veld, bereik: number, sterkte: number },
  * }} Opties
  *   botten: aan welke botten dit deel mag hangen (met zachte overgang ertussen);
- *   streep: [u, v, sterkte] voor de strepenshader (u = langs de streeprichting in meter)
+ *   streep: [u, v, sterkte] voor de strepenshader (u = langs de streeprichting in meter);
+ *   botGewicht: zelf kiezen hoe sterk elk punt aan welk bot hangt (bv. de bek: boven aan het
+ *     hoofd, onder aan de kaak), in plaats van volgens de afstand;
+ *   holte: plooien en holtes donkerder maken, gemeten met een vormveld van het hele lichaam
  */
 export class Lichaam {
   constructor() {
@@ -148,6 +158,96 @@ export class Lichaam {
     return this;
   }
 
+  /**
+   * Een huid rond een lijn, gevormd door een vormveld: vanuit elk punt van de lijn zoekt een
+   * krans van stralen waar de rand van de vorm ligt. Aan beide uiteinden sluit een kapje van
+   * stralen de vorm af. De lijn moet overal binnen de vorm lopen.
+   * @param {THREE.Vector3[]} pad
+   * @param {import('./vormveld.js').Veld} veld
+   * @param {Opties & { rMax: number, ringen?: number, zijden?: number, kap?: [number, number], op?: THREE.Vector3 }} o
+   *   rMax: hoe ver de rand hoogstens van de lijn ligt; kap: aantal ringen in elk eindkapje
+   */
+  langs(pad, veld, o) {
+    const ringen = o.ringen ?? 24;
+    const zijden = o.zijden ?? 20;
+    const [kapA, kapB] = o.kap ?? [6, 6];
+    const lijn = new THREE.CatmullRomCurve3(pad);
+    const lengte = lijn.getLength();
+    const op = o.op ?? new THREE.Vector3(0, 1, 0);
+    // Assen langs de lijn, meegedragen van ring tot ring zodat de krans nooit omdraait.
+    const assen = [];
+    const s = new THREE.Vector3();
+    for (let i = 0; i <= ringen; i++) {
+      const t = i / ringen;
+      const c = lijn.getPointAt(t);
+      const raak = lijn.getTangentAt(t);
+      if (i === 0) {
+        s.crossVectors(raak, op);
+        if (s.lengthSq() < 0.01) s.set(1, 0, 0).addScaledVector(raak, -raak.x);
+      } else {
+        s.addScaledVector(raak, -s.dot(raak));
+      }
+      s.normalize();
+      assen.push({ t, c, raak, s: s.clone(), u: new THREE.Vector3().crossVectors(s, raak).normalize() });
+    }
+    const P = [];
+    const N = [];
+    const I = [];
+    const rij = (as, kanteling) => {
+      const ck = Math.cos(kanteling);
+      const sk = Math.sin(kanteling);
+      for (let j = 0; j <= zijden; j++) {
+        const a = (j / zijden) * Math.PI * 2;
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        _e.copy(as.u).multiplyScalar(ca * ck).addScaledVector(as.s, sa * ck).addScaledVector(as.raak, sk).normalize();
+        const r = zoekRand(veld, as.c.x, as.c.y, as.c.z, _e.x, _e.y, _e.z, o.rMax);
+        const p = as.c.clone().addScaledVector(_e, r);
+        P.push(p);
+        N.push(veldNormaal(veld, p.x, p.y, p.z, new THREE.Vector3()));
+        const boog = as.t * lengte + _ap.subVectors(p, as.c).dot(as.raak);
+        I.push({ t: as.t, v: (a <= Math.PI ? a : Math.PI * 2 - a) / Math.PI, hoek: a, lokaal: new THREE.Vector3(sa, ca, 0), boog });
+      }
+    };
+    for (let i = 0; i < kapA; i++) rij(assen[0], (-Math.PI / 2) * (1 - i / kapA));
+    for (const as of assen) rij(as, 0);
+    for (let i = 1; i <= kapB; i++) rij(assen[ringen], (Math.PI / 2) * (i / kapB));
+    this.#rooster(P, N, I, kapA + ringen + 1 + kapB, zijden + 1, o);
+    return this;
+  }
+
+  /**
+   * Een huid rond een middelpunt, gevormd door een vormveld (bv. een poot met teentjes).
+   * Elke richting vanuit het midden mag de rand maar één keer raken.
+   * @param {THREE.Vector3} midden
+   * @param {import('./vormveld.js').Veld} veld
+   * @param {Opties & { rMax: number, breed?: number, hoog?: number, draai?: THREE.Euler }} o
+   */
+  rond(midden, veld, o) {
+    const breed = o.breed ?? 24;
+    const hoog = o.hoog ?? 16;
+    const q = new THREE.Quaternion().setFromEuler(o.draai ?? new THREE.Euler());
+    const P = [];
+    const N = [];
+    const I = [];
+    const d = new THREE.Vector3();
+    for (let i = 0; i <= hoog; i++) {
+      const th = (i / hoog) * Math.PI;
+      for (let j = 0; j <= breed; j++) {
+        const ph = (j / breed) * Math.PI * 2;
+        _e.set(Math.sin(th) * Math.sin(ph), Math.cos(th), Math.sin(th) * Math.cos(ph));
+        d.copy(_e).applyQuaternion(q);
+        const r = zoekRand(veld, midden.x, midden.y, midden.z, d.x, d.y, d.z, o.rMax);
+        const p = midden.clone().addScaledVector(d, r);
+        P.push(p);
+        N.push(veldNormaal(veld, p.x, p.y, p.z, new THREE.Vector3()));
+        I.push({ t: 0, v: th / Math.PI, hoek: ph, lokaal: _e.clone(), boog: 0 });
+      }
+    }
+    this.#rooster(P, N, I, hoog + 1, breed + 1, o);
+    return this;
+  }
+
   #rooster(P, N, I, rijen, kolommen, o) {
     const start = this.pos.length / 3;
     const kandidaten = o.botten.map((b) => {
@@ -162,12 +262,31 @@ export class Lichaam {
       const n = N[k];
       this.pos.push(p.x, p.y, p.z);
       this.nor.push(n.x, n.y, n.z);
+      let donker = 1;
+      if (o.holte) {
+        I[k].holte = vrijheid(o.holte.veld, p, n, o.holte.bereik);
+        donker = 1 - (1 - I[k].holte) * o.holte.sterkte;
+      }
       const kl = typeof o.kleur === 'function' ? o.kleur(p, n, I[k]) : o.kleur ?? 0xffffff;
       if (kl instanceof THREE.Color) _kl.copy(kl);
       else _kl.set(kl);
-      this.kleur.push(_kl.r, _kl.g, _kl.b);
+      this.kleur.push(_kl.r * donker, _kl.g * donker, _kl.b * donker);
       const st = o.streep ? o.streep(p, n, I[k]) : [0, 0, 0];
       this.streep.push(st[0], st[1], st[2]);
+      if (o.botGewicht) {
+        // Zelf gekozen gewichten (hoogstens vier botten).
+        const lijst = o.botGewicht(p, I[k]).slice(0, 4);
+        let som = 0;
+        for (const [, w] of lijst) som += w;
+        for (let q = 0; q < 4; q++) {
+          const g = lijst[q];
+          const i = g && this.namen.get(g[0]);
+          if (g && i === undefined) throw new Error(`Onbekend bot: ${g[0]}`);
+          this.skinI.push(g ? i : 0);
+          this.skinW.push(g ? g[1] / som : 0);
+        }
+        continue;
+      }
       // Huidgewichten: hoe dichter bij een bot, hoe meer dit punt met dat bot meebeweegt.
       let som = 0;
       for (let b = 0; b < kandidaten.length; b++) {
