@@ -459,7 +459,9 @@ const lus = maakSpellus({
     let dr = s.richting - s.vorigeRichting;
     dr = Math.atan2(Math.sin(dr), Math.cos(dr));
     figuur.position.copy(tekenpos);
-    figuur.rotation.y = s.vorigeRichting + dr * overgang;
+    // Volledig rechtop zetten: na het rijden kan de draaiing van het zadel nog een kanteling rond x en z
+    // bevatten (bv. x = z = π, wat samen een halve draai is). Alleen y zetten liet haar dan achterstevoren lopen.
+    figuur.rotation.set(0, s.vorigeRichting + dr * overgang, 0);
 
     // --- De pony ---
     const p = sim.pony(LOKAAL);
