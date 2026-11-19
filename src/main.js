@@ -141,7 +141,7 @@ const weidebeeld = maakWeidebeeld(sim.wereld.weide, K.detail);
 weidebeeld.vast.castShadow = K.schaduw;
 weidebeeld.vast.receiveShadow = K.schaduw;
 scene.add(weidebeeld.groep);
-const bloeispoor = maakBloeispoor(K.detail ? 1600 : 700, K.detail);
+const bloeispoor = maakBloeispoor(K.detail ? 1600 : 700, K.detail, RIJDEN.spoorLeven, RIJDEN.spoorVerwelk);
 scene.add(bloeispoor.mesh);
 
 // --- De pony ---

@@ -43,8 +43,10 @@ function maakBloemvorm(detail) {
 /**
  * @param {number} max hoeveel bloemen er hooguit staan (de oudste maken plaats voor nieuwe)
  * @param {number} detail
+ * @param {number} leven na zoveel seconden verwelkt een bloem
+ * @param {number} verwelk zo lang duurt het wegkrimpen
  */
-export function maakBloeispoor(max, detail) {
+export function maakBloeispoor(max, detail, leven = 30, verwelk = 2.5) {
   const geo = maakBloemvorm(detail);
   const mat = maakPlantMateriaal({ gloed: 0x2a1f24 });
   // De kleur per bloem alleen op de blaadjes, niet op het hartje en de steel.
@@ -69,9 +71,17 @@ export function maakBloeispoor(max, detail) {
   const plekVan = new Array(max).fill(null);
   /** @type {{ i:number, t:number, x:number, y:number, z:number, draai:number, schaal:number }[]} */
   const groeit = [];
+  /** @type {{ i:number, t:number }[]} */
+  const verwelkt = [];
   const plaats = new Array(max);
+  const generatie = new Uint32Array(max); // om te weten of een plekje intussen een nieuwe bloem kreeg
+  /** De bloemen in de volgorde waarin ze opbloeiden: de oudste verwelkt eerst. */
+  const rij = [];
+  let kop = 0;
+  let tijd = 0;
   let volgende = 0;
-  let aantal = 0;
+  let gebruikt = 0;
+  let levend = 0;
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const s = new THREE.Vector3();
@@ -89,8 +99,9 @@ export function maakBloeispoor(max, detail) {
 
   return {
     mesh,
+    /** Hoeveel bloemen er nu staan. */
     get aantal() {
-      return aantal;
+      return levend;
     },
     /**
      * Een nieuwe bloem op (x, y, z). keuze en draai: vaste toevalsgetallen 0..1 uit de simulatie.
@@ -101,21 +112,57 @@ export function maakBloeispoor(max, detail) {
       if (bezet.has(sleutel)) return false;
       const i = volgende;
       volgende = (volgende + 1) % max;
-      if (plekVan[i] !== null) bezet.delete(plekVan[i]);
+      if (plekVan[i] !== null) {
+        // Alle plekjes vol: de oudste bloem maakt plaats.
+        bezet.delete(plekVan[i]);
+        levend--;
+      }
       plekVan[i] = sleutel;
       bezet.set(sleutel, i);
-      aantal = Math.min(max, aantal + 1);
-      mesh.count = aantal;
+      generatie[i]++;
+      levend++;
+      gebruikt = Math.min(max, gebruikt + 1);
+      mesh.count = gebruikt;
       mesh.setColorAt(i, kl.set(PALET[Math.floor(keuze * PALET.length) % PALET.length]));
       mesh.instanceColor.needsUpdate = true;
       const schaal = GROOTTE[0] + ((keuze * 7.31) % 1) * (GROOTTE[1] - GROOTTE[0]);
       plaats[i] = { x, y, z, draai: draai * Math.PI * 2, schaal };
       zet(i, x, y, z, 0, 0);
       groeit.push({ i, t: 0, ...plaats[i] });
+      rij.push({ i, gen: generatie[i], geboren: tijd });
       return true;
     },
     werkBij(dt) {
-      if (!groeit.length) return;
+      tijd += dt;
+      let veranderd = groeit.length > 0 || verwelkt.length > 0;
+      // De oudste bloemen verwelken: ze krimpen terug in de grond, en hun plekje komt weer vrij.
+      while (kop < rij.length && tijd - rij[kop].geboren > leven) {
+        const b = rij[kop++];
+        if (generatie[b.i] !== b.gen || plekVan[b.i] === null) continue; // al vervangen door een nieuwere
+        bezet.delete(plekVan[b.i]);
+        plekVan[b.i] = null;
+        levend--;
+        verwelkt.push({ i: b.i, t: 0, gen: b.gen });
+        veranderd = true;
+      }
+      if (kop > 512) {
+        rij.splice(0, kop);
+        kop = 0;
+      }
+      for (let k = verwelkt.length - 1; k >= 0; k--) {
+        const v = verwelkt[k];
+        if (generatie[v.i] !== v.gen) {
+          verwelkt.splice(k, 1); // er bloeit hier intussen al een nieuwe
+          continue;
+        }
+        v.t += dt;
+        const f = Math.min(1, v.t / verwelk);
+        const b = plaats[v.i];
+        // Eerst wat slap hangen en draaien, dan zacht wegkrimpen.
+        zet(v.i, b.x, b.y - f * 0.08, b.z, b.draai + f * 1.5, b.schaal * (1 - f * f));
+        if (f >= 1) verwelkt.splice(k, 1);
+      }
+      if (!veranderd) return;
       for (let k = groeit.length - 1; k >= 0; k--) {
         const g = groeit[k];
         g.t += dt;

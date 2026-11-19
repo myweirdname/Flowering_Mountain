@@ -71,4 +71,6 @@ export const RIJDEN = {
   // --- Bloeispoor ---
   spoorStap: 0.55,        // om de zoveel meter galop bloeien er bloemen op
   spoorBreedte: 0.55,     // zo ver links en rechts van haar spoor
+  spoorLeven: 30,         // na zoveel seconden verwelkt een bloem weer (zodat niet alles vol bloemen staat)
+  spoorVerwelk: 2.5,      // zo lang duurt het wegkrimpen
 };
