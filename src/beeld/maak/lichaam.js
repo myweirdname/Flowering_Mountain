@@ -38,12 +38,15 @@ function afstandTotSegment(p, a, b) {
  *   scherpte?: number,
  *   botGewicht?: (p: THREE.Vector3, i: Info) => [string, number][],
  *   holte?: { veld: import('./vormveld.js').Veld, bereik: number, sterkte: number },
+ *   teken?: (p: THREE.Vector3, n: THREE.Vector3) => [number, number],
  * }} Opties
  *   botten: aan welke botten dit deel mag hangen (met zachte overgang ertussen);
  *   streep: [u, v, sterkte] voor de strepenshader (u = langs de streeprichting in meter);
  *   botGewicht: zelf kiezen hoe sterk elk punt aan welk bot hangt (bv. de bek: boven aan het
  *     hoofd, onder aan de kaak), in plaats van volgens de afstand;
- *   holte: plooien en holtes donkerder maken, gemeten met een vormveld van het hele lichaam
+ *   holte: plooien en holtes donkerder maken, gemeten met een vormveld van het hele lichaam;
+ *   teken: vaste, scherpe tekening (de strepen van het gezicht): [afstand tot de streep in
+ *     streepbreedtes (binnen < 1), sterkte]; de vachtshader tekent ze per beeldpunt
  */
 export class Lichaam {
   constructor() {
@@ -54,6 +57,8 @@ export class Lichaam {
     this.nor = [];
     this.kleur = [];
     this.streep = [];
+    this.teken = [];
+    this.tekenGebruikt = false;
     this.skinI = [];
     this.skinW = [];
     this.index = [];
@@ -273,6 +278,9 @@ export class Lichaam {
       this.kleur.push(_kl.r * donker, _kl.g * donker, _kl.b * donker);
       const st = o.streep ? o.streep(p, n, I[k]) : [0, 0, 0];
       this.streep.push(st[0], st[1], st[2]);
+      const tk = o.teken ? o.teken(p, n) : [9, 0];
+      if (o.teken) this.tekenGebruikt = true;
+      this.teken.push(tk[0], tk[1]);
       if (o.botGewicht) {
         // Zelf gekozen gewichten (hoogstens vier botten).
         const lijst = o.botGewicht(p, I[k]).slice(0, 4);
@@ -338,6 +346,7 @@ export class Lichaam {
     geo.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(this.kleur, 3));
     geo.setAttribute('streep', new THREE.Float32BufferAttribute(this.streep, 3));
+    if (this.tekenGebruikt) geo.setAttribute('teken', new THREE.Float32BufferAttribute(this.teken, 2));
     geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(this.skinI, 4));
     geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(this.skinW, 4));
     geo.setIndex(this.index);

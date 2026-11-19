@@ -56,17 +56,17 @@ export const PONYKLEUREN = {
 // hoektanden die je ziet als hij geeuwt of brult. In het spel blijven ze altijd vrienden (GD 8).
 export const TIJGERVORM = {
   schofthoogte: 0.95,      // tot de bovenkant van de schouders: zo hoog als de pony
-  rompLengte: 1.0,         // 1 = echte verhouding (lijf ongeveer anderhalve keer zo lang als hoog)
+  rompLengte: 0.95,        // nagemeten op foto's: het lijf is ongeveer anderhalve keer zo lang als hoog
   rompDikte: 1.0,          // 1 = echte breedte; hoger = zwaarder, lager = slanker
-  pootDikte: 1.0,          // hoe zwaar de poten zijn
+  pootDikte: 0.85,         // hoe zwaar de poten zijn (nagemeten op foto's: de onderarm ±1/7 van de schouderhoogte)
   pootGrootte: 1.0,        // hoe groot de voeten zijn
-  hoofdGrootte: 1.15,      // 1 = de maat van een echte tijger; iets groter leest beter in een spel
+  hoofdGrootte: 1.0,       // nagemeten op foto's en het skelet: de kop is ongeveer een derde van de schouderhoogte
   oogGrootte: 0.028,       // halve breedte van een oog (een echte tijger: ±0,02; iets groter leest beter)
   staartLengte: 1.0,
-  staartDikte: 0.05,
+  staartDikte: 0.043,
   wangkraag: 1.0,          // hoe ver de witte bakkebaarden uitsteken
-  hoektand: 0.058,         // lengte van de bovenste hoektanden
-  neusKleur: 0xc4786c,     // baksteenroze neus met een donkere rand
+  hoektand: 0.052,         // lengte van de bovenste hoektanden, in hoofdmaat (de schedel is ±0,3 lang)
+  neusKleur: 0xd08578,     // roze neus met een donkere rand (zoals op foto's)
   neusRand: 0x2a1a18,
   lipKleur: 0x1c1212,      // zwarte lippen
   mondKleur: 0x6e1e26,     // binnenkant van de bek

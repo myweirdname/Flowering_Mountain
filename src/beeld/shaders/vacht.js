@@ -97,13 +97,13 @@ export function maakVachtMateriaal(o = {}) {
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\nattribute vec3 streep;\nvarying vec3 vStreep;${fijn ? '\nvarying vec3 vRust;' : ''}`)
-      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvStreep = streep;${fijn ? '\nvRust = position;' : ''}`);
+      .replace('#include <common>', `#include <common>\nattribute vec3 streep;\nvarying vec3 vStreep;${fijn ? '\nvarying vec3 vRust;\nattribute vec2 teken;\nvarying vec2 vTeken;' : ''}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>\nvStreep = streep;${fijn ? '\nvRust = position;\nvTeken = teken;' : ''}`);
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
         `#include <common>
-${fijn ? '#define VACHT_FIJN\nvarying vec3 vRust;' : ''}
+${fijn ? '#define VACHT_FIJN\nvarying vec3 vRust;\nvarying vec2 vTeken;' : ''}
 varying vec3 vStreep;
 uniform vec4 uStreep;
 uniform vec3 uStreepKleur;
@@ -126,6 +126,11 @@ ${
   float korrel = length(fwidth(vRust)) * 110.0;
   float haar = vRuis3(vRust * vec3(120.0, 120.0, 38.0)) * 0.65 + vRuis3(vRust * 260.0) * 0.35;
   diffuseColor.rgb *= 1.0 + (haar - 0.5) * 2.0 * uFijn.x * (1.0 - smoothstep(0.5, 1.4, korrel));
+  // Vaste tekening (de strepen van het gezicht): vTeken.x = afstand tot het midden van de streep in
+  // halve streepbreedtes (binnen < 1). Scherp per beeldpunt, met een licht rafelige rand.
+  float td = abs(vTeken.x) + (vRuis3(vRust * 90.0) - 0.5) * 0.35 * uFijn.y;
+  float taa = fwidth(vTeken.x) + 0.03;
+  diffuseColor.rgb = mix(diffuseColor.rgb, uStreepKleur, (1.0 - smoothstep(1.0 - taa, 1.0 + taa, td)) * clamp(vTeken.y, 0.0, 1.0) * uStreep.w);
 }`
     : ''
 }
