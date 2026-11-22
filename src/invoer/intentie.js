@@ -17,7 +17,10 @@ export function naarIntentie(invoer, cameraHoek) {
     spring: invoer.spring,
     actie: invoer.actie,
     fluit: !!invoer.fluit,
+    brul: !!invoer.brul,
     aai: false,
+    aaiTijger: false,
+    aaiWelp: null,
   };
 }
 
@@ -33,5 +36,6 @@ export function voegSamen(...bronnen) {
     spring: bronnen.some((b) => b.spring),
     actie: bronnen.some((b) => b.actie),
     fluit: bronnen.some((b) => b.fluit),
+    brul: bronnen.some((b) => b.brul),
   };
 }

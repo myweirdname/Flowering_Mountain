@@ -44,6 +44,11 @@ import { aanBot } from './beeld/maak/viervoeter.js';
 import { maakDierAnimatie } from './beeld/dierAnimatie.js';
 import { maakWeidebeeld } from './beeld/springweide.js';
 import { maakBloeispoor } from './beeld/bloeispoor.js';
+import { GEZEL } from './data/tijger.js';
+import { maakGezelbeeld } from './beeld/gezel.js';
+import { maakSlaapbloembeeld } from './beeld/slaapbloem.js';
+import { WELPJES } from './data/welpjes.js';
+import { maakWelpjesbeeld } from './beeld/welpjes.js';
 
 const K = KWALITEIT[INSTELLINGEN.kwaliteit];
 
@@ -180,6 +185,12 @@ const ponyAnim = maakDierAnimatie(ponyVorm, 1, {
     geluid.hoef(ponyOndergrond(p), Math.min(1, Math.abs(p.snelheid) / RIJDEN.galop));
   },
 });
+// --- De tijger als reisgezel en de slaapbloem (stap 8a) ---
+const gezel = maakGezelbeeld(scene, K);
+const slaapbloembeeld = maakSlaapbloembeeld(scene, sim.wereld.slaapbloemen, GEZEL.slaapbloem, K);
+// --- De welpjes bij mama (stap 8b) ---
+const welpjesbeeld = maakWelpjesbeeld(scene, sim.welpjesVan(LOKAAL), K, sim.takVan(LOKAAL));
+
 // Op- en afstappen: een sprongetje van de grond naar het zadel (of terug).
 let rijOvergang = null;
 let juichTijd = 0;
@@ -251,6 +262,9 @@ const hud = maakHud(uiLaag, WEIDE.hindernissen.map((h) => h.soort));
 
 // Tik (of klik) op de pony: aaien.
 let aaiWacht = false;
+let aaiTijgerWacht = false;
+/** @type {string | null} */
+let aaiWelpWacht = null;
 const tikken = new Map();
 const straal = new THREE.Ray();
 const ponyMidden = new THREE.Vector3();
@@ -263,6 +277,16 @@ canvas.addEventListener('pointerup', (e) => {
   const ndc = new THREE.Vector3((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1, 0.5).unproject(camera);
   straal.origin.copy(camera.position);
   straal.direction.copy(ndc).sub(camera.position).normalize();
+  // Eerst de welpjes (ze zijn klein en staan vaak voor mama).
+  const welp = welpjesbeeld.raakt(straal, camera);
+  if (welp) {
+    aaiWelpWacht = welp;
+    return;
+  }
+  if (gezel.raakt(straal, camera)) {
+    aaiTijgerWacht = true;
+    return;
+  }
   const s = RIJDEN.ponySchaal;
   for (const [hoogte, voor, r] of [[0.65, 0, 0.62], [1.1, 0.6, 0.38]]) {
     ponyMidden.set(Math.sin(ponyHouder.rotation.y) * voor * s, hoogte * s, Math.cos(ponyHouder.rotation.y) * voor * s).add(ponyHouder.position);
@@ -297,6 +321,243 @@ const debug = maakDebugscherm(uiLaag, INSTELLINGEN.debug);
   // Alle shaders nu al klaarmaken, zodat er onderweg nooit een hapering komt als iets voor het eerst in beeld komt.
   renderer.compile(scene, camera);
 }
+
+/** Beeld en geluid bij wat de tijger doet (en de slaapbloem). Geeft true als de gebeurtenis van hem was. */
+const effectPlek = new THREE.Vector3();
+function tijgerGebeurtenis(g) {
+  const t = sim.tijger(LOKAAL);
+  const kop = (hoogte = 0.85) => {
+    const s = GEZEL.schaal;
+    return [t.pos[0] + Math.sin(t.richting) * 0.95 * s, t.pos[1] + hoogte * s, t.pos[2] + Math.cos(t.richting) * 0.95 * s];
+  };
+  switch (g.soort) {
+    case 'proest':
+      geluid.proest(g.roept ? 2 : 3);
+      gezel.anim.blij();
+      return true;
+    case 'kopje': {
+      gezel.anim.kopje(GEZEL.kopjeDuur);
+      geluid.spin(GEZEL.kopjeDuur);
+      const [x, y, z] = kop(1.05);
+      deeltjes.hartjes(x, y, z, g.eerste ? 7 : 4);
+      return true;
+    }
+    case 'tijgerAai': {
+      gezel.anim.blij();
+      geluid.spin(1.6);
+      const [x, y, z] = kop(1.05);
+      deeltjes.hartjes(x, y, z, 3);
+      return true;
+    }
+    case 'begroeting': {
+      // Neusje aan neusje: hij proest, zij hinnikt zachtjes terug, en er zweven hartjes tussen hen in.
+      geluid.proest(2);
+      setTimeout(() => geluid.hinnik(true), 420);
+      gezel.anim.blij();
+      ponyAnim.blij();
+      deeltjes.hartjes(g.pos[0], g.pos[1] + 1.5, g.pos[2], 6);
+      return true;
+    }
+    case 'tijgerBijBloem':
+      geluid.proest(2);
+      return true;
+    case 'tijgerWacht':
+      return true;
+    case 'brulStart':
+      gezel.anim.brul();
+      return true;
+    case 'brul': {
+      geluid.brul();
+      // De lucht trilt: kringen over de grond en een wolk blaadjes uit de jungle voor hem.
+      const [x, y, z] = kop(0.7);
+      deeltjes.kring(x, z, 3.5, 1.6, t.pos[1] + 0.05);
+      deeltjes.kring(x, z, 6, 2.2, t.pos[1] + 0.05);
+      const vx = Math.sin(t.richting) * 3;
+      const vz = Math.cos(t.richting) * 3;
+      deeltjes.blaadjes(x + vx, y + 0.8, z + vz, 26, undefined, 1.4);
+      return true;
+    }
+    case 'brulTeVroeg':
+      hud.brulTeVroeg();
+      geluid.grom();
+      return true;
+    case 'meterVol':
+      geluid.hindernisTel(4);
+      return true;
+    case 'bloemOpen': {
+      geluid.bloemOpen();
+      const S = GEZEL.slaapbloem;
+      setTimeout(() => {
+        deeltjes.bloemenregen(g.pos[0], g.pos[1] + S.hoogte + S.grootte, g.pos[2]);
+        deeltjes.glinsters(g.pos[0], g.pos[1] + S.hoogte + 0.6, g.pos[2], S.hartKleur, 24);
+      }, 500);
+      return true;
+    }
+    case 'schat': {
+      hud.schat(g.aantal);
+      geluid.schat();
+      const [x, y, z] = g.pos;
+      deeltjes.glinsters(x, y + 0.6, z, 0xffd84d, 40);
+      deeltjes.bloemenregen(x, y + 1.2, z);
+      deeltjes.blaadjes(x, y + 0.6, z, 22, [BLOESEMS.blaadjeKleur, BLOESEMS.randKleur], 1.2);
+      return true;
+    }
+    case 'tijgerWeg':
+      deeltjes.blaadjes(g.pos[0], g.pos[1] + 0.8, g.pos[2], 18);
+      return true;
+    case 'tijgerVerschijnt':
+      deeltjes.blaadjes(g.pos[0], g.pos[1] + 0.8, g.pos[2], 24);
+      geluid.proest(2);
+      return true;
+    case 'tijgerVast':
+      return true;
+  }
+  return false;
+}
+
+/** Beeld en geluid bij wat de welpjes doen. Geeft true als de gebeurtenis van een welpje was. */
+function welpGebeurtenis(g) {
+  if (!g.soort.startsWith('welp')) return false;
+  const b = welpjesbeeld.van(g.welp);
+  const dichtbij = b && b.houder.visible && camera.position.distanceTo(b.houder.position) < 30;
+  if (!dichtbij) return true;
+  const [x, y, z] = g.pos;
+  const kop = y + 0.55 * WELPJES.schaal;
+  switch (g.soort) {
+    case 'welpPiep':
+      // Gevangen! Een fel piepje en een paar sterretjes.
+      geluid.piep(1.2, 0.9);
+      deeltjes.glinsters(x, kop, z, 0xffe15a, 10);
+      break;
+    case 'welpSpeelt':
+      if (Math.random() < 0.6) geluid.piep(1, 0.6);
+      break;
+    case 'welpSprong':
+      geluid.piep(0.9, 0.5);
+      break;
+    case 'welpLand':
+      deeltjes.blaadjes(x, y + 0.1, z, 5, undefined, 0.3);
+      break;
+    case 'welpRolt':
+      if (Math.random() < 0.5) geluid.piep(1.1, 0.5);
+      break;
+    case 'welpAai':
+      // Op zijn rug voor een buikkriebel: hartjes, een blij piepje en een klein spinnetje.
+      geluid.piep(1.05, 1);
+      setTimeout(() => geluid.spin(1.4), 250);
+      deeltjes.hartjes(x, kop + 0.2, z, 5);
+      break;
+    case 'welpTerug':
+      geluid.piep(0.95, 0.7);
+      break;
+    case 'welpVerschijnt':
+      deeltjes.blaadjes(x, y + 0.4, z, 14, undefined, 0.6);
+      break;
+    // Schatjesmomenten (stap 8c).
+    case 'welpNies':
+      // "Ha ... ha ... TSJIE!": een wolkje stuifmeel uit de bloem.
+      geluid.nies();
+      setTimeout(() => {
+        const [nx, ny, nz] = g.neus;
+        deeltjes.glinsters(nx, ny, nz, EFFECTEN.stuifmeel[0], 12);
+        deeltjes.blaadjes(nx, ny - 0.3, nz, 4, EFFECTEN.stuifmeel, 0.35);
+        welpjesbeeld.zeg(g.welp, 'hatsjie!', 1.3);
+      }, 560);
+      break;
+    case 'welpHik':
+      geluid.hik();
+      welpjesbeeld.zeg(g.welp, 'hik!', 0.7);
+      break;
+    case 'welpStruikel':
+      geluid.piep(1.35, 0.7);
+      break;
+    case 'welpTuimel':
+      geluid.tuimel();
+      deeltjes.blaadjes(x, y + 0.05, z, 6, undefined, 0.35);
+      deeltjes.sterretjes(x, kop + 0.15, z, 6);
+      break;
+    case 'welpHuh':
+      if (g.eerste) geluid.huh(3);
+      welpjesbeeld.zeg(g.welp, '?', 1.4);
+      break;
+    case 'welpMeeBrul':
+      geluid.miniBrul();
+      setTimeout(() => welpjesbeeld.zeg(g.welp, 'mieuw!', 1.3), 170);
+      break;
+    // Spelen met elkaar (stap 8d).
+    case 'welpStaart':
+      geluid.piep(1.1, 0.6);
+      break;
+    case 'welpDuizelig':
+      geluid.tuimel();
+      geluid.duizelig();
+      deeltjes.blaadjes(x, y + 0.05, z, 5, BLAD_GROEN, 0.3);
+      break;
+    case 'welpWankel':
+      geluid.piep(0.85, 0.5);
+      break;
+    case 'welpVerstoppertje':
+      geluid.piep(1.15, 0.8);
+      break;
+    case 'welpTelt':
+      geluid.tel(g.n);
+      welpjesbeeld.zeg(g.welp, String(g.n), 0.75);
+      break;
+    case 'welpKlaar':
+      geluid.piep(1.25, 1);
+      welpjesbeeld.zeg(g.welp, 'klaar!', 1.2);
+      break;
+    case 'welpVerstopt':
+      geluid.ritsel(0.8);
+      deeltjes.blaadjes(x, y + 0.3, z, 4, BLAD_GROEN, 0.25);
+      break;
+    case 'welpGevonden':
+      // Hop, uit de struik! Bladeren vliegen in het rond.
+      geluid.ritsel(1.2);
+      geluid.piep(1.3, 1);
+      deeltjes.blaadjes(x, y + 0.35, z, 10, BLAD_GROEN, 0.5);
+      welpjesbeeld.zeg(g.welp, '!', 1.1);
+      break;
+    case 'welpBlij':
+      welpjesbeeld.blij(g.welp);
+      if (g.laatste !== undefined) {
+        // De zoeker: een blij sprongetje.
+        setTimeout(() => geluid.piep(1.2, 0.9), 120);
+        setTimeout(() => welpjesbeeld.zeg(g.welp, g.laatste ? 'hihi!' : 'gevonden!', 1.2), 300);
+        deeltjes.glinsters(x, kop + 0.2, z, 0xffe15a, 8);
+      } else if (Math.random() < 0.6) geluid.piep(1.05, 0.6);
+      break;
+    case 'welpTakSpel':
+      if (Math.random() < 0.6) geluid.piep(1, 0.6);
+      break;
+    case 'welpTakValt':
+      geluid.tok();
+      deeltjes.blaadjes(x, y + 0.1, z, 5, BLAD_GROEN, 0.3);
+      break;
+    case 'welpTakGrijp':
+      if (Math.random() < 0.5) geluid.piep(0.95, 0.5);
+      break;
+    case 'welpGrom':
+      geluid.miniGrom();
+      break;
+    case 'welpTakKrak':
+      geluid.krak();
+      deeltjes.blaadjes(x, y + 0.3, z, 6, [0xf2d6a2, 0x9a6a3e, 0x62d05c], 0.45);
+      welpjesbeeld.zeg(g.welp, 'krak!', 1);
+      break;
+    case 'welpTakLos':
+      geluid.zwiep();
+      break;
+    case 'welpPlof':
+      geluid.tuimel();
+      setTimeout(() => geluid.piep(1.3, 0.7), 90);
+      deeltjes.blaadjes(x, y + 0.05, z, 5, BLAD_GROEN, 0.3);
+      deeltjes.sterretjes(x, kop + 0.05, z, 4);
+      break;
+  }
+  return true;
+}
+const BLAD_GROEN = [0x5ad67a, 0x7fe46a, 0x3db97e];
 
 /** Beeld en geluid bij wat de pony doet. Geeft true als de gebeurtenis van de pony was. */
 function ponyGebeurtenis(g) {
@@ -401,6 +662,8 @@ function ponyGebeurtenis(g) {
 }
 
 // --- Spellus ---
+/** Testcamera: een functie die [plek, kijkpunt] geeft, of null (gewoon de volgcamera). */
+let testCamera = null;
 /** Intentie die window.spel kan opleggen (voor tests); anders null. */
 let opgelegd = null;
 let tijd = 0;
@@ -415,11 +678,18 @@ const lus = maakSpellus({
     const intentie = { ...(opgelegd ?? naarIntentie(invoer, volgcamera.hoek)) };
     if (aaiWacht) intentie.aai = true;
     aaiWacht = false;
+    if (aaiTijgerWacht) intentie.aaiTijger = true;
+    aaiTijgerWacht = false;
+    if (aaiWelpWacht) intentie.aaiWelp = aaiWelpWacht;
+    aaiWelpWacht = null;
+    if (hud.leesBrul()) intentie.brul = true;
     sim.stap({ [LOKAAL]: intentie }, dt);
     for (const g of sim.neemGebeurtenissen()) {
       if (g.soort === 'wortelTerug') weidebeeld.terug(g.id);
       if (g.speler !== LOKAAL) continue;
       if (ponyGebeurtenis(g)) continue;
+      if (tijgerGebeurtenis(g)) continue;
+      if (welpGebeurtenis(g)) continue;
       if (g.soort === 'landing') {
         animatie.land(g.snelheid / 12);
         if (g.snelheid > 2) geluid.landing(g.snelheid);
@@ -521,6 +791,13 @@ const lus = maakSpellus({
     weidebeeld.werkBij(tijd, dt);
     bloeispoor.werkBij(dt);
 
+    // --- De tijger en de slaapbloem ---
+    const tg = sim.tijger(LOKAAL);
+    gezel.werkBij(tg, overgang, dt, camera, sim.wereld.terreinOp);
+    welpjesbeeld.werkBij(overgang, dt, camera, sim.wereld.terreinOp);
+    slaapbloembeeld.werkBij(dt, camera.position);
+    hud.brulMeter(tg.vriend, s.brulMeter);
+
     // HUD: galopmeter, ronde, en wat de actieknop nu doet.
     hud.galop(rijdt, p.galop, p.galoppeert);
     if (s.ronde?.bezig) hud.rondeTijd(sim.tik / 60 - s.ronde.start);
@@ -554,6 +831,12 @@ const lus = maakSpellus({
     schaduw.scale.setScalar(THREE.MathUtils.clamp(1 - (tekenpos.y - grond) / 6, 0.4, 1));
 
     volgcamera.volg(tekenpos, s.vel[0], s.vel[2], rijdt ? RIJDEN.galop : LOPEN.rensnelheid, dt, rijdt);
+    // Een vaste testcamera (alleen vanuit de console, om iets van dichtbij te bekijken).
+    if (testCamera) {
+      const [v, d] = testCamera();
+      camera.position.set(...v);
+      camera.lookAt(...d);
+    }
 
     // De wereld rond de speler, en alles wat met de camera meeschuift.
     wereldbeeld.werkBij(tekenpos.x, tekenpos.z, camera);
@@ -588,7 +871,9 @@ const lus = maakSpellus({
 ` +
         `plek           ${tekenpos.x.toFixed(0)}, ${tekenpos.z.toFixed(0)}
 ` +
-        `pony           ${p.gang} ${Math.abs(p.snelheid).toFixed(1)} m/s · bloeispoor ${bloeispoor.aantal}`
+        `pony           ${p.gang} ${Math.abs(p.snelheid).toFixed(1)} m/s · bloeispoor ${bloeispoor.aantal}
+` +
+        `tijger         ${tg.modus}${tg.wacht ? ' (wacht)' : ''} ${tg.gang} ${tg.snelheid.toFixed(1)} m/s · brul ${Math.round(s.brulMeter * 100)}%`
       );
     });
   },
@@ -680,8 +965,58 @@ window.spel = {
     volgcamera.zet(r + Math.PI, CAMERA.kanteling);
   },
   bloeispoor,
+  get tijger() {
+    return sim.tijger(LOKAAL);
+  },
+  /** De welpjes bij mama (plek, modus). */
+  get welpjes() {
+    return sim.welpjesVan(LOKAAL);
+  },
+  /**
+   * Testcamera: kijk van dichtbij naar welpje i (of naar een punt [x, y, z]), vanaf `afstand` meter en
+   * onder hoek `hoek` (radialen rond de verticale as). spel.testCamera() zet de gewone camera terug.
+   */
+  testCamera(i, afstand = 3, hoek = 0, hoogte = 1.2) {
+    if (i === undefined) return void (testCamera = null);
+    testCamera = () => {
+      const p = typeof i === 'number' ? sim.welpjesVan(LOKAAL)[i].pos : i;
+      const d = [p[0], p[1] + 0.3, p[2]];
+      return [[d[0] + Math.sin(hoek) * afstand, d[1] + hoogte, d[2] + Math.cos(hoek) * afstand], d];
+    };
+  },
+  /** Het takje bij mama (stap 8d). */
+  get tak() {
+    return sim.takVan(LOKAAL);
+  },
+  /**
+   * Een schatjesmoment van de welpjes (stap 8c), om te testen: 'nies', 'hik' of 'struikel' voor welpje i (0, 1, 2),
+   * of 'huh' en 'meebrul' voor alle drie. Bv. spel.welpMoment('nies', 1).
+   * Spelletjes (stap 8d): 'staart' (welpje i), 'verstop' (welpje i zoekt) en 'tak' (welpje i en een ander).
+   */
+  welpMoment(soort, i = 0) {
+    sim.welpMoment(LOKAAL, soort, i);
+  },
+  /** Aai een welpje (0, 1 of 2), zoals een tik erop. */
+  aaiWelp(i = 0) {
+    aaiWelpWacht = sim.welpjesVan(LOKAAL)[i]?.id ?? null;
+  },
+  /** Zet de tijger op (x, z); modus bv. 'volg' of 'gids' (dan is hij meteen je vriend). */
+  zetTijger(x, z, richting = 0, modus) {
+    sim.zetTijger(LOKAAL, x, z, richting, modus);
+  },
+  /** De slaapbloemen (plek, open, schat). */
+  get slaapbloemen() {
+    return sim.wereld.slaapbloemen;
+  },
+  /** Drukt één keer op de brulknop. */
+  brul() {
+    const vorig = opgelegd;
+    opgelegd = { ...(vorig ?? { beweeg: [0, 0], spring: false, actie: false, fluit: false }), brul: true };
+    this.speel(1);
+    opgelegd = vorig;
+  },
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */

@@ -30,10 +30,17 @@ const _qx = new THREE.Quaternion();
 const _x = new THREE.Vector3(1, 0, 0);
 
 /**
- * @typedef {{ snelheid?: number, lucht?: boolean, vy?: number, graast?: boolean, achteruit?: boolean }} Extra
+ * @typedef {{ bek?: number, kopOp?: number, knik?: number, schuin?: number, oorPlat?: number, ogen?: number, schrap?: number, opzit?: number }} Gezicht
+ * @typedef {{ snelheid?: number, lucht?: boolean, vy?: number, graast?: boolean, achteruit?: boolean, kijkNaar?: THREE.Vector3 | null, gezicht?: Gezicht }} Extra
  * snelheid: echte vaart in lichaamsmaat (m/s); lucht: ze springt; vy: snelheid omhoog;
- * graast: hoofd naar het gras; achteruit: ze stapt terug.
+ * graast: hoofd naar het gras; achteruit: ze stapt terug; kijkNaar: een punt in de wereld waar het dier
+ * nu naar moet kijken (bv. de tijger die omkijkt naar jou, of met zijn kop wijst waar hij heen wil).
+ * gezicht: een uitdrukking van buitenaf (de schatjesmomenten van de welpjes, stap 8c): bek (hoe ver open,
+ * radialen), kopOp (hoofd omhoog), knik (hoofd snel omlaag, bv. bij een nies), schuin (kopje schuin, -1..1),
+ * oorPlat (0..1), ogen (0 = open, 1 = dichtgeknepen), schrap (zich schrap zetten: laag en achterover, 0..1),
+ * opzit (stap 8d: rechtop gaan zitten, voorkant omhoog, om boven een struik uit te gluren, 0..1).
  */
+const GEEN = {};
 
 /**
  * @param {ReturnType<typeof import('./maak/pony.js').maakPony> | ReturnType<typeof import('./maak/tijger.js').maakTijger>} dier
@@ -83,6 +90,7 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
   let volgendeGeeuw = 4 + kans() * 8;
   let geeuwTijd = 0;
   let brulTijd = 0;
+  let kopjeTijd = 0; // de tijger duwt zijn kop tegen je aan
 
   return {
     /** Laat het dier blij reageren (bv. na een tik of aai). */
@@ -95,6 +103,12 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
       if (!bot.kaak) return;
       brulTijd = LEVEN.brulDuur;
       geeuwTijd = 0;
+      zwiep = 1;
+    },
+    /** Een kopje geven: kop omlaag en schuin, ogen dicht, en zachtjes heen en weer wrijven. */
+    kopje(duur = 2.2) {
+      kopjeTijd = duur;
+      blijTijd = Math.max(blijTijd, duur * 0.8);
       zwiep = 1;
     },
     /** Hoofd schudden: "nee, dat doe ik niet" (weigeren). */
@@ -115,6 +129,7 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
      */
     werkBij(dt, gang, camera, extra = {}) {
       tijd += dt;
+      const gz = extra.gezicht ?? GEEN;
       const doel = GANGEN[gang === 'terug' ? 'stap' : gang];
       const o = 1 - Math.exp(-LEVEN.overgang * 1.6 * dt);
       for (const k of ['frequentie', 'pas', 'optil', 'deining', 'draagtijd', 'maxFrequentie', 'galop']) g[k] += ((doel[k] ?? 0) - g[k]) * o;
@@ -142,6 +157,10 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
       schudTijd = Math.max(0, schudTijd - dt);
       graas += ((extra.graast && !extra.lucht ? 1 : 0) - graas) * (1 - Math.exp(-2.5 * dt));
       const schud = Math.sin(Math.min(1, schudTijd / 0.15) * Math.PI * 0.5) * Math.min(1, schudTijd * 3);
+      // Kopje: vloeiend in en uit, met een trage wrijfbeweging opzij.
+      kopjeTijd = Math.max(0, kopjeTijd - dt);
+      const kop = glad(kopjeTijd, 0, 0.35) * (kopjeTijd > 0 ? 1 : 0);
+      const wrijf = Math.sin(tijd * 3.2) * kop;
 
       // --- Bek: af en toe een grote geeuw als hij stilstaat, of een brul ---
       let bek = 0; // hoe ver de kaak open staat (radialen)
@@ -176,6 +195,10 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
           snauw = Math.max(snauw, inademen * 0.5 + open);
           if (brulTijd === 0) volgendeGeeuw = Math.max(volgendeGeeuw, tijd + 6);
         }
+        if (gz.bek) {
+          bek = Math.max(bek, gz.bek);
+          snauw = Math.max(snauw, gz.bek * 0.4);
+        }
         bot.kaak.rotation.x = bek;
         if (bot.lip) {
           bot.lip.position.copy(bot.lip.userData.rust);
@@ -184,6 +207,14 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
         }
       }
 
+      kopOp += gz.kopOp ?? 0;
+      oorPlat = Math.max(oorPlat, gz.oorPlat ?? 0);
+      ogenSmal = Math.max(ogenSmal, gz.ogen ?? 0);
+      const schuin = gz.schuin ?? 0;
+      const gKnik = gz.knik ?? 0;
+      const schrap = gz.schrap ?? 0;
+      const opzit = gz.opzit ?? 0;
+
       // --- Lijf: deinen, kantelen, wiegen ---
       const c2 = cyclus * TAU * 2;
       const c1 = cyclus * TAU;
@@ -191,12 +222,12 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
         g.deining * schaal * (0.5 - 0.5 * Math.cos(c2 + draf * Math.PI * 0.5)) * (1 - galop) +
         galop * 0.055 * schaal * (0.5 - 0.5 * Math.cos(c1 + 0.9));
       const ademen = Math.sin(tijd * 1.6) * 0.004 * (1 - bewegen);
-      bot.lijf.position.y = dier.rugY - 0.012 * schaal + (deinen + ademen - draf * 0.01) * (1 - sprong) - plet * 0.07 * schaal;
+      bot.lijf.position.y = dier.rugY - 0.012 * schaal + (deinen + ademen - draf * 0.01) * (1 - sprong) - plet * 0.07 * schaal - schrap * 0.05 * schaal + opzit * 0.03 * schaal;
       bot.lijf.rotation.x =
         (Math.sin(c2) * 0.012 * bewegen + draf * 0.02 * Math.sin(c2 + 1)) * (1 - galop) +
         galop * 0.085 * Math.sin(c1 + 0.4) * (1 - sprong) -
-        vyZacht * 0.32 * sprong + plet * 0.06;
-      bot.lijf.rotation.z = (Math.sin(cyclus * TAU) * 0.025 * bewegen * (1 - draf * 0.6) + Math.sin(tijd * 0.7) * 0.01 * (1 - bewegen)) * (1 - sprong);
+        vyZacht * 0.32 * sprong + plet * 0.06 - schrap * 0.14 - opzit * 0.42;
+      bot.lijf.rotation.z = wrijf * 0.03 + (Math.sin(cyclus * TAU) * 0.025 * bewegen * (1 - draf * 0.6) + Math.sin(tijd * 0.7) * 0.01 * (1 - bewegen)) * (1 - sprong);
       bot.lijf.rotation.y = Math.sin(cyclus * TAU) * 0.02 * bewegen * (1 - sprong);
       // Schouders en heupen rollen tegen elkaar in (vooral bij de tijger: sluipende tred).
       bot.voor.rotation.z = Math.sin(cyclus * TAU) * K.schoudersRol * bewegen;
@@ -212,9 +243,10 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
       }
       let yaw = Math.atan2(kijkRichting.x, kijkRichting.z);
       let pitch = Math.atan2(kijkRichting.y, 1);
-      if (kijkNaarCamera && camera) {
+      const kijkPunt = extra.kijkNaar ?? (kijkNaarCamera && camera ? camera.position : null);
+      if (kijkPunt) {
         bot.voor.updateWorldMatrix(true, false);
-        _kijk.copy(camera.position);
+        _kijk.copy(kijkPunt);
         bot.voor.worldToLocal(_kijk);
         _lok.copy(bot.hoofd.position).add(bot.nek.position);
         _kijk.sub(_lok);
@@ -223,7 +255,7 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
         // Wat recht achter het dier ligt, kan het niet zien: dan kijkt het gewoon vooruit.
         if (Math.abs(yaw) > 2.1) yaw = 0;
       }
-      yaw = klem(yaw, -1.0, 1.0) * (1 - bewegen * 0.6) * (1 - graas * 0.7);
+      yaw = klem(yaw, -1.0, 1.0) * (1 - bewegen * (extra.kijkNaar ? 0.3 : 0.6)) * (1 - graas * 0.7);
       pitch = klem(pitch, -0.35, 0.45) * (1 - graas);
       const ko = 1 - Math.exp(-3.5 * dt);
       kijk.yaw += (yaw - kijk.yaw) * ko;
@@ -234,14 +266,14 @@ export function maakDierAnimatie(dier, zaad = 0, opties = {}) {
       blij += ((blijTijd > 0 ? 1 : 0) - blij) * (1 - Math.exp(-8 * dt));
       const knabbel = graas * Math.max(0, Math.sin(tijd * 7)) * 0.05;
       bot.nek.rotation.set(
-        -kijk.pitch * 0.4 + knik + graas * 0.95 - sprong * vyZacht * 0.15 + K.kopLaag * bewegen - kopOp * 0.4 + kopVoor * 0.3,
-        kijk.yaw * 0.45 + Math.sin(tijd * 19) * 0.42 * schud,
-        0
+        -kijk.pitch * 0.4 * (1 - kop) + knik + graas * 0.95 - sprong * vyZacht * 0.15 + K.kopLaag * bewegen - kopOp * 0.4 + kopVoor * 0.3 + kop * 0.28 + gKnik + opzit * 0.32,
+        kijk.yaw * 0.45 * (1 - kop) + Math.sin(tijd * 19) * 0.42 * schud + wrijf * 0.18,
+        wrijf * 0.12 + schuin * 0.14
       );
       bot.hoofd.rotation.set(
-        -kijk.pitch * 0.6 + knik * 0.5 - blij * 0.1 + graas * 0.4 + knabbel - K.kopLaag * bewegen * 0.6 - kopOp * 0.7 - kopVoor * 0.42,
+        -kijk.pitch * 0.6 + knik * 0.5 - blij * 0.1 + graas * 0.4 + knabbel - K.kopLaag * bewegen * 0.6 - kopOp * 0.7 - kopVoor * 0.42 + gKnik * 0.6,
         kijk.yaw * 0.55 + Math.sin(tijd * 19 - 0.6) * 0.3 * schud,
-        Math.sin(tijd * 7) * 0.1 * blij + blij * 0.2 + Math.sin(tijd * 19 + 1) * 0.22 * schud
+        Math.sin(tijd * 7) * 0.1 * blij * (1 - kop) + blij * 0.2 + Math.sin(tijd * 19 + 1) * 0.22 * schud + kop * 0.25 + wrijf * 0.2 + schuin * 0.5
       );
 
       // --- Poten: elke voet volgt zijn baan, de poot buigt zich ernaar (IK met twee stukken) ---

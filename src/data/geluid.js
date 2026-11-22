@@ -29,6 +29,19 @@ export const GELUID = {
   tel: 0.18,
   ronde: 0.2,
 
+  // De tijger (stap 8a).
+  proest: 0.3,
+  spin: 0.22,
+  brul: 0.42,
+  bloemOpen: 0.16,
+  schat: 0.2,
+  piep: 0.16,           // de welpjes (stap 8b)
+  nies: 0.14,           // schatjesmomenten (stap 8c)
+  hik: 0.12,
+  huh: 0.12,
+  tuimel: 0.22,
+  welpSpel: { tel: 0.1, ritsel: 0.07, tok: 0.18, krak: 0.2, grom: 0.07, duizelig: 0.06 }, // spelen met elkaar (stap 8d)
+
   branding: 0.22,
   golfPeriode: 6.5,     // seconden per golf
   insecten: 0.035,

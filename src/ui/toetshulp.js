@@ -9,6 +9,7 @@ export function maakToetshulp(ui) {
     '<span><kbd>spatie</kbd> springen</span>' +
     '<span><kbd>E</kbd> actie (op de pony)</span>' +
     '<span><kbd>F</kbd> pony fluiten</span>' +
+    '<span><kbd>R</kbd> tijgerbrul</span>' +
     '<span><kbd>M</kbd> geluid</span>' +
     '<span>muis slepen: rondkijken</span>';
   ui.appendChild(el);

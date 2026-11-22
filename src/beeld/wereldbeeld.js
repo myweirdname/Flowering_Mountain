@@ -13,7 +13,7 @@ import { maakBladplant } from './maak/blad.js';
 import { maakBloemplant } from './maak/bloem.js';
 import { maakPalm } from './maak/palm.js';
 import { maakBoom } from './maak/boom.js';
-import { maakGras, maakRots } from './maak/klein.js';
+import { maakGras, maakRots, maakBosje } from './maak/klein.js';
 
 /**
  * @param {THREE.Scene} scene
@@ -47,7 +47,7 @@ export function maakWereldbeeld(scene, sim, K) {
   /**
    * @typedef {{ geo: THREE.BufferGeometry, straal: number, mat: any, schaduw?: boolean,
    *             mesh?: THREE.InstancedMesh, cap?: number }} Band
-   * @typedef {{ naam: string, bron: 'boom'|'palm'|'rots'|'struik'|'bloem'|'gras', laag: 'grote'|'kleine',
+   * @typedef {{ naam: string, bron: 'boom'|'palm'|'rots'|'struik'|'bloem'|'gras'|'bosje', laag: 'grote'|'kleine',
    *             filter: (p: any) => boolean, schaal: (p: any) => number, kleur: (p: any, c: THREE.Color) => void,
    *             zak?: number, banden: Band[] }} Soort
    */
@@ -93,6 +93,21 @@ export function maakWereldbeeld(scene, sim, K) {
         : [{ geo: maakBladplant(P, 0, toeval(10 + i)), straal: K.struikStraal, mat }],
     });
   });
+  // Ronde bosjes (stap 8d): altijd te zien (de welpjes verstoppen zich erin).
+  {
+    const B = FLORA.bosje;
+    soorten.push({
+      naam: 'bosje', bron: 'bosje', laag: 'kleine', filter: () => true, zak: 0.02,
+      schaal: (p) => B.grootte[0] + p.schaal * (B.grootte[1] - B.grootte[0]),
+      kleur: (p, c) => c.setScalar(0.9 + 0.1 * p.tint),
+      banden: d
+        ? [
+            { geo: maakBosje(B, 1, toeval(30)), straal: K.dichtbijKlein, mat: gewoon },
+            { geo: maakBosje(B, 0, toeval(30)), straal: K.struikStraal, mat: gewoon },
+          ]
+        : [{ geo: maakBosje(B, 0, toeval(30)), straal: K.struikStraal, mat: gewoon }],
+    });
+  }
   flora.bloemen.forEach((gen, i) => {
     soorten.push({
       naam: 'bloem' + i, bron: 'bloem', laag: 'kleine', filter: (p) => p.soort === i && p.kans < K.bloemen, zak: 0.02,

@@ -502,5 +502,411 @@ export function maakGeluid() {
       toon(eind, { freq: L[0] * 2, piek: G.ronde * 0.8, verval: 1.0 });
       toon(eind, { freq: L[3] * 2, piek: G.ronde * 0.6, verval: 1.0 });
     },
+
+    // --- De tijger (GD 16) ---
+
+    /** Proesten: het vriendelijke "prrt-prrt" door de neus waarmee tijgers elkaar begroeten. */
+    proest(keer = 2) {
+      const t = plek(0.8);
+      if (t < 0) return;
+      for (let i = 0; i < keer; i++) {
+        const t0 = t + i * 0.17;
+        // Een luchtstoot door de neus, met fladderende lippen (snel aan en uit).
+        const bron = ctx.createBufferSource();
+        bron.buffer = ruis;
+        const f = ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.frequency.setValueAtTime(950, t0);
+        f.frequency.exponentialRampToValueAtTime(420, t0 + 0.14);
+        f.Q.value = 1.2;
+        const fladder = ctx.createGain();
+        fladder.gain.value = 0.55;
+        const lfo = ctx.createOscillator();
+        lfo.type = 'square';
+        lfo.frequency.value = 34;
+        const ld = ctx.createGain();
+        ld.gain.value = 0.45;
+        lfo.connect(ld).connect(fladder.gain);
+        const g = omhul(t0, G.proest * (i === 0 ? 1 : 0.8), 0.012, 0.15);
+        bron.connect(f).connect(fladder).connect(g);
+        naarUit(g);
+        bron.start(t0, Math.random());
+        bron.stop(t0 + 0.2);
+        lfo.start(t0);
+        lfo.stop(t0 + 0.2);
+        // Een zacht stemmetje eronder.
+        toon(t0, { vorm: 'triangle', freq: 150, freqEind: 110, piek: G.proest * 0.25, aanslag: 0.01, verval: 0.13 });
+      }
+    },
+
+    /** Spinnen: een diep, rommelend gesnor, in en uit ademend. */
+    /**
+     * Een welpje piept: een klein, hoog "mieuw" dat omhoog en weer omlaag glijdt (stap 8b).
+     * hoogte: 1 = gewoon, hoger = nog kleiner en feller (bv. als hij gevangen wordt); luid 0..1.
+     */
+    piep(hoogte = 1, luid = 1) {
+      const duur = 0.24 + Math.random() * 0.12;
+      const t = plek(duur + 0.1);
+      if (t < 0) return;
+      const f0 = (720 + Math.random() * 160) * hoogte;
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.linearRampToValueAtTime(f0 * 1.45, t + duur * 0.35);
+      o.frequency.exponentialRampToValueAtTime(f0 * 0.82, t + duur);
+      // Een trillertje in de stem.
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 17;
+      const diep = ctx.createGain();
+      diep.gain.value = f0 * 0.03;
+      lfo.connect(diep).connect(o.frequency);
+      // "mi-" (dicht) naar "-euw" (open): het filter gaat open en weer dicht.
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 2.2;
+      f.frequency.setValueAtTime(f0 * 1.4, t);
+      f.frequency.linearRampToValueAtTime(f0 * 2.6, t + duur * 0.4);
+      f.frequency.exponentialRampToValueAtTime(f0 * 1.2, t + duur);
+      const g = omhul(t, G.piep * luid, 0.03, duur);
+      o.connect(f).connect(g);
+      naarUit(g, Math.random() * 0.6 - 0.3);
+      for (const x of [o, lfo]) {
+        x.start(t);
+        x.stop(t + duur + 0.08);
+      }
+    },
+
+    // --- Schatjesmomenten van de welpjes (stap 8c) ---
+
+    /** "Ha ... ha ... TSJIE!": twee piepkleine inademingen en een fel niesje (het niesje valt 0,55 s na het begin). */
+    nies() {
+      const t = plek(0.9);
+      if (t < 0) return;
+      const G2 = G.nies;
+      for (const [dt, f] of [[0, 900], [0.27, 1050]]) {
+        // "ha": een ademstootje met een klein stemmetje dat omhoog gaat.
+        ruisStoot(t + dt, { soort: 'bandpass', freq: 1700 + f * 0.4, q: 1.6, piek: G2 * 0.35, aanslag: 0.04, verval: 0.14 });
+        toon(t + dt, { vorm: 'triangle', freq: f, freqEind: f * 1.25, piek: G2 * 0.3, aanslag: 0.03, verval: 0.12 });
+      }
+      // "TSJIE!": een scherpe sis en een piepje dat naar beneden valt.
+      const t2 = t + 0.55;
+      ruisStoot(t2, { soort: 'highpass', freq: 4200, freqEind: 2600, q: 0.8, piek: G2, aanslag: 0.004, verval: 0.2 });
+      ruisStoot(t2, { soort: 'bandpass', freq: 2400, freqEind: 1400, q: 2, piek: G2 * 0.6, aanslag: 0.004, verval: 0.1 });
+      toon(t2 + 0.01, { vorm: 'triangle', freq: 1500, freqEind: 820, piek: G2 * 0.55, aanslag: 0.005, verval: 0.16 });
+    },
+
+    /** "Hik!": een piepklein, kort hikje. */
+    hik() {
+      const t = plek(0.15);
+      if (t < 0) return;
+      const f = 1050 + Math.random() * 150;
+      toon(t, { vorm: 'triangle', freq: f, freqEind: f * 1.5, piek: G.hik, aanslag: 0.004, verval: 0.07 });
+      ruisStoot(t, { soort: 'bandpass', freq: 2600, q: 3, piek: G.hik * 0.5, aanslag: 0.002, verval: 0.03 });
+    },
+
+    /** "Mrr?": een vragend piepje dat omhoog gaat (de kopjes gaan schuin). keer: hoeveel welpjes tegelijk. */
+    huh(keer = 3) {
+      for (let i = 0; i < keer; i++) {
+        const duur = 0.26 + Math.random() * 0.06;
+        const t = plek(duur + 0.1);
+        if (t < 0) return;
+        const t0 = t + i * 0.07;
+        const f0 = (560 + Math.random() * 120) * (1 + i * 0.12);
+        const o = ctx.createOscillator();
+        o.type = 'triangle';
+        o.frequency.setValueAtTime(f0, t0);
+        o.frequency.linearRampToValueAtTime(f0 * 0.92, t0 + duur * 0.35);
+        o.frequency.exponentialRampToValueAtTime(f0 * 1.7, t0 + duur);
+        const f = ctx.createBiquadFilter();
+        f.type = 'bandpass';
+        f.Q.value = 1.8;
+        f.frequency.setValueAtTime(f0 * 1.3, t0);
+        f.frequency.exponentialRampToValueAtTime(f0 * 2.4, t0 + duur);
+        const g = omhul(t0, G.huh * (i === 0 ? 1 : 0.75), 0.04, duur);
+        o.connect(f).connect(g);
+        naarUit(g, (i - 1) * 0.35);
+        o.start(t0);
+        o.stop(t0 + duur + 0.08);
+      }
+    },
+
+    /** Mee proberen te brullen: een klein "hrr" van inspanning ... en dan alleen "mieuw!". */
+    miniBrul() {
+      const t = plek(0.25);
+      if (t < 0) return;
+      ruisStoot(t, { soort: 'lowpass', freq: 900, freqEind: 500, q: 2, piek: G.piep * 0.35, aanslag: 0.05, verval: 0.15 });
+      setTimeout(() => this.piep(1.2, 1.15), 170);
+    },
+
+    // --- Spelen met elkaar (stap 8d) ---
+
+    /** Verstoppertje: de zoeker telt, elk getal een zacht piepje dat een tikje hoger gaat. */
+    tel(n) {
+      const t = plek(0.25);
+      if (t < 0) return;
+      const f = 620 * Math.pow(1.06, Math.min(n, 9));
+      toon(t, { vorm: 'triangle', freq: f, freqEind: f * 0.92, piek: G.welpSpel.tel, aanslag: 0.02, verval: 0.16 });
+      toon(t, { vorm: 'sine', freq: f * 2, piek: G.welpSpel.tel * 0.25, aanslag: 0.02, verval: 0.1 });
+    },
+
+    /** Geritsel van bladeren (een welpje kruipt in een struik, of springt eruit). */
+    ritsel(sterk = 1) {
+      const t = plek(0.5);
+      if (t < 0) return;
+      for (let i = 0; i < 4; i++) {
+        ruisStoot(t + i * 0.07 + Math.random() * 0.03, {
+          soort: 'bandpass', freq: 2600 + Math.random() * 2200, q: 1.4, piek: G.welpSpel.ritsel * sterk * (1 - i * 0.15), aanslag: 0.01, verval: 0.07 + Math.random() * 0.05,
+        });
+      }
+    },
+
+    /** Een takje valt in het gras: "tok". */
+    tok() {
+      const t = plek(0.3);
+      if (t < 0) return;
+      toon(t, { vorm: 'triangle', freq: 640, freqEind: 420, piek: G.welpSpel.tok, aanslag: 0.002, verval: 0.09 });
+      toon(t + 0.11, { vorm: 'triangle', freq: 560, freqEind: 400, piek: G.welpSpel.tok * 0.45, aanslag: 0.002, verval: 0.07 });
+      ruisStoot(t, { soort: 'bandpass', freq: 1800, q: 2, piek: G.welpSpel.tok * 0.4, aanslag: 0.002, verval: 0.05 });
+    },
+
+    /** Krak! Het takje breekt. */
+    krak() {
+      const t = plek(0.4);
+      if (t < 0) return;
+      for (let i = 0; i < 3; i++) {
+        ruisStoot(t + i * 0.018, { soort: 'highpass', freq: 2200 + i * 900, q: 0.9, piek: G.welpSpel.krak * (1 - i * 0.25), aanslag: 0.001, verval: 0.04 });
+      }
+      toon(t, { vorm: 'square', freq: 260, freqEind: 140, piek: G.welpSpel.krak * 0.25, aanslag: 0.001, verval: 0.06 });
+    },
+
+    /** Het takje schiet los: een zacht "zwiep". */
+    zwiep() {
+      const t = plek(0.3);
+      if (t < 0) return;
+      ruisStoot(t, { soort: 'bandpass', freq: 900, freqEind: 3200, q: 3, piek: G.welpSpel.krak * 0.5, aanslag: 0.06, verval: 0.12 });
+    },
+
+    /** Een piepklein grommetje van inspanning (trekken aan de tak). */
+    miniGrom() {
+      const duur = 0.22 + Math.random() * 0.1;
+      const t = plek(duur + 0.05);
+      if (t < 0) return;
+      const f0 = 300 + Math.random() * 80;
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(f0, t);
+      o.frequency.linearRampToValueAtTime(f0 * 0.85, t + duur);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 36;
+      const ld = ctx.createGain();
+      ld.gain.value = f0 * 0.1;
+      lfo.connect(ld).connect(o.frequency);
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 1500;
+      const g = omhul(t, G.welpSpel.grom, 0.04, duur);
+      o.connect(f).connect(g);
+      naarUit(g, Math.random() * 0.6 - 0.3);
+      for (const x of [o, lfo]) {
+        x.start(t);
+        x.stop(t + duur + 0.08);
+      }
+    },
+
+    /** Duizelig: een wiebelend fluitje dat omlaag glijdt ("wieieieuw"). */
+    duizelig() {
+      const t = plek(1);
+      if (t < 0) return;
+      const o = ctx.createOscillator();
+      o.type = 'sine';
+      o.frequency.setValueAtTime(1300, t);
+      o.frequency.exponentialRampToValueAtTime(420, t + 0.85);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.setValueAtTime(7, t);
+      lfo.frequency.linearRampToValueAtTime(4, t + 0.85);
+      const ld = ctx.createGain();
+      ld.gain.value = 70;
+      lfo.connect(ld).connect(o.frequency);
+      const g = omhul(t, G.welpSpel.duizelig, 0.05, 0.85);
+      o.connect(g);
+      naarUit(g);
+      for (const x of [o, lfo]) {
+        x.start(t);
+        x.stop(t + 0.95);
+      }
+    },
+
+    /** Kopje-onder: een zachte plof in het gras en een verschrikt piepje. */
+    tuimel() {
+      const t = plek(0.4);
+      if (t < 0) return;
+      ruisStoot(t, { soort: 'lowpass', freq: 700, freqEind: 220, piek: G.tuimel, aanslag: 0.01, verval: 0.22 });
+      toon(t, { freq: 170, freqEind: 95, piek: G.tuimel * 0.6, aanslag: 0.005, verval: 0.16 });
+      ruisStoot(t + 0.05, { soort: 'bandpass', freq: 3000, q: 1, piek: G.tuimel * 0.25, aanslag: 0.01, verval: 0.18 });
+    },
+
+    spin(duur = 2.4) {
+      const t = plek(duur + 0.2);
+      if (t < 0) return;
+      const bron = ctx.createBufferSource();
+      bron.buffer = ruis;
+      bron.loop = true;
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 360;
+      f.Q.value = 2;
+      const brom = ctx.createOscillator();
+      brom.type = 'sawtooth';
+      brom.frequency.value = 52;
+      const bromF = ctx.createBiquadFilter();
+      bromF.type = 'lowpass';
+      bromF.frequency.value = 220;
+      const bromG = ctx.createGain();
+      bromG.gain.value = 0.5;
+      // Het snorren zelf: ±25 tikjes per seconde.
+      const snor = ctx.createGain();
+      snor.gain.value = 0.5;
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 25;
+      const ld = ctx.createGain();
+      ld.gain.value = 0.5;
+      lfo.connect(ld).connect(snor.gain);
+      // In- en uitademen: twee keer aanzwellen.
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      const adem = duur / 2;
+      for (let i = 0; i < 2; i++) {
+        const a = t + i * adem;
+        g.gain.linearRampToValueAtTime(G.spin * (i === 0 ? 0.8 : 1), a + adem * 0.35);
+        g.gain.linearRampToValueAtTime(G.spin * 0.25, a + adem * 0.95);
+      }
+      g.gain.exponentialRampToValueAtTime(0.0001, t + duur + 0.1);
+      bron.connect(f).connect(snor);
+      brom.connect(bromF).connect(bromG).connect(snor);
+      snor.connect(g);
+      naarUit(g);
+      bron.start(t, Math.random());
+      brom.start(t);
+      lfo.start(t);
+      for (const x of [bron, brom, lfo]) x.stop(t + duur + 0.15);
+    },
+
+    /** De brul: een grote, rommelende brul die aanzwelt en wegzakt. */
+    brul(sterk = 1) {
+      const t = plek(2.2);
+      if (t < 0) return;
+      const duur = 1.5;
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(110, t);
+      o.frequency.linearRampToValueAtTime(175, t + 0.28);
+      o.frequency.linearRampToValueAtTime(150, t + 0.8);
+      o.frequency.exponentialRampToValueAtTime(62, t + duur);
+      const o2 = ctx.createOscillator();
+      o2.type = 'sawtooth';
+      o2.frequency.setValueAtTime(113, t);
+      o2.frequency.linearRampToValueAtTime(171, t + 0.3);
+      o2.frequency.exponentialRampToValueAtTime(60, t + duur);
+      // Het grommen: de stem rammelt (snel op en neer in luidheid en toonhoogte).
+      const grom = ctx.createOscillator();
+      grom.frequency.value = 38;
+      const gromD = ctx.createGain();
+      gromD.gain.value = 14;
+      grom.connect(gromD).connect(o.frequency);
+      const rammel = ctx.createGain();
+      rammel.gain.value = 0.6;
+      const rd = ctx.createGain();
+      rd.gain.value = 0.4;
+      grom.connect(rd).connect(rammel.gain);
+      // De keel en de bek: de bek gaat open (helderder) en weer dicht.
+      const keel = ctx.createBiquadFilter();
+      keel.type = 'bandpass';
+      keel.frequency.setValueAtTime(380, t);
+      keel.frequency.linearRampToValueAtTime(720, t + 0.35);
+      keel.frequency.exponentialRampToValueAtTime(300, t + duur);
+      keel.Q.value = 1.4;
+      const bek = ctx.createBiquadFilter();
+      bek.type = 'lowpass';
+      bek.frequency.setValueAtTime(900, t);
+      bek.frequency.linearRampToValueAtTime(2200, t + 0.3);
+      bek.frequency.exponentialRampToValueAtTime(500, t + duur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(G.brul * sterk, t + 0.18);
+      g.gain.setValueAtTime(G.brul * sterk, t + 0.6);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + duur + 0.15);
+      o.connect(keel);
+      o2.connect(keel);
+      keel.connect(bek).connect(rammel).connect(g);
+      // De lucht die mee naar buiten raast.
+      const bron = ctx.createBufferSource();
+      bron.buffer = ruis;
+      const rf = ctx.createBiquadFilter();
+      rf.type = 'bandpass';
+      rf.frequency.value = 700;
+      rf.Q.value = 0.8;
+      const rg = ctx.createGain();
+      rg.gain.value = 0.35;
+      bron.connect(rf).connect(rg).connect(rammel);
+      naarUit(g);
+      bron.start(t, Math.random());
+      o.start(t);
+      o2.start(t);
+      grom.start(t);
+      for (const x of [o, o2, grom, bron]) x.stop(t + duur + 0.2);
+      // En diep in je buik: een lage dreun.
+      toon(t + 0.05, { vorm: 'sine', freq: 70, freqEind: 42, piek: G.brul * 0.6 * sterk, aanslag: 0.12, verval: 1.3 });
+    },
+
+    /** Een klein grommetje: "nog niet" (de brulmeter is nog niet vol). */
+    grom() {
+      const t = plek(0.5);
+      if (t < 0) return;
+      const o = ctx.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.setValueAtTime(120, t);
+      o.frequency.exponentialRampToValueAtTime(90, t + 0.3);
+      const lfo = ctx.createOscillator();
+      lfo.frequency.value = 30;
+      const ld = ctx.createGain();
+      ld.gain.value = 10;
+      lfo.connect(ld).connect(o.frequency);
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.value = 600;
+      const g = omhul(t, G.brul * 0.25, 0.04, 0.3);
+      o.connect(f).connect(g);
+      naarUit(g);
+      for (const x of [o, lfo]) {
+        x.start(t);
+        x.stop(t + 0.4);
+      }
+    },
+
+    /** Een slaapbloem gaat open: klokjes die de toonladder opklimmen, met een glinstering erboven. */
+    bloemOpen() {
+      const t = plek(2.4);
+      if (t < 0) return;
+      const L = G.toonladder;
+      const reeks = [L[0] / 2, L[2] / 2, L[3] / 2, L[0], L[1], L[2], L[3], L[4], L[0] * 2, L[2] * 2];
+      reeks.forEach((f, i) => {
+        toon(t + i * 0.12, { freq: f, piek: G.bloemOpen, aanslag: 0.004, verval: 0.9 });
+        toon(t + i * 0.12, { freq: f * 2.76, piek: G.bloemOpen * 0.12, aanslag: 0.002, verval: 0.3 });
+      });
+      ruisStoot(t + 0.3, { soort: 'highpass', freq: 6000, piek: G.bloemOpen * 0.25, aanslag: 0.6, verval: 1.2 });
+    },
+
+    /** De schat: een vrolijk loopje en een regen van glinsters. */
+    schat() {
+      const t = plek(2.0);
+      if (t < 0) return;
+      const L = G.toonladder;
+      [L[0], L[2], L[3], L[0] * 2].forEach((f, i) => {
+        toon(t + i * 0.09, { vorm: 'triangle', freq: f, piek: G.schat, aanslag: 0.005, verval: 0.4 });
+      });
+      const e = t + 0.4;
+      for (const f of [L[0] * 2, L[2] * 2, L[3] * 2]) toon(e, { vorm: 'triangle', freq: f, piek: G.schat * 0.7, aanslag: 0.01, verval: 1.2 });
+      for (let i = 0; i < 10; i++) toon(e + 0.1 + i * 0.07, { freq: L[i % 5] * 4, piek: G.schat * 0.12, aanslag: 0.002, verval: 0.2 });
+    },
   };
 }

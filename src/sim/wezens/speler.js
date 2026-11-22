@@ -4,11 +4,13 @@
  * @typedef {{ beweeg: [number, number], spring: boolean, actie: boolean, fluit?: boolean, aai?: boolean }} Intentie
  * `beweeg` is een richting op de grond in wereldcoördinaten [x, z], lengte 0..1.
  * `fluit` roept de pony; `aai` aait de pony (één stap lang, na een tik op de pony).
+ * `brul` laat de tijger brullen; `aaiTijger` aait de tijger (na een tik op hem); `aaiWelp` is het id van het welpje
+ * dat je aait (of null).
  */
 
 /** @returns {Intentie} */
 export function legeIntentie() {
-  return { beweeg: [0, 0], spring: false, actie: false, fluit: false, aai: false };
+  return { beweeg: [0, 0], spring: false, actie: false, fluit: false, aai: false, brul: false, aaiTijger: false, aaiWelp: null };
 }
 
 /** @typedef {ReturnType<typeof maakSpeler>} Speler */

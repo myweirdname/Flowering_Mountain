@@ -428,3 +428,71 @@ body.touch .toetshulp {
 body.touch .actiehint {
   display: none;
 }
+
+/* --- De brulknop: een tijgerkopje met de brulmeter als ring (GD 8) --- */
+.brulknop {
+  position: absolute;
+  right: calc(18px + env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  width: 84px;
+  height: 84px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff7e6, #ffe0b0 70%, #f7c27a);
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.16), 0 8px 16px rgba(0, 0, 0, 0.2);
+  pointer-events: auto;
+  touch-action: none;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.4s, transform 0.4s;
+  visibility: hidden;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.brulknop.zichtbaar {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+}
+.brulknop svg {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.brulknop .ringbodem { stroke: rgba(120, 70, 20, 0.18); }
+.brulknop .ring { stroke: #ff9a2e; transition: stroke-dashoffset 0.25s; }
+.brulknop.vol .ring { stroke: #ffcf2e; }
+.brulknop.vol {
+  animation: brulwenk 1s ease-in-out infinite;
+}
+.brulknop.vol .bek { d: path("M40 66 Q50 80 60 66"); }
+.brulknop.ingedrukt { transform: translateY(5px) scale(0.94); }
+.brulknop.schud { animation: brulschud 0.4s ease-in-out; }
+@keyframes brulwenk {
+  0%, 100% { box-shadow: 0 6px 0 rgba(0, 0, 0, 0.16), 0 0 0 0 rgba(255, 207, 46, 0.95); transform: scale(1); }
+  50% { box-shadow: 0 6px 0 rgba(0, 0, 0, 0.16), 0 0 0 18px rgba(255, 207, 46, 0); transform: scale(1.07); }
+}
+@keyframes brulschud {
+  0%, 100% { transform: none; }
+  20% { transform: translateX(-6px) rotate(-6deg); }
+  45% { transform: translateX(6px) rotate(6deg); }
+  70% { transform: translateX(-4px) rotate(-3deg); }
+}
+/* Op touch: links van de fluitknop, boven de actieknop. */
+body.touch .brulknop {
+  width: var(--brul, 15vh);
+  height: var(--brul, 15vh);
+  right: calc(5vh + 24vh + 4vh + env(safe-area-inset-right));
+  bottom: calc(5vh + 24vh + 8vh + env(safe-area-inset-bottom));
+}
+.bloesemteller.schat {
+  animation: schatwip 0.9s ease-out;
+}
+@keyframes schatwip {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.6) rotate(-6deg); }
+  60% { transform: scale(1.25) rotate(4deg); }
+  100% { transform: scale(1); }
+}

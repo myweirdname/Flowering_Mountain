@@ -77,3 +77,61 @@ export function maakRots(detail) {
     })
     .maak();
 }
+
+/**
+ * Een rond, dicht bosje (stap 8d): een donkere kern vol blaadjes, met hier en daar een bloemetje.
+ * Net zo hoog als een welpje zonder zijn oortjes, zodat een verstopt welpje echt weg is ... op zijn oortjes na.
+ * @param {typeof import('../../data/flora.js').FLORA.bosje} B
+ * @param {number} detail 1 = dichtbij (meer blaadjes)
+ * @param {() => number} toeval
+ */
+export function maakBosje(B, detail, toeval) {
+  const b = new Bouwer();
+  const [rx, ry] = B.kern;
+  // De kern: een afgeplatte koepel, donker vanbinnen (je kijkt er nooit doorheen).
+  const kern = maakBol(1, detail ? 2 : 1);
+  const kp = kern.attributes.position;
+  for (let i = 0; i < kp.count; i++) {
+    const y = kp.getY(i);
+    kp.setXYZ(i, kp.getX(i) * rx, Math.max(-0.1, y) * ry, kp.getZ(i) * rx);
+  }
+  kA.set(B.binnen);
+  kB.set(B.blad);
+  b.voegToe(kern, { kleur: (q) => k.copy(kA).lerp(kB, THREE.MathUtils.clamp(q.y / ry, 0, 1) * 0.55), zwaai: (q) => q.y * 0.15 });
+  // Blaadjes over de koepel, naar buiten en een beetje omhoog gericht.
+  const blad = new THREE.BufferGeometry();
+  const L = B.bladLengte;
+  const W = L * 0.42;
+  blad.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, W, 0.02, L * 0.45, 0, 0.05, L, 0, 0, 0, 0, 0.05, L, -W, 0.02, L * 0.45], 3));
+  blad.computeVertexNormals();
+  const n = detail ? B.blaadjes : Math.round(B.blaadjes * 0.6);
+  const licht = new THREE.Color(B.bladLicht);
+  for (let i = 0; i < n; i++) {
+    // Gelijkmatig over de koepel (gulden hoek), van de rand tot de top.
+    const t = (i + 0.5) / n;
+    const hoogte = Math.sqrt(t) * 0.95;
+    const a = i * 2.39996 + toeval() * 0.4;
+    const r = Math.sqrt(1 - hoogte * hoogte);
+    const x = Math.cos(a) * r * rx * 0.97;
+    const z = Math.sin(a) * r * rx * 0.97;
+    const y = hoogte * ry * 0.97;
+    const ry_ = Math.atan2(x, z);
+    const op = -0.25 - hoogte * 0.9 + (toeval() - 0.5) * 0.4;
+    const tint = toeval();
+    b.voegToe(blad, {
+      matrix: matrix(x, y, z, op, ry_ + (toeval() - 0.5) * 0.6, 0, 0.8 + toeval() * 0.45),
+      kleur: () => k.copy(kB).lerp(licht, tint * 0.7),
+      zwaai: (q) => 0.25 + q.y * 0.6,
+    });
+  }
+  // Een paar bloemetjes bovenop.
+  const bol = maakBol(0.035, 0);
+  for (let i = 0; i < B.bloemen; i++) {
+    const a = toeval() * Math.PI * 2;
+    const h = 0.45 + toeval() * 0.5;
+    const r = Math.sqrt(1 - h * h);
+    const kleur = B.bloemKleuren[i % B.bloemKleuren.length];
+    b.voegToe(bol, { matrix: matrix(Math.cos(a) * r * rx * 1.02, h * ry * 1.04, Math.sin(a) * r * rx * 1.02), kleur, zwaai: 0.3 });
+  }
+  return b.maak();
+}

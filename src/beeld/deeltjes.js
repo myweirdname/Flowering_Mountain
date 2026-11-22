@@ -8,7 +8,7 @@ export function maakDeeltjes() {
   const pos = new Float32Array(N * 3);
   const kleur = new Float32Array(N * 3);
   const grootte = new Float32Array(N);
-  const vorm = new Float32Array(N); // 0 = rond (spetter, glinster), 1 = blaadje
+  const vorm = new Float32Array(N); // 0 = rond (spetter, glinster), 1 = blaadje, 2 = hartje, 3 = sterretje
   const vel = new Float32Array(N * 3);
   const leven = new Float32Array(N);
   const duur = new Float32Array(N).fill(1);
@@ -45,7 +45,18 @@ export function maakDeeltjes() {
       void main() {
         vec2 p = gl_PointCoord - 0.5;
         float a;
-        if (vVorm > 1.5) {
+        if (vVorm > 2.5) {
+          // Een sterretje met vijf punten, geel met een wit hartje.
+          float r = length(p);
+          float hoek = atan(p.y, p.x) + 1.5708;
+          float rand = 0.2 + 0.28 * pow(0.5 + 0.5 * cos(5.0 * hoek), 2.5);
+          a = smoothstep(rand + 0.02, rand - 0.02, r);
+          if (a < 0.02) discard;
+          vec3 c = mix(vec3(1.0, 1.0, 0.92), vKleur, smoothstep(0.05, 0.2, r));
+          gl_FragColor = vec4(c, a);
+          #include <colorspace_fragment>
+          return;
+        } else if (vVorm > 1.5) {
           // Een hartje: twee bolletjes en een puntje, met een wit randje.
           vec2 q = vec2(p.x, -p.y) * 2.7;
           q.y += 0.12;
@@ -97,7 +108,7 @@ export function maakDeeltjes() {
     kleur[i * 3] = kl.r; kleur[i * 3 + 1] = kl.g; kleur[i * 3 + 2] = kl.b;
     basis[i] = maat;
     grootte[i] = maat;
-    vorm[i] = blaadje === 2 ? 2 : blaadje ? 1 : 0;
+    vorm[i] = typeof blaadje === 'number' ? blaadje : blaadje ? 1 : 0;
     leven[i] = levensduur;
     duur[i] = levensduur;
     zwaar[i] = zwaarte;
@@ -132,6 +143,15 @@ export function maakDeeltjes() {
         const v = rnd(0.2, 0.7);
         voegToe(x + rnd(-0.25, 0.25), y + rnd(0, 0.3), z + rnd(-0.25, 0.25), Math.cos(a) * v, rnd(1.0, 1.8), Math.sin(a) * v,
           kleuren[n % kleuren.length], rnd(0.26, 0.4), rnd(1.3, 1.9), 2, -0.02);
+      }
+    },
+    /** Sterretjes die rond een kopje dansen (een welpje dat kopje-onder gaat, stap 8c). */
+    sterretjes(x, y, z, aantal = 6, kleuren = E.sterretjes.kleuren) {
+      for (let n = 0; n < aantal; n++) {
+        const a = (n / aantal) * Math.PI * 2 + Math.random() * 0.5;
+        const v = rnd(0.5, 1.1);
+        voegToe(x + Math.cos(a) * 0.12, y + rnd(0, 0.15), z + Math.sin(a) * 0.12, Math.cos(a) * v, rnd(0.7, 1.5), Math.sin(a) * v,
+          kleuren[n % kleuren.length], rnd(0.2, 0.3), rnd(0.9, 1.3), 3, 0.03);
       }
     },
     /** Een regen van bloemblaadjes die van boven neerdwarrelt (een perfecte sprong). */

@@ -19,9 +19,11 @@ const KNUFFEL_KOPSTREPEN = { 0: 1.2, 1: 1.3, 2: 1.3, 3: 1.3, 4: 1.3, 9: 1.35, 10
  * @param {typeof import('../../data/dieren.js').KNUFFELWELPVORM} F vorm (welpverhoudingen)
  * @param {typeof import('../../data/dieren.js').KNUFFELWELPEN.bengaals} T soort (snoepkleuren en strepen)
  * @param {number} [zaadje] eigen streeppatroon
+ * @param {{ fijnheid?: number, kopFijnheid?: number }} [extra] bv. een minder fijne huid op laag niveau
  */
-export function maakKnuffelWelp(F, T, zaadje = 0) {
+export function maakKnuffelWelp(F, T, zaadje = 0, extra = {}) {
   return maakTijger(F, T, zaadje, {
+    ...extra,
     // Grote, glanzende, ronde ogen met glimlichtjes (zoals de eerste knuffeltijger).
     oog: (o) => maakDierOog({ straal: o.breedte, kromming: o.kromming, iris: o.iris, donker: o.donker, kant: o.kant, hoogte: 1.05 }),
     kopStreep: (i) => KNUFFEL_KOPSTREPEN[i] ?? 0,

@@ -63,9 +63,14 @@ const KOPSTREPEN = [
  *   Een andere stijl op dezelfde echte bouw (de knuffelwelp, knuffelWelp.js): oog = een ander oog maken;
  *   gezicht = de snorvlekjes en snorharen vervangen (op de bovenlip); kopStreep = per vaste gezichtsstreep
  *   (KOPSTREPEN) hoe dik, 0 = weglaten.
+ *   fijnheid / kopFijnheid: hoe fijn de huid is (1 = zoals in de dierenproef). In het spel op laag niveau
+ *   minder fijn, zodat de tijger minder driehoeken kost (TP 7).
  */
 export function maakTijger(F, T, zaadje = 0, stijl = {}) {
   const s = F.schofthoogte;
+  const fijn = stijl.fijnheid ?? 1;
+  const kopFijn = stijl.kopFijnheid ?? 1;
+  const fijnN = (n, f = fijn) => Math.max(6, Math.round(n * f));
   const lz = F.rompLengte;
   const bx = F.rompDikte;
   const pd = F.pootDikte;
@@ -495,8 +500,8 @@ export function maakTijger(F, T, zaadje = 0, stijl = {}) {
   L.langs(rompPad, romp, {
     botten: ['achter', 'lijf', 'voor', 'nek', 'hoofd', 'lv_boven', 'rv_boven', 'la_boven', 'ra_boven'],
     rMax: 0.42 * s,
-    ringen: 60,
-    zijden: 36,
+    ringen: fijnN(60),
+    zijden: fijnN(36),
     kap: [8, 6],
     holte,
     // Onder en achter de kaak is de nek wit (de keelvacht die onder de wangkraag uitkomt), zonder strepen.
@@ -514,8 +519,8 @@ export function maakTijger(F, T, zaadje = 0, stijl = {}) {
       botten: [poot.voor ? 'voor' : 'achter', n + '_boven', n + '_onder', n + '_voet'],
       scherpte: 5,
       rMax: 0.3 * s,
-      ringen: 30,
-      zijden: 20,
+      ringen: fijnN(30),
+      zijden: fijnN(20),
       kap: [5, 4],
       holte,
       // Oranje aan de buitenkant, wit aan de binnenkant, iets lichter naar onder.
@@ -538,8 +543,8 @@ export function maakTijger(F, T, zaadje = 0, stijl = {}) {
       botten: [n + '_voet', n + '_onder'],
       scherpte: 6,
       rMax: 0.16 * s,
-      breed: 22,
-      hoog: 14,
+      breed: fijnN(22),
+      hoog: fijnN(14),
       holte,
       // Oranjebruin zoals de poten (foto's), wit aan de binnenkant, donkere zolen.
       kleur: (p, nn) => (nn.y < -0.75 ? 0x3a2a26 : kl(T.vachtKleur, T.flankKleur, 0.55).lerp(new THREE.Color(T.buikKleur), glad(-nn.x * k, 0.15, 0.7) * 0.75)),
@@ -557,8 +562,8 @@ export function maakTijger(F, T, zaadje = 0, stijl = {}) {
     {
       botten: m.staart.slice(0, -1).map((_, i) => 'staart' + i),
       scherpte: 4,
-      ringen: 56,
-      zijden: 12,
+      ringen: fijnN(56),
+      zijden: fijnN(12, Math.max(fijn, 0.75)),
       holte,
       kleur: (p, n, i) => (i.t > 0.87 ? T.streepKleur : kl(T.rugKleur, T.flankKleur, glad(i.v, 0.3, 0.9))),
       streep: (p, n, i) => [(i.t * staartLengte) / s + 0.05, 0.1, glad(i.t, 0.05, 0.12)],
@@ -570,8 +575,8 @@ export function maakTijger(F, T, zaadje = 0, stijl = {}) {
     botten: ['hoofd', 'lip', 'kaak'],
     rMax: 0.27 * s * hg,
     // Fijner dan de rest van het lijf: de gezichtsstrepen hebben punten om de centimeter nodig.
-    ringen: 56,
-    zijden: 72,
+    ringen: fijnN(56, kopFijn),
+    zijden: fijnN(72, kopFijn),
     kap: [10, 16],
     holte: { ...holte, sterkte: F.holteSterkte * 0.35 },
     kleur: kopKleur,
@@ -622,8 +627,8 @@ export function maakTijger(F, T, zaadje = 0, stijl = {}) {
   L.langs(kaakPad, kaakVeld, {
     botten: ['kaak'],
     rMax: 0.12 * s * hg,
-    ringen: 22,
-    zijden: 32,
+    ringen: fijnN(22, kopFijn),
+    zijden: fijnN(32, kopFijn),
     kap: [6, 6],
     holte,
     kleur: (p, n) => {

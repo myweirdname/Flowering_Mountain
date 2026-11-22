@@ -43,6 +43,24 @@ export const FLORA = {
     bijKamp: [{ dx: 12.5, dz: 2, maat: 2.1, draai: 0.4 }, { dx: 13.5, dz: 9.5, maat: 2.6, draai: 1.9 }],
   },
 
+  // Ronde bosjes (stap 8d): dicht en laag, net hoog genoeg om een welpje te verbergen (op zijn oortjes na).
+  // afstand = gemiddelde tussenafstand; kans = hoe vaak er op zo'n plek echt een bosje staat; top = hoogte bij schaal 1.
+  bosje: {
+    afstand: 6, kans: 0.3, grootte: [0.92, 1.08], kern: [0.6, 0.44], top: 0.5,
+    blaadjes: 70, bladLengte: 0.2, blad: 0x4fd06e, bladLicht: 0xa6ef7a, binnen: 0x2a8a48,
+    bloemen: 5, bloemKleuren: [0xff7fb0, 0xffffff, 0xffd84d],
+  },
+  // Vaste bosjes aan de rand van het kamp, zodat de welpjes daar altijd verstoppertje kunnen spelen.
+  // Ten opzichte van het kampmidden; schaal 0..1 binnen de grootte. Op het pad: overgeslagen.
+  bosjeBijKamp: [
+    { dx: 4.9, dz: 7.1, schaal: 0.5, draai: 0.7 },
+    { dx: 8.1, dz: -2.9, schaal: 0.3, draai: 2.1 },
+    { dx: -1.5, dz: -8.5, schaal: 0.6, draai: 4.0 },
+    { dx: -6.6, dz: -5.5, schaal: 0.2, draai: 5.2 },
+    { dx: -8.1, dz: 3.0, schaal: 0.5, draai: 1.3 },
+    { dx: 1.2, dz: 8.6, schaal: 0.4, draai: 3.3 },
+  ],
+
   gras: { kleur: 0x6fd65e, punt: 0xc9f590, hoogte: 0.34 },
 
   // Bladplanten. gewicht = hoe vaak de soort gekozen wordt (het zaadje schudt die nog wat door elkaar).

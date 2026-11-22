@@ -181,7 +181,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     const k = sleutel(tx, tz);
     let g = klein.get(k);
     if (g) return g;
-    g = { struik: [], bloem: [], gras: [] };
+    g = { struik: [], bloem: [], gras: [], bosje: [] };
 
     // Rotsen in en rond deze tegel: daar groeit niets op, en struiken blijven er een stukje vandaan.
     const rotsen = [];
@@ -194,6 +194,23 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
       if (steilte(x, z) > 0.9 || opRots(x, z, 0.9)) return;
       g.struik.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1, kiesGewogen(flora.struikGewichten, r4)));
     });
+
+    // Ronde bosjes om in te verstoppen (stap 8d): langs de rand van het kamp, het pad en de jungle.
+    const B = F.bosje;
+    overRaster(tx, tz, B.afstand, 'bosje', (x, z, r1, r2, r3) => {
+      const kampRand = b.kamp > 0.02 && b.kamp < 0.5;
+      if (r1 > B.kans || b.h < 0.4 || b.pad > 0.15 || b.weide > 0.2 || b.zand > 0.4 || !(b.bos > 0.2 || kampRand)) return;
+      if (steilte(x, z) > 0.7 || opRots(x, z, 0.9)) return;
+      g.bosje.push(plant(x, z, r2 * Math.PI * 2, r3, 0.5, r1));
+    });
+    for (const v of F.bosjeBijKamp ?? []) {
+      const x = kamp.x + v.dx;
+      const z = kamp.z + v.dz;
+      if (Math.floor(x / T) !== tx || Math.floor(z / T) !== tz) continue;
+      vorm.bodem(x, z, b);
+      if (b.pad > 0.05 || opRots(x, z, 0.9)) continue;
+      g.bosje.push(plant(x, z, v.draai, v.schaal, 0.5, 0));
+    }
 
     overRaster(tx, tz, L.bloem.afstand, 'bloem', (x, z, r1, r2, r3, r4) => {
       if (b.h < 0.35 || b.zand > 0.4 || b.pad > 0.55) return;

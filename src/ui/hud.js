@@ -50,6 +50,20 @@ const tijdTekst = (t) => {
  * @param {HTMLElement} ui
  * @param {string[]} hindernissen soorten, in de volgorde van de groepen in de weide
  */
+// De brulknop: een tijgerkopje in een ring die zich vult (de brulmeter, GD 8).
+const BRUL_ICOON = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <circle class="ringbodem" cx="50" cy="50" r="45" fill="none" stroke-width="8"/>
+  <circle class="ring" cx="50" cy="50" r="45" fill="none" stroke-width="8" stroke-linecap="round"
+          transform="rotate(-90 50 50)" stroke-dasharray="282.7" stroke-dashoffset="282.7"/>
+  <path d="M27 36 L24 20 L40 28 Z M73 36 L76 20 L60 28 Z" fill="#f08a24" stroke="#4a2a12" stroke-width="3" stroke-linejoin="round"/>
+  <ellipse cx="50" cy="54" rx="27" ry="24" fill="#f5952c" stroke="#4a2a12" stroke-width="3"/>
+  <path d="M50 31 V40 M40 33 L43 41 M60 33 L57 41 M24 52 H31 M23 60 H30 M76 52 H69 M77 60 H70" stroke="#2b1a10" stroke-width="3.2" stroke-linecap="round"/>
+  <ellipse cx="50" cy="64" rx="14" ry="10" fill="#fff6ea"/>
+  <circle cx="40" cy="50" r="3.6" fill="#2b1a10"/><circle cx="60" cy="50" r="3.6" fill="#2b1a10"/>
+  <path d="M45 58 L55 58 L50 63 Z" fill="#e0637a"/>
+  <path class="bek" d="M42 67 Q50 76 58 67" fill="none" stroke="#2b1a10" stroke-width="2.6" stroke-linecap="round"/>
+</svg>`;
+
 export function maakHud(ui, hindernissen = []) {
   const teller = document.createElement('div');
   teller.className = 'bloesemteller';
@@ -77,6 +91,26 @@ export function maakHud(ui, hindernissen = []) {
   kaart.className = 'rondekaart';
   ui.appendChild(kaart);
   let kaartTot = 0;
+
+  // De brulknop met zijn meter. Werkt met tikken en klikken; op pc ook met R.
+  const brulKnop = document.createElement('button');
+  brulKnop.className = 'brulknop';
+  brulKnop.setAttribute('aria-label', 'tijgerbrul');
+  brulKnop.innerHTML = BRUL_ICOON;
+  ui.appendChild(brulKnop);
+  const ring = /** @type {SVGCircleElement} */ (brulKnop.querySelector('.ring'));
+  let brulGedrukt = false;
+  brulKnop.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    brulGedrukt = true;
+    brulKnop.classList.add('ingedrukt');
+  });
+  const brulLos = () => brulKnop.classList.remove('ingedrukt');
+  brulKnop.addEventListener('pointerup', brulLos);
+  brulKnop.addEventListener('pointercancel', brulLos);
+  brulKnop.addEventListener('pointerleave', brulLos);
+  let brulVul = -1;
 
   // Pc: welke toets doet nu de actie.
   const hint = document.createElement('div');
@@ -131,6 +165,34 @@ export function maakHud(ui, hindernissen = []) {
       void kaart.offsetWidth;
       kaart.classList.add('zichtbaar');
       kaartTot = performance.now() + 4200;
+    },
+    /** Werd de brulknop ingedrukt sinds de vorige keer? (één keer lezen per simulatiestap) */
+    leesBrul() {
+      const b = brulGedrukt;
+      brulGedrukt = false;
+      return b;
+    },
+    /** De brulmeter: zichtbaar zodra de tijger je vriend is; vul 0..1 (vol = de knop wenkt). */
+    brulMeter(zichtbaar, vul) {
+      brulKnop.classList.toggle('zichtbaar', zichtbaar);
+      const v = Math.round(vul * 100) / 100;
+      if (v === brulVul) return;
+      brulVul = v;
+      ring.style.strokeDashoffset = String(282.7 * (1 - v));
+      brulKnop.classList.toggle('vol', v >= 1);
+    },
+    /** De meter is nog niet vol: de knop schudt even "nog niet". */
+    brulTeVroeg() {
+      brulKnop.classList.remove('schud');
+      void brulKnop.offsetWidth;
+      brulKnop.classList.add('schud');
+    },
+    /** De schat gevonden: het getal wipt groot op. */
+    schat(aantal) {
+      getal.textContent = String(aantal);
+      teller.classList.remove('wip', 'schat');
+      void teller.offsetWidth;
+      teller.classList.add('schat');
     },
     /** Pc-seintje voor de actietoets. */
     actie(soort) {
