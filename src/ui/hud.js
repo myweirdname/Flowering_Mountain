@@ -36,6 +36,8 @@ const ROZET = `<svg viewBox="0 0 100 120" aria-hidden="true">
 </svg>`;
 const KROON = `<svg viewBox="0 0 60 40"><path d="M6 34 L4 10 L18 20 L30 4 L42 20 L56 10 L54 34 Z" fill="#ffd84d" stroke="#fff" stroke-width="3" stroke-linejoin="round"/><circle cx="30" cy="22" r="4" fill="#ff6fae"/></svg>`;
 const TOETS_ICONEN = {
+  klimmen: `<svg viewBox="0 0 40 40"><path d="M5 36 C4 24 8 12 17 7 C25 3 34 6 36 16 L37 36 Z" fill="#e3d2f6" stroke="#2f7d6d" stroke-width="2.5" stroke-linejoin="round"/><ellipse cx="21" cy="20" rx="6" ry="3.6" fill="#ffd23f" stroke="#2f7d6d" stroke-width="2"/></svg>`,
+  uitschudden: `<svg viewBox="0 0 40 40"><path d="M15 34 C11 29 10 25 11 22 C12 20 14 20 15 22 V12 C15 10 19 10 19 12 V20 V10 C19 8 23 8 23 10 V20 V12 C23 10 27 10 27 12 V25 C27 30 24 34 20 35 Z" fill="#fff" stroke="#2f7d6d" stroke-width="2.2" stroke-linejoin="round"/><path d="M6 14 Q3 18 6 22 M34 14 Q37 18 34 22" fill="none" stroke="#2f7d6d" stroke-width="2.2" stroke-linecap="round"/></svg>`,
   opstappen: `<svg viewBox="0 0 40 40"><path d="M20 6 L31 18 H25 V26 H15 V18 H9 Z" fill="#fff" stroke="#2f7d6d" stroke-width="2.5" stroke-linejoin="round"/><path d="M7 32 C12 27 28 27 33 32 L31 36 H9 Z" fill="#ffd84d"/></svg>`,
   afstappen: `<svg viewBox="0 0 40 40"><path d="M7 12 C12 7 28 7 33 12 L31 16 H9 Z" fill="#ffd84d"/><path d="M20 36 L31 24 H25 V18 H15 V24 H9 Z" fill="#fff" stroke="#2f7d6d" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
 };

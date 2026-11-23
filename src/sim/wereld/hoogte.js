@@ -6,6 +6,7 @@ import { maakWillekeur } from '../../kern/willekeur.js';
 import { lagenruis, waardenruis } from './ruis.js';
 import { maakWeide } from './springweide.js';
 import { WEIDE } from '../../data/springweide.js';
+import { KLIMMEN } from '../../data/klimmen.js';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
@@ -53,6 +54,22 @@ export function maakWereldvorm(zaadje, W) {
     return h;
   }
   const kampH = ruw(W.kamp.x, W.kamp.z);
+  // De open plek voor de oefenrots (stap 9): vlak gras voor de wand, en geen bomen waar de rots zelf staat.
+  const KR = KLIMMEN.rots;
+  const rotsH = kampH + KR.voetBoven;
+  const rotsX = W.kamp.x + KR.plek.dx;
+  const rotsZ = W.kamp.z + KR.plek.dz;
+  const rotsNx = -Math.sin(KR.richting);
+  const rotsNz = -Math.cos(KR.richting);
+  function rotsOpen(x, z) {
+    const dx = x - rotsX;
+    const dz = z - rotsZ;
+    const u = dx * rotsNz - dz * rotsNx; // langs de wand (naar rechts = (nz, -nx))
+    const voor = dx * rotsNx + dz * rotsNz;
+    const du = Math.max(0, Math.abs(u) - (KR.breedte / 2 + KR.open.opzij));
+    const dv = Math.max(0, voor - KR.open.voor, -KR.diepte - 0.5 - voor);
+    return 1 - glad(Math.hypot(du, dv) / KR.open.rand);
+  }
   const padX = (z) => W.kamp.x + W.pad.slinger * Math.sin(z * 0.09 + padFase);
   const geulX = (z) => lagX + 1.6 * Math.sin(z * 0.2 + geulFase);
   // De springweide ligt aan de andere kant van het kamp dan de lagune.
@@ -70,8 +87,11 @@ export function maakWereldvorm(zaadje, W) {
     const fijn = lagenruis(x / W.fijneRuis.schaal, z / W.fijneRuis.schaal, zFijn, 2) * W.fijneRuis.hoogte * (0.3 + 0.7 * bosW);
 
     // De open plek: vlak gemaakt.
-    const kw = 1 - glad((Math.hypot(x - W.kamp.x, z - W.kamp.z) - W.kamp.straal) / W.kamp.rand);
-    h += (kampH - h) * kw;
+    const kw0 = 1 - glad((Math.hypot(x - W.kamp.x, z - W.kamp.z) - W.kamp.straal) / W.kamp.rand);
+    h += (kampH - h) * kw0;
+    const ow = rotsOpen(x, z);
+    h += (rotsH - h) * ow;
+    const kw = Math.max(kw0, ow);
 
     // Het paadje van het kamp naar het strand.
     let pw = 0;

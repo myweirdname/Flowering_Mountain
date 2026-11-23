@@ -1,0 +1,90 @@
+// Een eenvoudige proefbot voor de klimproef (stap 9): klimt een route met de regels van het spel, zonder scherm.
+// Hij kiest telkens de zet die hem het meest hoger brengt (de laagste hand eerst), nooit een zet waarbij
+// de andere hand zou wegglijden, en rust en schudt uit op een goede greep als zijn armen vollopen.
+// Dit is nog niet de klimbot uit KL 10 (die komt in stap 15b), maar wel het begin ervan.
+// Gebruik in de console: (await import('./src/sim/klimmen/proefbot.js')).klimProef(spel.sim, 2)
+
+const leeg = { beweeg: [0, 0], spring: false, actie: false };
+
+/**
+ * @param {any} sim de simulatie (sim/spel.js)
+ * @param {number} ri route
+ * @param {{ speler?: string, maxRisico?: number, maxTijd?: number, rusten?: boolean }} [opties]
+ */
+export function klimProef(sim, ri, opties = {}) {
+  const id = opties.speler ?? 'speler1';
+  const maxRisico = opties.maxRisico ?? 2.0;
+  const rusten = opties.rusten ?? true;
+  const R = sim.wereld.oefenrots;
+  const G = R.grepen;
+  const r = R.routes[ri];
+  const handGrepen = r.ids.filter((g) => !['voet', 'korrel'].includes(G[g].soort));
+  sim.klim(id, ri, 'handen');
+  const tel = {};
+  const zetten = [];
+  let maxPomp = 0;
+  let schudden = 0;
+  const stappen = Math.round((opties.maxTijd ?? 240) * 60);
+  let uitkomst = 'tijd op';
+  let i = 0;
+  for (; i < stappen; i++) {
+    const s = sim.speler(id);
+    const k = s.klim;
+    if (!k) {
+      uitkomst = 'van de wand';
+      break;
+    }
+    maxPomp = Math.max(maxPomp, k.hand.lh.pomp, k.hand.rh.pomp);
+    if (k.toestand === 'boven') {
+      uitkomst = 'top';
+      break;
+    }
+    let actie = false;
+    if (k.toestand === 'klimt' && !k.zet && !k.rij.length && k.los.lh <= 0 && k.los.rh <= 0) {
+      // Uitschudden zolang een arm te vol zit en we op een goede greep hangen.
+      const pomp = Math.max(k.hand.lh.pomp, k.hand.rh.pomp);
+      if (rusten && (k.schudt ? pomp > 0.08 : pomp > 0.45 && k.armBelasting < 0.35)) {
+        actie = true;
+        if (!k.schudt) schudden++;
+      } else if (!k.schudt) {
+        const hv = (l) => k.op[l]?.v ?? 0;
+        const nu = Math.min(hv('lh'), hv('rh')) + 0.3 * Math.max(hv('lh'), hv('rh'));
+        let beste = null;
+        for (const g of handGrepen) {
+          for (const lid of ['lh', 'rh']) {
+            const p = sim.klimPlan(id, g, lid);
+            if (!p || p.risico > maxRisico) continue;
+            const gr = G[g];
+            const ander = hv(lid === 'lh' ? 'rh' : 'lh');
+            const kruist = lid === 'lh' ? gr.u > (k.op.rh?.u ?? 99) + 0.02 : gr.u < (k.op.lh?.u ?? -99) - 0.02;
+            // Liefst de hand aan de kant van de greep (links van het lijf: linkerhand), zoals een klimmer doet.
+            const kant = (lid === 'lh' ? -1 : 1) * (gr.u - k.P[0]) > -0.05 ? 0 : 0.3;
+            const sc = Math.min(gr.v, ander) + 0.3 * Math.max(gr.v, ander) - p.risico * 0.05 - (kruist ? 0.4 : 0) - kant + (gr.top ? 5 : 0);
+            if (!beste || sc > beste.sc) beste = { g, lid, sc, risico: p.risico };
+          }
+        }
+        if (!beste || beste.sc <= nu + 0.01) {
+          uitkomst = 'vast';
+          break;
+        }
+        zetten.push(`${G[beste.g].u}/${G[beste.g].v} ${beste.lid} r${beste.risico.toFixed(1)}`);
+        sim.klimGreep(id, beste.g, beste.lid);
+      }
+    }
+    sim.stap({ [id]: { ...leeg, actie } }, 1 / 60);
+    for (const e of sim.neemGebeurtenissen()) if (e.speler === id) tel[e.soort] = (tel[e.soort] ?? 0) + 1;
+  }
+  const k = sim.speler(id).klim;
+  return {
+    route: r.graad,
+    uitkomst,
+    tijd: +(i / 60).toFixed(1),
+    hoogte: k ? +k.P[1].toFixed(2) : null,
+    zetten: zetten.length,
+    schudden,
+    maxPomp: +maxPomp.toFixed(2),
+    vallen: tel.val ?? 0,
+    glijden: tel.handGlijdt ?? 0,
+    laatste: zetten.slice(-4),
+  };
+}

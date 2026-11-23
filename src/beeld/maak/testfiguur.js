@@ -201,6 +201,18 @@ export function maakTestfiguur(f) {
   bloem.rotation.set(1.25, 0.35, -0.2); // het bloemhart kijkt naar voren, een tikje opzij en omhoog
   lijf.add(bloem);
 
+  // Het hoofd (met haar, gezichtje en bloem) hangt aan een nekscharnier, zodat het kan draaien en kijken
+  // (bv. naar de greep waar ze naartoe reikt aan de klimwand, stap 9).
+  const NEK = 0.6;
+  const kop = new THREE.Group();
+  kop.position.y = NEK;
+  for (const o of [...lijf.children]) {
+    if (o === jurk || o === zoom || o === borst || o === kraag || armen.includes(o) || benen.includes(o)) continue;
+    o.position.y -= NEK;
+    kop.add(o);
+  }
+  lijf.add(kop);
+
   lijf.scale.setScalar(s);
   const basisSchaal = s;
 
@@ -211,5 +223,5 @@ export function maakTestfiguur(f) {
   );
   schaduw.rotation.x = -Math.PI / 2;
 
-  return { figuur, lijf, schaduw, basisSchaal, benen, armen, ogen, krullen };
+  return { figuur, lijf, kop, schaduw, basisSchaal, benen, armen, ogen, krullen };
 }

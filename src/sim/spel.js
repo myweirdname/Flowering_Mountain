@@ -25,6 +25,9 @@ import { stapGezel, vraagBrul, aaiGezel } from './modi/gezel.js';
 import { WELPJES } from '../data/welpjes.js';
 import { maakWelp, maakTak } from './wezens/welp.js';
 import { stapWelpjes, aaiWelp } from './modi/welpjes.js';
+import { KLIMMEN } from '../data/klimmen.js';
+import { maakOefenrots } from './klimmen/oefenrots.js';
+import { beginKlimmen, stapKlimmen, stopKlimmen, bereikbaar, planVoor } from './modi/klimmen.js';
 
 /** @param {string|number} berg bergcode of zaadje */
 export function maakSim(berg) {
@@ -34,7 +37,9 @@ export function maakSim(berg) {
   const raster = maakTegelwereld(hoogte, WERELD.tegelGrootte, WERELD.rasterStap);
   const begroeiing = maakBegroeiing(vorm, FLORA, zaadje, WERELD.tegelGrootte);
   const weide = vorm.weide;
-  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z));
+  // De oefenrots achter het kamp (stap 9): een rotsblok met een klimwand naar het kamp toe.
+  const oefenrots = maakOefenrots(KLIMMEN, vorm.kamp, vorm.kamp.h + KLIMMEN.rots.voetBoven);
+  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z), oefenrots.blokOp);
   const wereld = {
     raster,       // hoogteOp / hellingOp over alle tegels
     vorm,         // de hoogtefunctie en wat er ligt (zand, gras, bos, lagune, weide)
@@ -45,6 +50,7 @@ export function maakSim(berg) {
     terreinOp: grond.terreinOp, // zonder de hindernissen (de pony springt erover)
     rotsOp: grond.rotsOp,
     weide,        // de springweide: baan, hindernissen, water
+    oefenrots,    // de klimwand met drie routes (stap 9)
   };
   // Boven elke hindernis zweeft een bloesem: wie er met de pony over springt, pakt hem.
   const boven = weide.groepen.map((gr) => {
@@ -87,9 +93,26 @@ export function maakSim(berg) {
     o.vorigeRichting = o.richting;
   };
 
+  /** Bij de voet van welke route staat de speler (index), of -1. */
+  function routeBij(s) {
+    if (s.modus !== 'lopen' || !s.opGrond || s.klimt) return -1;
+    let beste = -1;
+    let d0 = KLIMMEN.startAfstand;
+    oefenrots.routes.forEach((r, i) => {
+      const d = Math.hypot(r.voet[0] - s.pos[0], r.voet[2] - s.pos[2]);
+      if (d < d0 && Math.abs(s.pos[1] - oefenrots.voetHoogte) < 0.6) {
+        d0 = d;
+        beste = i;
+      }
+    });
+    return beste;
+  }
+
   /** Wat de actieknop nu zou doen voor deze speler. */
   function actieVoor(s) {
     if (s.modus === 'rijden') return 'afstappen';
+    if (s.modus === 'klimmen') return 'uitschudden';
+    if (routeBij(s) >= 0) return 'klimmen';
     const p = ponyVan(s);
     if (!p || p.ruiter || s.modus !== 'lopen' || !s.opGrond || s.klimt || !p.opGrond || p.weigert > 0) return null;
     const d = Math.hypot(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]);
@@ -148,6 +171,7 @@ export function maakSim(berg) {
     /** Plof: speler terug naar de laatste veilige grond (van de pony af als je erop zit). */
     terug(id) {
       const s = this.speler(id);
+      if (s.modus === 'klimmen') stopKlimmen(s, oefenrots, KLIMMEN);
       const p = ponyOnder(s);
       if (p) {
         stapAf(s, p, wereld, meld);
@@ -203,9 +227,39 @@ export function maakSim(berg) {
       }
     },
 
-    /** Wat de actieknop nu doet: 'opstappen', 'afstappen' of null. */
+    /** Wat de actieknop nu doet: 'opstappen', 'afstappen', 'klimmen', 'uitschudden' of null. */
     actieVoor(id) {
       return actieVoor(this.speler(id));
+    },
+
+    /** Bij welke route (index) staat de speler klaar om te klimmen, of -1. */
+    routeBij(id) {
+      return routeBij(this.speler(id));
+    },
+
+    /** Meteen beginnen klimmen op route ri (voor tests): de speler staat dan aan de voet. */
+    klim(id, ri, besturing) {
+      const s = this.speler(id);
+      if (s.modus === 'rijden') this.rijd(id, false);
+      if (s.modus === 'klimmen') stopKlimmen(s, oefenrots, KLIMMEN);
+      const v = oefenrots.routes[ri].voet;
+      s.pos = [v[0], oefenrots.voetHoogte, v[2]];
+      beginKlimmen(s, oefenrots, ri, KLIMMEN, meld, besturing);
+    },
+
+    /** Een zet vragen op de wand (zoals een tik op een greep, of een hand slepen als `lid` gegeven is). */
+    klimGreep(id, greep, lid = null) {
+      this.speler(id).klimVraag = { greep, lid };
+    },
+
+    /** Welk plan het spel zou maken om hand `lid` op greep `greep` te krijgen (tests, klimbot). */
+    klimPlan(id, greep, lid) {
+      return planVoor(this.speler(id), oefenrots, KLIMMEN, greep, lid);
+    },
+
+    /** De grepen die de klimster nu kan bereiken (met hand `lid`, of met eender welke). */
+    bereikbaar(id, lid = null) {
+      return bereikbaar(this.speler(id), oefenrots, KLIMMEN, lid);
     },
 
     /** Zet de pony van een speler op (x, z) (voor tests). */
@@ -245,7 +299,11 @@ export function maakSim(berg) {
       const begin = gebeurtenissen.length;
       for (const s of spelers) {
         bewaarVorige(s);
-        const int = intenties[s.id] ?? legeIntentie();
+        let int = intenties[s.id] ?? legeIntentie();
+        if (s.klimVraag) {
+          int = { ...int, klimGreep: s.klimVraag.greep, klimLid: s.klimVraag.lid };
+          s.klimVraag = null;
+        }
         const p = ponyVan(s);
 
         // Fluiten: de pony komt aangedraafd (of zoekt zelf een weg als ze ver weg is).
@@ -266,6 +324,7 @@ export function maakSim(berg) {
           const wat = actieVoor(s);
           if (wat === 'opstappen') stapOp(s, p, meld);
           else if (wat === 'afstappen') ponyOnder(s).stopt = true;
+          else if (wat === 'klimmen') beginKlimmen(s, oefenrots, routeBij(s), KLIMMEN, meld, int.besturing);
         }
 
         // Aaien kan altijd: dichtbij, of zittend op haar rug.
@@ -286,7 +345,8 @@ export function maakSim(berg) {
           aaiWelp(aw, gezinnen.get(t.id), t, s, WELPJES, meld);
         }
 
-        if (s.modus === 'lopen') stapLopen(s, int, wereld, LOPEN, dt, meld, ZWEMMEN);
+        if (s.modus === 'klimmen') stapKlimmen(s, int, oefenrots, KLIMMEN, dt, meld);
+        else if (s.modus === 'lopen') stapLopen(s, int, wereld, LOPEN, dt, meld, ZWEMMEN);
         else if (s.modus === 'zwemmen') stapZwemmen(s, int, wereld, ZWEMMEN, dt, meld);
         else if (s.modus === 'rijden') {
           const q = ponyOnder(s);

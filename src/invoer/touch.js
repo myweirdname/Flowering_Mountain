@@ -25,6 +25,18 @@ export const ACTIE_ICONEN = {
     <path d="M50 14 L74 40 H60 V58 H40 V40 H26 Z" fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
     <path d="M18 74 C30 62 70 62 82 74 L78 86 H22 Z" fill="#ffd84d" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
   </svg>`,
+  // Klimmen: een greep op de rots met een handje erop.
+  klimmen: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M14 88 C10 60 18 30 40 16 C60 6 82 14 88 40 L90 88 Z" fill="#e3d2f6" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+    <ellipse cx="52" cy="48" rx="15" ry="9" fill="#ffd23f" stroke="#2f7d6d" stroke-width="4"/>
+    <path d="M40 46 C40 36 46 34 49 40 L50 28 C51 22 58 23 57 29 L57 40 L60 32 C62 27 68 29 66 35 L62 50 C60 58 50 60 44 56 Z" fill="#fff" stroke="#2f7d6d" stroke-width="4" stroke-linejoin="round"/>
+  </svg>`,
+  // Uitschudden: een handje met trillijntjes.
+  uitschudden: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M36 84 C26 72 24 62 26 54 C28 48 34 48 36 54 L38 60 V30 C38 24 47 24 47 30 V50 V24 C47 18 56 18 56 24 V50 V28 C56 22 65 22 65 28 V54 V38 C65 32 74 32 74 38 V62 C74 74 66 84 56 86 Z"
+          fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M14 34 Q8 42 14 50 M86 34 Q92 42 86 50 M18 24 Q12 30 16 36 M82 24 Q88 30 84 36" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  </svg>`,
   afstappen: `<svg viewBox="0 0 100 100" aria-hidden="true">
     <path d="M18 30 C30 18 70 18 82 30 L78 42 H22 Z" fill="#ffd84d" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
     <path d="M50 88 L74 62 H60 V48 H40 V62 H26 Z" fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
@@ -68,9 +80,14 @@ export function maakTouch(vlak, ui, camera) {
 
   const isTouch = (e) => e.pointerType === 'touch' || e.pointerType === 'pen';
 
+  /** @type {null | ((e: PointerEvent) => boolean)} */
+  let voorrang = null;
+
   vlak.addEventListener('pointerdown', (e) => {
     if (!isTouch(e)) return;
     toon();
+    // Iets anders mag de aanraking eerst nemen (bv. een hand of greep op de klimwand, KL 7).
+    if (voorrang && voorrang(e)) return;
     if (e.clientX < innerWidth * T.linkerDeel && stickId === null) {
       stickId = e.pointerId;
       start = [e.clientX, e.clientY];
@@ -176,13 +193,17 @@ export function maakTouch(vlak, ui, camera) {
     lees() {
       return { beweeg: [beweeg[0], beweeg[1]], spring: leesSpring(), actie: leesActie(), fluit: leesFluit() };
     },
-    /** Zet het pictogram van de actieknop ('hand', 'opstappen', 'afstappen'); wenkt als er iets te doen is. */
+    /** Zet het pictogram van de actieknop ('hand', 'opstappen', 'afstappen', 'klimmen', 'uitschudden'); wenkt als er iets te doen is. */
     zetActie(soort) {
       const s = soort ?? 'hand';
       if (s === actieSoort) return;
       actieSoort = s;
-      actieKnop.innerHTML = ACTIE_ICONEN[s];
-      actieKnop.classList.toggle('wenkt', s !== 'hand');
+      actieKnop.innerHTML = ACTIE_ICONEN[s] ?? ACTIE_ICONEN.hand;
+      actieKnop.classList.toggle('wenkt', s !== 'hand' && s !== 'uitschudden');
+    },
+    /** Een functie die een aanraking eerst mag nemen (true = genomen: geen joystick of rondkijken). */
+    zetVoorrang(f) {
+      voorrang = f;
     },
   };
 }

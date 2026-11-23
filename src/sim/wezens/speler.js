@@ -17,7 +17,7 @@ export function legeIntentie() {
 export function maakSpeler(id, x, y, z) {
   return {
     id,
-    modus: 'lopen',       // 'lopen' | 'zwemmen' | 'rijden'
+    modus: 'lopen',       // 'lopen' | 'zwemmen' | 'rijden' | 'klimmen'
     rijdt: null,          // id van de pony waar je op zit
     pos: [x, y, z],
     vorigePos: [x, y, z], // stand bij de vorige stap, voor vloeiend tekenen
@@ -40,6 +40,10 @@ export function maakSpeler(id, x, y, z) {
     actieVorige: false,
     fluitVorige: false,
     /** @type {any} */
-    ronde: null,          // rondetijd in de springweide (sim/modi/ronde.js)
+    ronde: null,
+    /** @type {any} */
+    klim: null,           // op de klimwand: de klimtoestand (sim/modi/klimmen.js)
+    /** @type {any} */
+    klimVraag: null,      // een zet gevraagd van buitenaf (tests): { greep, lid }          // rondetijd in de springweide (sim/modi/ronde.js)
   };
 }

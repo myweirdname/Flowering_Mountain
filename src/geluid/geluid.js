@@ -236,6 +236,101 @@ export function maakGeluid() {
       ruisStoot(t + 0.05, { freq: 2600, piek: G.opklimmen * 0.4, verval: 0.08 });
     },
 
+    // --- Klimmen (stap 9) ---
+    /** De gordel klikt vast en de tijger neemt het touw: klaar om te klimmen. */
+    klimStart() {
+      const t = plek(0.4);
+      if (t < 0) return;
+      const v = G.klim.gordel;
+      toon(t, { vorm: 'triangle', freq: 1900, freqEind: 1500, piek: v, aanslag: 0.002, verval: 0.05 });
+      toon(t + 0.07, { vorm: 'triangle', freq: 2400, freqEind: 2000, piek: v * 0.8, aanslag: 0.002, verval: 0.06 });
+      ruisStoot(t, { soort: 'highpass', freq: 3500, piek: v * 0.3, verval: 0.03 });
+    },
+    /** Een hand pakt een greep: een doffe klop (bak), een tikje (richel, rand) of een zachte veeg (sloper), met wat magnesium. */
+    greep(soort) {
+      const t = plek(0.3);
+      if (t < 0) return;
+      const v = G.klim.greep;
+      const pan = (Math.random() - 0.5) * 0.4;
+      if (soort === 'bak') toon(t, { freq: 210, freqEind: 140, piek: v, aanslag: 0.003, verval: 0.09, pan });
+      else if (soort === 'sloper') ruisStoot(t, { freq: 900, freqEind: 500, q: 0.8, piek: v * 0.8, aanslag: 0.01, verval: 0.12, pan });
+      else toon(t, { vorm: 'triangle', freq: soort === 'rand' ? 760 : 520, freqEind: soort === 'rand' ? 600 : 400, piek: v * 0.7, aanslag: 0.002, verval: 0.05, pan });
+      ruisStoot(t + 0.01, { soort: 'highpass', freq: 3000, piek: v * 0.22, aanslag: 0.004, verval: 0.08, pan }); // magnesiumpufje
+    },
+    /** Een klimschoentje op een trede (een piepje van rubber) of op de grond. */
+    voetje(grond = false) {
+      const t = plek(0.2);
+      if (t < 0) return;
+      const v = G.klim.voet;
+      if (grond) ruisStoot(t, { soort: 'lowpass', freq: 600, piek: v, verval: 0.06 });
+      else {
+        toon(t, { freq: 1100, freqEind: 1450, piek: v * 0.5, aanslag: 0.004, verval: 0.05 });
+        ruisStoot(t, { freq: 1800, q: 2, piek: v * 0.6, verval: 0.05 });
+      }
+    },
+    /** "Hmm-mm": die greep is te ver (of niet van jouw route). */
+    teVer() {
+      const t = plek(0.5);
+      if (t < 0) return;
+      const v = G.klim.teVer;
+      toon(t, { vorm: 'triangle', freq: 330, freqEind: 300, piek: v, aanslag: 0.02, verval: 0.14 });
+      toon(t + 0.18, { vorm: 'triangle', freq: 280, freqEind: 230, piek: v, aanslag: 0.02, verval: 0.18 });
+    },
+    /** Een hand glijdt weg: een veeg en een geschrokken "oei". */
+    glijden() {
+      const t = plek(0.5);
+      if (t < 0) return;
+      const v = G.klim.glijden;
+      ruisStoot(t, { freq: 2200, freqEind: 600, q: 1.2, piek: v * 0.7, aanslag: 0.01, verval: 0.2 });
+      toon(t + 0.05, { freq: 620, freqEind: 880, piek: v * 0.5, aanslag: 0.02, verval: 0.12 });
+      toon(t + 0.2, { freq: 880, freqEind: 560, piek: v * 0.4, aanslag: 0.01, verval: 0.15 });
+    },
+    /** Vallen: het touw zoeft door het anker. */
+    val() {
+      const t = plek(0.6);
+      if (t < 0) return;
+      const v = G.klim.val;
+      ruisStoot(t, { freq: 500, freqEind: 2400, q: 1.5, piek: v, aanslag: 0.05, verval: 0.3 });
+      toon(t, { freq: 700, freqEind: 380, piek: v * 0.35, aanslag: 0.01, verval: 0.3 });
+    },
+    /** Het touw vangt je op (een ruk en een doinggg), en daarna een opgeluchte zucht. */
+    touwRuk() {
+      const t = plek(1.4);
+      if (t < 0) return;
+      const v = G.klim.ruk;
+      toon(t, { freq: 95, freqEind: 60, piek: v, aanslag: 0.003, verval: 0.16 });
+      toon(t, { vorm: 'triangle', freq: 150, freqEind: 140, piek: v * 0.35, aanslag: 0.003, verval: 0.45 });
+      ruisStoot(t + 0.45, { soort: 'lowpass', freq: 900, freqEind: 300, piek: G.klim.zucht, aanslag: 0.08, verval: 0.6 });
+    },
+    /** Boven! Klokjes omhoog, en een glinster. */
+    top() {
+      const t = plek(1.6);
+      if (t < 0) return;
+      const L = G.toonladder;
+      const v = G.klim.top;
+      [L[0], L[1], L[2], L[3], L[4], L[0] * 2].forEach((f, i) => toon(t + i * 0.08, { vorm: 'triangle', freq: f, piek: v, aanslag: 0.004, verval: 0.35 }));
+      for (const f of [L[0] * 2, L[2] * 2, L[4] * 2]) toon(t + 0.5, { vorm: 'triangle', freq: f, piek: v * 0.6, aanslag: 0.01, verval: 1.0 });
+    },
+    /** Laten zakken: het touw ruist zacht door het anker. */
+    zakken() {
+      const t = plek(1.6);
+      if (t < 0) return;
+      ruisStoot(t, { freq: 1300, freqEind: 900, q: 2, piek: G.klim.zakken, aanslag: 0.3, verval: 1.2 });
+    },
+    /** Uitschudden: een armpje dat flappert. */
+    schud() {
+      const t = plek(0.5);
+      if (t < 0) return;
+      for (let i = 0; i < 4; i++) ruisStoot(t + i * 0.09, { freq: 700, q: 1, piek: G.klim.schud, aanslag: 0.01, verval: 0.05 });
+    },
+    /** Zwaar ademen als de armen vol zitten. */
+    adem() {
+      const t = plek(0.8);
+      if (t < 0) return;
+      ruisStoot(t, { soort: 'bandpass', freq: 1100, freqEind: 800, q: 0.7, piek: G.klim.adem, aanslag: 0.15, verval: 0.3 });
+      ruisStoot(t + 0.42, { soort: 'bandpass', freq: 700, freqEind: 500, q: 0.7, piek: G.klim.adem * 0.8, aanslag: 0.1, verval: 0.3 });
+    },
+
     /** Een klokje uit de vijftonige toonladder; snel na elkaar wordt elk klokje hoger. */
     bloesem(reeks) {
       const t = plek(0.9);

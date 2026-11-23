@@ -5,13 +5,14 @@
  * @param {{ hoogteOp(x:number, z:number): number, tegelGrootte: number }} raster
  * @param {(tx:number, tz:number) => { x:number, y:number, z:number, maat:number, cos:number, sin:number }[]} rotsen
  * @param {(x:number, z:number) => number} [hindernisOp] bovenkant van de hindernissen in de springweide
+ * @param {(x:number, z:number) => number} [blokOp] grote rotsblokken met rechte wanden (de oefenrots, stap 9)
  */
-export function maakGrond(raster, rotsen, hindernisOp = () => -Infinity) {
+export function maakGrond(raster, rotsen, hindernisOp = () => -Infinity, blokOp = () => -Infinity) {
   const T = raster.tegelGrootte;
 
   /** Hoogte van de rotsen op (x, z), of -Infinity als er geen rots ligt. */
   function rotsOp(x, z) {
-    let best = -Infinity;
+    let best = blokOp(x, z);
     const tx0 = Math.floor((x - 3) / T);
     const tx1 = Math.floor((x + 3) / T);
     const tz0 = Math.floor((z - 3) / T);

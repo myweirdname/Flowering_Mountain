@@ -42,6 +42,9 @@ export const GELUID = {
   tuimel: 0.22,
   welpSpel: { tel: 0.1, ritsel: 0.07, tok: 0.18, krak: 0.2, grom: 0.07, duizelig: 0.06 }, // spelen met elkaar (stap 8d)
 
+  // Klimmen (stap 9).
+  klim: { gordel: 0.16, greep: 0.2, voet: 0.1, teVer: 0.12, glijden: 0.2, val: 0.22, ruk: 0.3, zucht: 0.1, top: 0.2, zakken: 0.07, schud: 0.1, adem: 0.05 },
+
   branding: 0.22,
   golfPeriode: 6.5,     // seconden per golf
   insecten: 0.035,

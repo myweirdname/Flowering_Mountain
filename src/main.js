@@ -49,6 +49,10 @@ import { maakGezelbeeld } from './beeld/gezel.js';
 import { maakSlaapbloembeeld } from './beeld/slaapbloem.js';
 import { WELPJES } from './data/welpjes.js';
 import { maakWelpjesbeeld } from './beeld/welpjes.js';
+import { KLIMMEN } from './data/klimmen.js';
+import { maakOefenrotsbeeld } from './beeld/maak/oefenrots.js';
+import { maakKlimmerbeeld } from './beeld/klimmer.js';
+import { maakKlimbediening } from './ui/klimbediening.js';
 
 const K = KWALITEIT[INSTELLINGEN.kwaliteit];
 
@@ -190,6 +194,14 @@ const gezel = maakGezelbeeld(scene, K);
 const slaapbloembeeld = maakSlaapbloembeeld(scene, sim.wereld.slaapbloemen, GEZEL.slaapbloem, K);
 // --- De welpjes bij mama (stap 8b) ---
 const welpjesbeeld = maakWelpjesbeeld(scene, sim.welpjesVan(LOKAAL), K, sim.takVan(LOKAAL));
+// --- De oefenrots en de klimster (stap 9) ---
+const rots = sim.wereld.oefenrots;
+const rotsbeeld = maakOefenrotsbeeld(rots, KLIMMEN, K);
+scene.add(rotsbeeld.groep);
+const rotsMidden = new THREE.Vector3(...rots.midden);
+const klimmer = maakKlimmerbeeld(scene, avonturier, rots, KLIMMEN, K);
+const rotsN = new THREE.Vector3(...rots.N);
+const rotsR = new THREE.Vector3(...rots.R);
 
 // Op- en afstappen: een sprongetje van de grond naar het zadel (of terug).
 let rijOvergang = null;
@@ -259,6 +271,12 @@ const uiLaag = /** @type {HTMLElement} */ (document.getElementById('ui'));
 const touch = maakTouch(canvas, uiLaag, volgcamera);
 maakScherm(uiLaag, { touch: isTouchToestel() });
 const hud = maakHud(uiLaag, WEIDE.hindernissen.map((h) => h.soort));
+const klimbediening = maakKlimbediening(canvas, uiLaag, camera, rots, KLIMMEN, {
+  speler: () => sim.speler(LOKAAL),
+  bereikbaar: (lid) => sim.bereikbaar(LOKAAL, lid),
+  handPlek: (lid) => klimmer.handPlek(lid),
+});
+touch.zetVoorrang((e) => klimbediening.neem(e));
 
 // Tik (of klik) op de pony: aaien.
 let aaiWacht = false;
@@ -273,6 +291,7 @@ canvas.addEventListener('pointerup', (e) => {
   const t = tikken.get(e.pointerId);
   tikken.delete(e.pointerId);
   if (!t || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 12 || performance.now() - t.t > 450) return;
+  if (sim.speler(LOKAAL).modus === 'klimmen') return; // aan de wand tik je op grepen
   // Een straal vanuit de camera door de tik: raakt hij het lijf of het hoofd van de pony?
   const ndc = new THREE.Vector3((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1, 0.5).unproject(camera);
   straal.origin.copy(camera.position);
@@ -559,6 +578,89 @@ function welpGebeurtenis(g) {
 }
 const BLAD_GROEN = [0x5ad67a, 0x7fe46a, 0x3db97e];
 
+/** Beeld en geluid bij het klimmen (stap 9). Geeft true als de gebeurtenis van het klimmen was. */
+const KRIJT = 0xfffaf4;
+function klimGebeurtenis(g) {
+  switch (g.soort) {
+    case 'klimStart': {
+      geluid.klimStart();
+      setTimeout(() => geluid.proest(2), 250);
+      // Het klimspreukje: een glitterwolkje, en het hoofdje wordt kleiner (beeld/klimmer.js).
+      const s = sim.speler(LOKAAL);
+      deeltjes.glinsters(s.pos[0], s.pos[1] + 0.9, s.pos[2], 0xfff3a0, 26);
+      deeltjes.glinsters(s.pos[0], s.pos[1] + 0.9, s.pos[2], 0xff9ad0, 14);
+      rotsbeeld.hangtouw(g.route, false);
+      rotsbeeld.sluit(g.route);
+      return true;
+    }
+    case 'klimGreep':
+      geluid.greep(g.greepSoort);
+      deeltjes.stof(g.pos[0], g.pos[1], g.pos[2], KRIJT);
+      return true;
+    case 'klimVoet':
+      geluid.voetje(g.grond);
+      return true;
+    case 'teVer':
+    case 'andereRoute':
+      geluid.teVer();
+      klimbediening.flits(g.greep);
+      return true;
+    case 'handGlijdt': {
+      geluid.glijden();
+      const h = klimmer.handPlek(g.lid);
+      deeltjes.stof(h.x, h.y, h.z, KRIJT);
+      return true;
+    }
+    case 'val':
+      geluid.val();
+      klimmer.tijgerSchrik();
+      return true;
+    case 'touwRuk':
+      geluid.touwRuk();
+      return true;
+    case 'opnieuw':
+      geluid.piep(1.1, 0.4);
+      return true;
+    case 'top': {
+      geluid.top();
+      rotsbeeld.bloei(g.route);
+      const [x, y, z] = g.pos;
+      setTimeout(() => {
+        deeltjes.bloemenregen(x, y + 0.8, z, 70);
+        deeltjes.glinsters(x, y + 0.3, z, KLIMMEN.routes[g.route].kleur, 30);
+      }, 150);
+      klimmer.tijgerBlij();
+      setTimeout(() => geluid.proest(3), 500);
+      const kop = klimmer.tijgerKop();
+      deeltjes.hartjes(kop.x, kop.y, kop.z, 5);
+      return true;
+    }
+    case 'zakken':
+      geluid.zakken();
+      return true;
+    case 'beneden': {
+      geluid.landing(2);
+      rotsbeeld.hangtouw(g.route, true);
+      const s = sim.speler(LOKAAL);
+      deeltjes.stof(s.pos[0], s.pos[1], s.pos[2], EFFECTEN.stof);
+      deeltjes.glinsters(s.pos[0], s.pos[1] + 0.9, s.pos[2], 0xfff3a0, 16);
+      // De camera staat voor de wand, met de rots in beeld.
+      volgcamera.zet(Math.atan2(rotsN.x, rotsN.z), CAMERA.kanteling);
+      return true;
+    }
+    case 'schudden':
+      geluid.schud();
+      return true;
+    case 'nietSchudden':
+      geluid.teVer();
+      return true;
+    case 'besturing':
+      geluid.tik();
+      return true;
+  }
+  return false;
+}
+
 /** Beeld en geluid bij wat de pony doet. Geeft true als de gebeurtenis van de pony was. */
 function ponyGebeurtenis(g) {
   const p = sim.pony(LOKAAL);
@@ -669,6 +771,13 @@ let opgelegd = null;
 let tijd = 0;
 let kringTijd = 0;
 let bosRond = 0;
+let ademTijd = 0;
+let klimMix = 0;
+const klimCam = { pos: new THREE.Vector3(), doel: new THREE.Vector3(), klaar: false };
+const camPos = new THREE.Vector3();
+const camDraai = new THREE.Quaternion();
+const kijker = new THREE.PerspectiveCamera(); // alleen om te richten (lookAt van een camera kijkt langs -z)
+const klimDoel = new THREE.Vector3();
 const tekenpos = new THREE.Vector3();
 
 const lus = maakSpellus({
@@ -683,6 +792,20 @@ const lus = maakSpellus({
     if (aaiWelpWacht) intentie.aaiWelp = aaiWelpWacht;
     aaiWelpWacht = null;
     if (hud.leesBrul()) intentie.brul = true;
+    // Klimmen: de besturing (tikken of handen), een gevraagde zet, laten zakken, en leunen met de joystick.
+    intentie.besturing = klimbediening.besturing;
+    if (sim.speler(LOKAAL).modus === 'klimmen') {
+      const z = klimbediening.leesZet();
+      if (z) {
+        intentie.klimGreep = z.greep;
+        intentie.klimLid = z.lid;
+      }
+      intentie.zakken = klimbediening.leesZakken();
+      intentie.leun = [invoer.beweeg[0], invoer.beweeg[1]];
+    } else {
+      klimbediening.leesZet();
+      klimbediening.leesZakken();
+    }
     sim.stap({ [LOKAAL]: intentie }, dt);
     for (const g of sim.neemGebeurtenissen()) {
       if (g.soort === 'wortelTerug') weidebeeld.terug(g.id);
@@ -690,6 +813,7 @@ const lus = maakSpellus({
       if (ponyGebeurtenis(g)) continue;
       if (tijgerGebeurtenis(g)) continue;
       if (welpGebeurtenis(g)) continue;
+      if (klimGebeurtenis(g)) continue;
       if (g.soort === 'landing') {
         animatie.land(g.snelheid / 12);
         if (g.snelheid > 2) geluid.landing(g.snelheid);
@@ -788,6 +912,17 @@ const lus = maakSpellus({
       : undefined);
     juichTijd = Math.max(0, juichTijd - dt);
     aaiTijd = Math.max(0, aaiTijd - dt);
+    // Aan de klimwand: de klimster hangt aan haar grepen (en de witte tijger zekert).
+    const klim = klimbediening.werkBij(dt);
+    klimmer.werkBij(s, dt, camera, sim.wereld.terreinOp, klimbediening.hint);
+    if (s.klim || camera.position.distanceToSquared(rotsMidden) < 60 * 60) rotsbeeld.werkBij(dt, tijd, klim.licht, klim.flitsen);
+    if (s.klim && Math.max(s.klim.hand.lh.pomp, s.klim.hand.rh.pomp) > KLIMMEN.kracht.trillenVanaf) {
+      ademTijd -= dt;
+      if (ademTijd <= 0) {
+        ademTijd = 1.5;
+        geluid.adem();
+      }
+    }
     weidebeeld.werkBij(tijd, dt);
     bloeispoor.werkBij(dt);
 
@@ -809,7 +944,7 @@ const lus = maakSpellus({
     const grond = sim.wereld.grondOp(tekenpos.x, tekenpos.z);
     // In het water: geen schaduw op de bodem, wel kringetjes rond het lijfje.
     const zwemt = s.modus === 'zwemmen';
-    schaduw.visible = !K.schaduw && !zwemt && grond > -0.3 && !rijdt && !rijOvergang;
+    schaduw.visible = !K.schaduw && !zwemt && grond > -0.3 && !rijdt && !rijOvergang && !s.klim;
     if (zwemt) {
       kringTijd -= dt * (0.6 + Math.hypot(s.vel[0], s.vel[2]) * 0.4);
       if (kringTijd <= 0) {
@@ -831,6 +966,28 @@ const lus = maakSpellus({
     schaduw.scale.setScalar(THREE.MathUtils.clamp(1 - (tekenpos.y - grond) / 6, 0.4, 1));
 
     volgcamera.volg(tekenpos, s.vel[0], s.vel[2], rijdt ? RIJDEN.galop : LOPEN.rensnelheid, dt, rijdt);
+    // Aan de klimwand: de camera kijkt recht op de wand, met ±3 m wand rond de klimster (KL 11).
+    const C = KLIMMEN.camera;
+    klimMix = THREE.MathUtils.clamp(klimMix + (s.klim ? dt : -dt) / C.wissel, 0, 1);
+    if (s.klim) {
+      // Een beetje van onder en opzij: zo zie je de handjes boven het grote hoofd reiken.
+      klimDoel.set(s.pos[0], s.pos[1] + C.kijkHoger, s.pos[2]);
+      const t = klimCam.klaar ? 1 - Math.exp(-C.volgen * dt) : 1;
+      klimCam.doel.lerp(klimDoel, t);
+      klimDoel.set(s.pos[0], s.pos[1] + C.camHoger, s.pos[2]).addScaledVector(rotsN, C.afstand).addScaledVector(rotsR, C.opzij);
+      klimDoel.y = Math.max(klimDoel.y, rots.voetHoogte + C.minHoogte);
+      klimCam.pos.lerp(klimDoel, t);
+      klimCam.klaar = true;
+    } else klimCam.klaar = false;
+    if (klimMix > 0) {
+      const m = klimMix * klimMix * (3 - 2 * klimMix);
+      camPos.copy(camera.position);
+      camDraai.copy(camera.quaternion);
+      kijker.position.copy(klimCam.pos);
+      kijker.lookAt(klimCam.doel);
+      camera.position.lerpVectors(camPos, klimCam.pos, m);
+      camera.quaternion.slerpQuaternions(camDraai, kijker.quaternion, m);
+    }
     // Een vaste testcamera (alleen vanuit de console, om iets van dichtbij te bekijken).
     if (testCamera) {
       const [v, d] = testCamera();
@@ -873,7 +1030,11 @@ const lus = maakSpellus({
 ` +
         `pony           ${p.gang} ${Math.abs(p.snelheid).toFixed(1)} m/s · bloeispoor ${bloeispoor.aantal}
 ` +
-        `tijger         ${tg.modus}${tg.wacht ? ' (wacht)' : ''} ${tg.gang} ${tg.snelheid.toFixed(1)} m/s · brul ${Math.round(s.brulMeter * 100)}%`
+        `tijger         ${tg.modus}${tg.wacht ? ' (wacht)' : ''} ${tg.gang} ${tg.snelheid.toFixed(1)} m/s · brul ${Math.round(s.brulMeter * 100)}%` +
+        (s.klim
+          ? `
+klimmen        ${KLIMMEN.routes[s.klim.route].graad} ${s.klim.toestand} · arm ${s.klim.armBelasting.toFixed(2)} · kracht ${Math.round(s.klim.hand.lh.pomp * 100)}/${Math.round(s.klim.hand.rh.pomp * 100)}%`
+          : '')
       );
     });
   },
@@ -1015,8 +1176,26 @@ window.spel = {
     this.speel(1);
     opgelegd = vorig;
   },
+  /** Zet de speler aan de voet van route ri van de oefenrots (0 = geel 3, 1 = turkoois 5, 2 = koraal 6a). */
+  naarRots(ri = 0) {
+    const v = rots.routes[ri].voet;
+    this.zet(v[0], v[2]);
+    const s = sim.speler(LOKAAL);
+    s.richting = s.vorigeRichting = Math.atan2(-rotsN.x, -rotsN.z);
+    volgcamera.zet(Math.atan2(rotsN.x, rotsN.z), CAMERA.kanteling);
+  },
+  /** Meteen beginnen klimmen op route ri, met besturing 'tikken' of 'handen'. */
+  klim(ri = 0, besturing = klimbediening.besturing) {
+    sim.klim(LOKAAL, ri, besturing);
+  },
+  /** Tik op greep id (of sleep hand lid ernaartoe). */
+  klimGreep(id, lid = null) {
+    sim.klimGreep(LOKAAL, id, lid);
+  },
+  /** De oefenrots: grepen, routes en de wandkaart. */
+  rots,
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */
@@ -1035,6 +1214,12 @@ window.spel = {
 // Snelkoppeling ?plek=weide: meteen bij de springweide beginnen, naast de pony (TP 9).
 if (INSTELLINGEN.plek === 'weide') {
   window.spel.naarWeide(false);
+  const s = sim.speler(LOKAAL);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}
+// ?plek=rots: meteen aan de voet van de oefenrots (stap 9).
+if (INSTELLINGEN.plek === 'rots') {
+  window.spel.naarRots(1);
   const s = sim.speler(LOKAAL);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
 }

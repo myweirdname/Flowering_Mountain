@@ -496,3 +496,146 @@ body.touch .brulknop {
   60% { transform: scale(1.25) rotate(4deg); }
   100% { transform: scale(1); }
 }
+
+/* --- Klimmen (stap 9): besturing wisselen, laten zakken, de graad van de route, de sleeplijn --- */
+.klimhud {
+  display: none;
+}
+body.klimt .klimhud {
+  display: block;
+}
+.klimknop {
+  position: absolute;
+  padding: 0;
+  border: none;
+  border-radius: 22px;
+  pointer-events: auto;
+  touch-action: none;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 0 rgba(0, 0, 0, 0.16), 0 8px 16px rgba(0, 0, 0, 0.2);
+  transition: transform 0.06s;
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.klimknop.ingedrukt {
+  transform: translateY(5px) scale(0.94);
+}
+.klimknop svg {
+  width: 62%;
+  height: 62%;
+  pointer-events: none;
+}
+.besturingknop {
+  top: calc(84px + env(safe-area-inset-top));
+  left: calc(16px + env(safe-area-inset-left));
+  width: 92px;
+  height: 104px;
+  grid-template-rows: 1fr auto;
+  padding-bottom: 8px;
+  background: radial-gradient(circle at 35% 30%, #ffb3d1, #ff6fa8 70%, #e2508b);
+  color: #fff;
+  font: 800 15px/1 system-ui, sans-serif;
+  text-shadow: 0 1px 2px rgba(120, 30, 70, 0.5);
+}
+.besturingknop svg {
+  width: 70px;
+  height: 70px;
+}
+.besturingknop.handen {
+  background: radial-gradient(circle at 35% 30%, #b8f5e4, #5fd3b3 70%, #3bb594);
+  text-shadow: 0 1px 2px rgba(20, 90, 70, 0.5);
+}
+.zakknop {
+  top: calc(16px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff1b8, #ffcf4d 70%, #e8a91c);
+}
+.routebadge {
+  position: absolute;
+  top: calc(26px + env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  min-width: 64px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  border: 4px solid #fff;
+  color: #fff;
+  font: 900 28px/1 system-ui, sans-serif;
+  text-align: center;
+  text-shadow: 0 2px 3px rgba(60, 20, 40, 0.35);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+.sleeplijn {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+}
+.klimhud.sleept .sleeplijn {
+  opacity: 1;
+}
+.sleeplijn line {
+  stroke: #fff;
+  stroke-width: 6;
+  stroke-dasharray: 2 12;
+  stroke-linecap: round;
+}
+.sleeplijn circle {
+  fill: rgba(255, 255, 255, 0.55);
+  stroke: #fff;
+  stroke-width: 4;
+}
+/* Aan de wand: geen springknop, fluitknop of brulknop (de actieknop schudt uit). */
+body.klimt .springknop,
+body.klimt .fluitknop,
+body.klimt .brulknop {
+  display: none;
+}
+body.touch .besturingknop {
+  width: 15vh;
+  height: 17vh;
+  font-size: 2.4vh;
+}
+body.touch .besturingknop svg {
+  width: 11vh;
+  height: 11vh;
+}
+body.touch .zakknop {
+  width: 14vh;
+  height: 14vh;
+}
+.klimtoetsen {
+  position: absolute;
+  left: 50%;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+  padding: 6px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  color: #6a3a5a;
+  font: 600 13px/1.6 system-ui, sans-serif;
+  white-space: nowrap;
+}
+.klimtoetsen kbd {
+  padding: 0 5px;
+  margin-right: 3px;
+  border-radius: 5px;
+  background: #fff;
+  border: 1px solid #f0b6cf;
+  border-bottom-width: 2px;
+  font: 700 12px/1.4 system-ui, sans-serif;
+}
+body.touch .klimtoetsen {
+  display: none;
+}
+body.klimt .toetshulp,
+body.klimt .actiehint {
+  display: none;
+}
