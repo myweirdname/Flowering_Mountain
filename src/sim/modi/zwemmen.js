@@ -26,9 +26,10 @@ export function stapZwemmen(s, int, wereld, Z, dt, meld) {
 
   // Golven in de zee: hoe dieper, hoe harder ze je terug naar de kust duwen.
   const terrein = wereld.raster.hoogteOp(s.pos[0], s.pos[2]);
-  const diepte = -terrein;
+  const peil = wereld.waterOp(s.pos[0], s.pos[2]);
+  const diepte = peil - terrein;
   const inLagune = wereld.vorm.bodem(s.pos[0], s.pos[2], bodem).lagune > 0.3;
-  if (!inLagune && diepte > Z.golfDiepte) {
+  if (!inLagune && peil < 0.01 && diepte > Z.golfDiepte) {
     const [gx, gz] = wereld.raster.hellingOp(s.pos[0], s.pos[2]);
     const gl = Math.hypot(gx, gz) || 1;
     const duw = Z.golfDuw * Math.min(1, (diepte - Z.golfDiepte) / 1.5);
@@ -41,12 +42,14 @@ export function stapZwemmen(s, int, wereld, Z, dt, meld) {
   }
 
   // Drijven: zacht naar de drijfhoogte toe (eerst wat wegzakken na een sprong in het water).
-  const drijf = -Z.drijfDiepte;
+  const drijf = peil - Z.drijfDiepte;
   s.vel[1] += ((drijf - s.pos[1]) * Z.drijfVeer - s.vel[1] * Z.drijfDemping) * dt;
 
-  s.pos[0] += s.vel[0] * dt;
+  // In de rivier voert de stroming je mee.
+  wereld.rivier.stroomOp(s.pos[0], s.pos[2], stroom);
+  s.pos[0] += (s.vel[0] + stroom[0] * Z.rivierMee) * dt;
   s.pos[1] += s.vel[1] * dt;
-  s.pos[2] += s.vel[2] * dt;
+  s.pos[2] += (s.vel[2] + stroom[1] * Z.rivierMee) * dt;
 
   const gr = wereld.grens;
   if (s.pos[0] < gr.minX || s.pos[0] > gr.maxX) { s.pos[0] = Math.min(Math.max(s.pos[0], gr.minX), gr.maxX); s.vel[0] = 0; }
@@ -67,7 +70,7 @@ export function stapZwemmen(s, int, wereld, Z, dt, meld) {
 
   // Ondiep genoeg om te staan: weer lopen.
   const grond = wereld.grondOp(s.pos[0], s.pos[2]);
-  if (grond > -Z.uitDiepte) {
+  if (grond > peil - Z.uitDiepte) {
     s.modus = 'lopen';
     s.pos[1] = Math.max(s.pos[1], grond);
     s.opGrond = s.pos[1] - grond < 0.05;
@@ -85,6 +88,7 @@ export function stapZwemmen(s, int, wereld, Z, dt, meld) {
 }
 
 const bodem = /** @type {any} */ ({});
+const stroom = [0, 0];
 
 function naderen(waarde, doel, max) {
   const d = doel - waarde;

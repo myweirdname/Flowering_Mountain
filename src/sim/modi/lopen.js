@@ -127,9 +127,10 @@ export function stapLopen(s, int, wereld, L, dt, meld, Z) {
     s.opGrond = false;
   }
 
-  // Diep water: zwemmen.
-  if (grond < -Z.inDiepte && s.pos[1] < -Z.drijfDiepte + 0.05) {
-    meld({ soort: 'plons', speler: s.id, pos: [s.pos[0], 0, s.pos[2]], snelheid: Math.max(1, -s.vel[1]) });
+  // Diep water: zwemmen (de zee en de lagune liggen op 0, de rivier hoger).
+  const peil = wereld.waterOp(s.pos[0], s.pos[2]);
+  if (grond < peil - Z.inDiepte && s.pos[1] < peil - Z.drijfDiepte + 0.05) {
+    meld({ soort: 'plons', speler: s.id, pos: [s.pos[0], peil, s.pos[2]], snelheid: Math.max(1, -s.vel[1]) });
     s.modus = 'zwemmen';
     s.opGrond = false;
     s.vel[1] *= 0.3;
@@ -137,7 +138,7 @@ export function stapLopen(s, int, wereld, L, dt, meld, Z) {
   }
 
   // Laatste veilige grond onthouden; te lang glijden of ver vallen brengt je daar terug.
-  onthoudVeilig(s, grond, dt, L.veiligNa);
+  onthoudVeilig(s, grond - Math.max(0, peil), dt, L.veiligNa); // in de rivier is het niet veilig
   s.glijTijd = glijdt ? s.glijTijd + dt : 0;
   if (s.glijTijd > L.maxGlijTijd || s.pos[1] < L.terugOnder) {
     naarVeiligeGrond(s, meld);

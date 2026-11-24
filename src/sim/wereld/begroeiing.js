@@ -150,6 +150,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
 
     overRaster(tx, tz, L.rots.afstand, 'rots', (x, z, r1, r2, r3, r4) => {
       if (b.h < -1.2 || r1 > (b.zand > 0.5 ? 0.28 : 0.4) || b.pad > 0.05 || b.kamp > 0.6 || b.weide > 0.05) return;
+      if (b.rivier > 0.01 || b.oever > 0.2) return; // de rivier heeft haar eigen rotsen
       // Af en toe een grote rots: een lage rand om op te klimmen.
       const R = F.rots;
       const [a, bmax] = r1 < R.grootKans ? R.grootte : R.klein;

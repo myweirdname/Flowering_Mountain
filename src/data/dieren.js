@@ -121,6 +121,20 @@ export const TIJGERS = {
     streepKleur: 0x9a5426,  // zacht roodbruin
     strepen: { dichtheid: 9.0, dikte: 0.26, rafel: 1.2, sterkte: 0.85, zaad: 12.4 },
   },
+  // De zwemmer in de rivier (stap 10): de kleinste en donkerste tijger, dieper roodoranje met dichte,
+  // brede strepen (ook op de poten) en een volle witte wangkraag.
+  sumatraans: {
+    naam: 'Sumatraanse tijger',
+    vachtKleur: 0xc65a18,
+    rugKleur: 0xa0420e,
+    flankKleur: 0xd98840,
+    buikKleur: 0xf0e4d2,
+    oorBinnen: 0xeee4d6,
+    oogKleur: 0xeaa61e,
+    oogRand: 0x7a3c0c,
+    streepKleur: 0x110a08,
+    strepen: { dichtheid: 13.0, dikte: 0.34, rafel: 1.0, sterkte: 1.0, zaad: 21.7 },
+  },
 };
 
 // --- De echte welpen (verbeterronde stap 6, plan van de gebruiker) ---

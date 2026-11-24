@@ -53,6 +53,9 @@ import { KLIMMEN } from './data/klimmen.js';
 import { maakOefenrotsbeeld } from './beeld/maak/oefenrots.js';
 import { maakKlimmerbeeld } from './beeld/klimmer.js';
 import { maakKlimbediening } from './ui/klimbediening.js';
+import { RIVIER, VLOT, ZWEMTIJGER } from './data/rivier.js';
+import { maakRivierbeeld } from './beeld/rivier.js';
+import { maakVlotbeeld, maakZwemvest, maakZwemtijgerbeeld } from './beeld/vlot.js';
 
 const K = KWALITEIT[INSTELLINGEN.kwaliteit];
 
@@ -128,7 +131,7 @@ function ondergrond(s) {
   const z = s.pos[2];
   if (sim.wereld.rotsOp(x, z) > raster.hoogteOp(x, z) + 0.03) return 'rots';
   sim.wereld.vorm.bodem(x, z, bodem);
-  if (bodem.h < 0.05 || sim.wereld.weide.water(x, z) > bodem.h) return 'water';
+  if (bodem.h < 0.05 || sim.wereld.weide.water(x, z) > bodem.h || sim.wereld.waterOp(x, z) > bodem.h + 0.03) return 'water';
   return bodem.zand > 0.5 || bodem.pad > 0.5 ? 'zand' : 'gras';
 }
 const animatie = maakAnimatie(avonturier, {
@@ -202,6 +205,26 @@ const rotsMidden = new THREE.Vector3(...rots.midden);
 const klimmer = maakKlimmerbeeld(scene, avonturier, rots, KLIMMEN, K);
 const rotsN = new THREE.Vector3(...rots.N);
 const rotsR = new THREE.Vector3(...rots.R);
+// --- De benedenrivier, het vlot en de Sumatraanse tijger (stap 10) ---
+const rivier = sim.wereld.rivier;
+const rivierbeeld = maakRivierbeeld(rivier, VLOT, sim.wereld.vlotStukken, K, zonRichting, SCENE.hemel.horizon);
+scene.add(rivierbeeld.groep);
+const vlotbeeld = maakVlotbeeld(VLOT, K);
+scene.add(vlotbeeld.groep);
+const zwemvest = maakZwemvest(ponyVorm);
+const zwemtijger = maakZwemtijgerbeeld(scene, ZWEMTIJGER, K, GEZEL.laag);
+/** Op of van het vlot springen: { t, duur, van } (de avonturier) en hetzelfde voor de pony (met `ver`: ze verschijnt). */
+let vaarOvergang = null;
+let ponyHop = null;
+let laatstePeddel = [0, 0];
+let kielTijd = 0;
+let zwemKielTijd = 0;
+let ponyLeun = 0;
+const ZIT_ZAK = 0.17; // zittend op het vlot zakt het figuurtje tot op haar billetjes
+const hopDoel = new THREE.Vector3();
+const rivierPunt = { s: 0, d: 0 };
+const [valX, valZ] = rivier.puntOp(RIVIER.sprong.s + 1, 0);
+const valY = rivier.peil(RIVIER.sprong.s + 1);
 
 // Op- en afstappen: een sprongetje van de grond naar het zadel (of terug).
 let rijOvergang = null;
@@ -661,6 +684,101 @@ function klimGebeurtenis(g) {
   return false;
 }
 
+/** Beeld en geluid bij het vlot, de rivier en de Sumatraanse tijger (stap 10). */
+const GLITTER = 0xfff3a0;
+function vaarGebeurtenis(g) {
+  switch (g.soort) {
+    case 'bouwstuk': {
+      rivierbeeld.pak(g.stuk);
+      const [x, y, z] = g.pos;
+      deeltjes.glinsters(x, y + 0.5, z, GLITTER, 18);
+      deeltjes.blaadjes(x, y + 0.3, z, 8, BLAD_GROEN, 0.5);
+      geluid.ritsel(1);
+      geluid.bloesem(g.aantal - 1);
+      return true;
+    }
+    case 'vlotBouwen': {
+      vlotbeeld.bouw();
+      const [x, y, z] = g.pos;
+      deeltjes.glinsters(x, y + 1.2, z, GLITTER, 30);
+      deeltjes.glinsters(x, y + 1.2, z, 0xff9ad0, 16);
+      geluid.ritsel(1.2);
+      return true;
+    }
+    case 'vlotKlaar': {
+      const [x, y, z] = g.pos;
+      geluid.top();
+      deeltjes.bloemenregen(x, y + 1.5, z, 50);
+      deeltjes.glinsters(x, y + 0.6, z, GLITTER, 24);
+      return true;
+    }
+    case 'vlotIn':
+      vaarOvergang = { t: 0, duur: 0.45, van: figuur.position.clone() };
+      geluid.opstappen();
+      return true;
+    case 'vlotUit':
+      vaarOvergang = { t: 0, duur: 0.45, van: figuur.position.clone() };
+      setTimeout(() => geluid.landing(2), 380);
+      return true;
+    case 'ponyOpVlot':
+      ponyHop = { t: 0, duur: g.ver ? 0.01 : 0.65, van: new THREE.Vector3(...g.van) };
+      if (g.ver) {
+        const v = sim.vlot(LOKAAL);
+        deeltjes.blaadjes(v.pos[0], v.pos[1] + 0.6, v.pos[2], 24, [0x6fd35e, 0x9be37a, 0xff8cc6], 0.8);
+      }
+      geluid.hinnik(true);
+      setTimeout(() => geluid.tok(), 600);
+      return true;
+    case 'ponyVanVlot':
+      ponyHop = { t: 0, duur: 0.65, van: ponyHouder.position.clone() };
+      setTimeout(() => geluid.hinnik(), 300);
+      return true;
+    case 'vlotHop':
+      geluid.sprong();
+      return true;
+    case 'vlotSprong':
+      // De wow-sprong: een zoef, de pony hinnikt, en alles even in slow motion.
+      geluid.zoef();
+      setTimeout(() => geluid.hinnik(true), 120);
+      ponyAnim.blij();
+      return true;
+    case 'vlotLanding': {
+      const [x, y, z] = g.pos;
+      deeltjes.spetters(x, z, 2.2, y);
+      deeltjes.spetters(x + 0.8, z - 0.5, 1.2, y);
+      geluid.plons(6);
+      animatie.land(0.5);
+      ponyAnim.land(0.6);
+      juichTijd = 0.9;
+      return true;
+    }
+    case 'vlotBots': {
+      const [x, y, z] = g.pos;
+      deeltjes.spetters(x, z, 0.4 + g.sterkte * 0.8, y);
+      geluid.vlotBots(g.sterkte, g.rots);
+      return true;
+    }
+    case 'zwemtijgerSprong':
+      return true;
+    case 'zwemtijgerPlons': {
+      const [x, y, z] = g.pos;
+      deeltjes.spetters(x, z, 1.5, y);
+      geluid.plons(3);
+      zwemtijger.duik();
+      return true;
+    }
+    case 'zwemtijgerVerschijnt': {
+      const [x, y, z] = g.pos;
+      deeltjes.spetters(x, z, 1, y);
+      return true;
+    }
+    case 'inLagune':
+    case 'vlotTerug':
+      return true;
+  }
+  return false;
+}
+
 /** Beeld en geluid bij wat de pony doet. Geeft true als de gebeurtenis van de pony was. */
 function ponyGebeurtenis(g) {
   const p = sim.pony(LOKAAL);
@@ -806,6 +924,11 @@ const lus = maakSpellus({
       klimbediening.leesZet();
       klimbediening.leesZakken();
     }
+    // Op het vlot: de joystick stuurt (links, rechts) en peddelt (vooruit, achteruit).
+    if (sim.speler(LOKAAL).modus === 'varen') {
+      intentie.peddel = opgelegd?.peddel ?? [invoer.beweeg[0], invoer.beweeg[1]];
+      laatstePeddel = intentie.peddel;
+    } else laatstePeddel = [0, 0];
     sim.stap({ [LOKAAL]: intentie }, dt);
     for (const g of sim.neemGebeurtenissen()) {
       if (g.soort === 'wortelTerug') weidebeeld.terug(g.id);
@@ -814,12 +937,13 @@ const lus = maakSpellus({
       if (tijgerGebeurtenis(g)) continue;
       if (welpGebeurtenis(g)) continue;
       if (klimGebeurtenis(g)) continue;
+      if (vaarGebeurtenis(g)) continue;
       if (g.soort === 'landing') {
         animatie.land(g.snelheid / 12);
         if (g.snelheid > 2) geluid.landing(g.snelheid);
         else geluid.stap(ondergrond(sim.speler(LOKAAL)), 0.5);
       } else if (g.soort === 'plons') {
-        deeltjes.spetters(g.pos[0], g.pos[2], Math.min(1.6, 0.5 + g.snelheid / 6));
+        deeltjes.spetters(g.pos[0], g.pos[2], Math.min(1.6, 0.5 + g.snelheid / 6), g.pos[1]);
         geluid.plons(g.snelheid);
       } else if (g.soort === 'opklimmen') geluid.opklimmen();
       else if (g.soort === 'bloesem') {
@@ -907,9 +1031,73 @@ const lus = maakSpellus({
       figuur.position.copy(zadelPos);
       figuur.quaternion.copy(zadelDraai);
     }
+    // --- Het vlot (stap 10): zittend op het vlot, met de peddel; op en af in een sprongetje ---
+    const v = sim.vlot(LOKAAL);
+    const vaart = s.modus === 'varen';
+    vlotbeeld.werkBij(v, overgang, dt, tijd, (w) => geluid.bamboe(Math.round(w * 8)));
+    if (vaart) figuur.position.y += vlotbeeld.dobber - ZIT_ZAK;
+    if (vaarOvergang) {
+      vaarOvergang.t += dt;
+      const f = Math.min(1, vaarOvergang.t / vaarOvergang.duur);
+      const e = f * f * (3 - 2 * f);
+      hopDoel.copy(figuur.position);
+      figuur.position.lerpVectors(vaarOvergang.van, hopDoel, e);
+      figuur.position.y += Math.sin(f * Math.PI) * 0.6;
+      if (f >= 1) vaarOvergang = null;
+    }
+    const kracht = Math.max(0, laatstePeddel[1]) + Math.abs(laatstePeddel[0]) * 0.6;
+    const slag = vlotbeeld.peddelBij(figuur, vaart && !vaarOvergang && !v.lucht, dt, Math.min(1, kracht), laatstePeddel[0], (x, y, z) => {
+      deeltjes.spetters(x, z, 0.3 + kracht * 0.25, v.pos[1]);
+      geluid.peddel(Math.min(1, 0.3 + kracht));
+    });
     animatie.werkBij(s, dt, LOPEN.rensnelheid, rijdt
       ? { gang: p.gang, lucht: !p.opGrond, vy: p.vel[1], weigert: p.weigert > 0, juich: juichTijd, aai: aaiTijd }
-      : undefined);
+      : undefined, vaart ? { slag: juichTijd > 0 ? 0 : slag, lucht: v.lucht || juichTijd > 0, hop: v.hop } : undefined);
+    // De pony op het vlot: met haar zwemvestje, dobberend, en ze leunt mee in de bochten.
+    const ponyOpVlot = p.modus === 'vlot';
+    zwemvest.visible = ponyOpVlot || !!ponyHop;
+    if (ponyOpVlot) {
+      ponyHouder.position.y += vlotbeeld.dobber;
+      let dr = v.richting - v.vorigeRichting;
+      dr = Math.atan2(Math.sin(dr), Math.cos(dr));
+      const doelLeun = THREE.MathUtils.clamp(-dr * 60 * Math.max(1, Math.abs(v.vs)) * 0.12, -0.28, 0.28);
+      ponyLeun += (doelLeun - ponyLeun) * (1 - Math.exp(-4 * dt));
+    } else ponyLeun *= Math.exp(-6 * dt);
+    ponyHouder.rotation.z = ponyLeun;
+    if (ponyHop) {
+      ponyHop.t += dt;
+      const f = Math.min(1, ponyHop.t / ponyHop.duur);
+      const e = f * f * (3 - 2 * f);
+      hopDoel.copy(ponyHouder.position);
+      ponyHouder.position.lerpVectors(ponyHop.van, hopDoel, e);
+      ponyHouder.position.y += Math.sin(f * Math.PI) * 0.9;
+      if (f >= 1) ponyHop = null;
+    }
+    if (ponyOpVlot) ponySchaduw.visible = false;
+    // De Sumatraanse tijger: alleen bijwerken als hij in de buurt van de camera is.
+    const zt = sim.zwemtijger(LOKAAL);
+    const ztDichtbij = (zt.pos[0] - camera.position.x) ** 2 + (zt.pos[2] - camera.position.z) ** 2 < 90 * 90;
+    zwemtijger.houder.visible = ztDichtbij;
+    if (ztDichtbij) zwemtijger.werkBij(zt, overgang, dt, camera);
+    // Kielzog: kringen achter het vlot en de zwemmende tijger.
+    if (vaart && !v.lucht && Math.hypot(v.vel[0], v.vel[2]) > 0.4) {
+      kielTijd -= dt;
+      if (kielTijd <= 0) {
+        kielTijd = 0.3;
+        const r = v.richting;
+        deeltjes.kring(v.pos[0] - Math.sin(r) * 1.5, v.pos[2] - Math.cos(r) * 1.5, 1.4, 1.3, v.pos[1] + 0.02);
+      }
+    }
+    if (ztDichtbij && !zt.lucht && zt.modus !== 'wacht') {
+      zwemKielTijd -= dt;
+      if (zwemKielTijd <= 0) {
+        zwemKielTijd = 0.45;
+        deeltjes.kring(zt.pos[0], zt.pos[2], 1.1, 1.2, zt.pos[1] + 0.02);
+      }
+    }
+    // De bouwstukken in beeld zolang het vlot nog niet gebouwd is en je in de buurt van de bron bent.
+    const bd = rivier.bovenDek;
+    hud.bouw(!v.gebouwd && v.bouwt <= 0 && s.modus === 'lopen' && Math.hypot(s.pos[0] - bd.x, s.pos[2] - bd.z) < 30, VLOT.stukken.map((k) => k.soort), v.stukken);
     juichTijd = Math.max(0, juichTijd - dt);
     aaiTijd = Math.max(0, aaiTijd - dt);
     // Aan de klimwand: de klimster hangt aan haar grepen (en de witte tijger zekert).
@@ -944,12 +1132,12 @@ const lus = maakSpellus({
     const grond = sim.wereld.grondOp(tekenpos.x, tekenpos.z);
     // In het water: geen schaduw op de bodem, wel kringetjes rond het lijfje.
     const zwemt = s.modus === 'zwemmen';
-    schaduw.visible = !K.schaduw && !zwemt && grond > -0.3 && !rijdt && !rijOvergang && !s.klim;
+    schaduw.visible = !K.schaduw && !zwemt && grond > -0.3 && !rijdt && !rijOvergang && !s.klim && !vaart && !vaarOvergang;
     if (zwemt) {
       kringTijd -= dt * (0.6 + Math.hypot(s.vel[0], s.vel[2]) * 0.4);
       if (kringTijd <= 0) {
         kringTijd = EFFECTEN.zwemKring;
-        deeltjes.kring(tekenpos.x, tekenpos.z, 0.9, 1.4);
+        deeltjes.kring(tekenpos.x, tekenpos.z, 0.9, 1.4, sim.wereld.waterOp(tekenpos.x, tekenpos.z));
         if (Math.hypot(s.vel[0], s.vel[2]) > 0.4) geluid.zwemslag();
       }
     }
@@ -961,11 +1149,23 @@ const lus = maakSpellus({
     const zeeDichtbij = THREE.MathUtils.clamp(1 - Math.max(0, bodem.d) / 55, 0, 1);
     bosRond += (THREE.MathUtils.clamp(bodem.bos * 1.3 + bodem.kamp * 0.5, 0, 1) - bosRond) * Math.min(1, dt * 0.8);
     geluid.omgeving(zeeDichtbij, bosRond);
+    // Het water van de rivier: luider dichtbij en als je snel vaart; de waterval raast.
+    {
+      let nabij = 0;
+      let snel = 0;
+      if (rivier.naar(tekenpos.x, tekenpos.z, rivierPunt)) {
+        const e = Math.abs(rivierPunt.d) - rivier.breedte(rivierPunt.s);
+        nabij = THREE.MathUtils.clamp(1 - Math.max(0, e) / 22, 0, 1) * (rivierPunt.s < rivier.sMond + 4 ? 1 : 0.3);
+        snel = vaart ? Math.min(1, Math.hypot(v.vel[0], v.vel[2]) / 3.4) : Math.min(1, rivier.stroom(rivierPunt.s, 0) / 4);
+      }
+      const val = THREE.MathUtils.clamp(1 - Math.hypot(tekenpos.x - valX, tekenpos.y - valY, tekenpos.z - valZ) / 26, 0, 1);
+      geluid.rivier(nabij, snel, val * val);
+    }
     bloesems.werkBij(tijd, dt, camera, beeldSchaal);
     schaduw.position.set(tekenpos.x, grond + 0.03, tekenpos.z);
     schaduw.scale.setScalar(THREE.MathUtils.clamp(1 - (tekenpos.y - grond) / 6, 0.4, 1));
 
-    volgcamera.volg(tekenpos, s.vel[0], s.vel[2], rijdt ? RIJDEN.galop : LOPEN.rensnelheid, dt, rijdt);
+    volgcamera.volg(tekenpos, s.vel[0], s.vel[2], rijdt ? RIJDEN.galop : vaart ? 2.6 : LOPEN.rensnelheid, dt, rijdt || vaart);
     // Aan de klimwand: de camera kijkt recht op de wand, met ±3 m wand rond de klimster (KL 11).
     const C = KLIMMEN.camera;
     klimMix = THREE.MathUtils.clamp(klimMix + (s.klim ? dt : -dt) / C.wissel, 0, 1);
@@ -1005,6 +1205,7 @@ const lus = maakSpellus({
     WIND.uWind.value = SCENE.wind.sterkte;
     WIND.uSpeler.value.copy(tekenpos);
     zee.werkBij(tijd, camera);
+    rivierbeeld.werkBij(tijd, dt, camera);
     stralen?.werkBij(tijd);
     grens.werkBij(tijd);
     stuifmeel.werkBij(tijd, camera, pixel);
@@ -1034,6 +1235,10 @@ const lus = maakSpellus({
         (s.klim
           ? `
 klimmen        ${KLIMMEN.routes[s.klim.route].graad} ${s.klim.toestand} · arm ${s.klim.armBelasting.toFixed(2)} · kracht ${Math.round(s.klim.hand.lh.pomp * 100)}/${Math.round(s.klim.hand.rh.pomp * 100)}%`
+          : '') +
+        (s.modus === 'varen'
+          ? `
+vlot           ${v.plek} s ${v.s.toFixed(1)} d ${v.d.toFixed(1)} · ${Math.hypot(v.vel[0], v.vel[2]).toFixed(1)} m/s${v.lucht ? ' · SPRONG' : ''}`
           : '')
       );
     });
@@ -1194,8 +1399,28 @@ window.spel = {
   },
   /** De oefenrots: grepen, routes en de wandkaart. */
   rots,
+  /** De benedenrivier (stap 10). */
+  rivier,
+  get vlot() {
+    return sim.vlot(LOKAAL);
+  },
+  get zwemtijger() {
+    return sim.zwemtijger(LOKAAL);
+  },
+  /** Meteen op het vlot aan de bron (het vlot is dan gebouwd), met de pony. */
+  vaar() {
+    sim.vaar(LOKAAL);
+  },
+  /** Zet de speler op de steiger aan de bron van de rivier. */
+  naarRivier() {
+    const k = rivier.bovenDek;
+    this.zet(k.x - k.az * rivier.padZijde * 2.2, k.z + k.ax * rivier.padZijde * 2.2);
+    const s = sim.speler(LOKAAL);
+    s.richting = s.vorigeRichting = Math.atan2(k.ax, k.az);
+    volgcamera.zet(Math.atan2(-k.ax, -k.az), CAMERA.kanteling);
+  },
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN, RIVIER, VLOT, ZWEMTIJGER },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */
@@ -1214,6 +1439,12 @@ window.spel = {
 // Snelkoppeling ?plek=weide: meteen bij de springweide beginnen, naast de pony (TP 9).
 if (INSTELLINGEN.plek === 'weide') {
   window.spel.naarWeide(false);
+  const s = sim.speler(LOKAAL);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}
+// ?plek=rivier: meteen aan de bron van de rivier, bij de steiger (stap 10).
+if (INSTELLINGEN.plek === 'rivier') {
+  window.spel.naarRivier();
   const s = sim.speler(LOKAAL);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
 }

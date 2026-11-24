@@ -32,14 +32,17 @@ export function maakAnimatie(delen, { onStap } = {}) {
      * @param {number} snelheidRen rensnelheid (voor de verhouding wandelen/rennen)
      * @param {{ gang: string, lucht: boolean, vy: number, weigert: boolean, juich: number, aai: number }} [rit]
      *   als ze op de pony zit: hoe de pony beweegt (en of ze juicht na een perfecte sprong of de pony aait)
+     * @param {{ slag: number, lucht: boolean, hop: number }} [vaart] op het vlot: de stand van de peddel (-1..1),
+     *   of het vlot over de sprong vliegt, en een hupje (springknop)
      */
-    werkBij(s, dt, snelheidRen, rit) {
+    werkBij(s, dt, snelheidRen, rit, vaart) {
       tijd += dt;
       const v = Math.hypot(s.vel[0], s.vel[2]);
       const ren = klem(v / snelheidRen, 0, 1);
       const zwemt = s.modus === 'zwemmen';
       const klimt = !!s.klimt;
       const rijdt = s.modus === 'rijden' && !!rit;
+      const vaartNu = s.modus === 'varen' && !!vaart;
 
       // Doelhoudingen.
       let beenX = [0, 0];
@@ -50,7 +53,24 @@ export function maakAnimatie(delen, { onStap } = {}) {
       let hoog = 0;
       let wieg = 0;
 
-      if (rijdt) {
+      if (vaartNu) {
+        // Op het vlot: zittend, beentjes vooruit, de peddel in beide handjes; een slag links, een slag rechts.
+        const k = vaart.slag;
+        beenX = [-1.45, -1.45];
+        beenZ = [-0.14, 0.14];
+        armX = [-1.2 - k * 0.3, -1.2 + k * 0.3];
+        armZ = [-0.5, 0.5];
+        leun = 0.1 + Math.abs(k) * 0.08;
+        wieg = k * 0.08;
+        if (vaart.lucht) {
+          // Over de sprong: armen (met peddel) de lucht in!
+          armX = [-2.3, -2.3];
+          armZ = [-0.7, 0.7];
+          leun = -0.15;
+          beenX = [-1.7, -1.7];
+        }
+        hoog = Math.sin(Math.min(1, vaart.hop / 0.45) * Math.PI) * 0.3;
+      } else if (rijdt) {
         // Op de pony: beentjes wijd over haar flanken, handjes vooruit in de manen.
         // In draf hupt ze mee, in galop leunt ze voorover, in de lucht nog wat verder.
         const R = A.rijden;
@@ -166,7 +186,7 @@ export function maakAnimatie(delen, { onStap } = {}) {
 
       // Pletten bij een landing, uitrekken tijdens het stijgen.
       pletten = Math.max(0, pletten - dt * 6);
-      const rek = s.opGrond || zwemt || klimt || rijdt ? 0 : klem(s.vel[1] / 8, -0.5, 1) * A.rekken;
+      const rek = s.opGrond || zwemt || klimt || rijdt || vaartNu ? 0 : klem(s.vel[1] / 8, -0.5, 1) * A.rekken;
       const adem = (s.opGrond && v < A.stilDrempel) || (rijdt && rit.gang === 'stil') ? Math.sin(tijd * 2.2) * 0.012 : 0;
       const sy = 1 + rek + adem - pletten * A.pletten;
       lijf.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy)).multiplyScalar(basisSchaal);

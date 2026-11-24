@@ -11,7 +11,7 @@ export function maakGeluid() {
   let ruis = null;      // 2 s witte ruis, voor alle ruisrecepten
   let actief = 0;       // klanken die nu spelen
   let aan = true;
-  const omgeving = { branding: null, insecten: null };
+  const omgeving = { branding: null, insecten: null, rivier: null, ruisen: null, waterval: null };
   let volgendeVogel = 0;
   let omgevingWaarden = { zee: 0, bos: 0 };
 
@@ -153,6 +153,12 @@ export function maakGeluid() {
     ins.g.connect(trilG).connect(uit);
     tril.start();
     omgeving.insecten = ins;
+
+    // De rivier (stap 10): een diep gerommel, een helder geruis dat sterker wordt naarmate het water (of jij)
+    // sneller gaat, en het geraas van de kleine waterval.
+    omgeving.rivier = lus('lowpass', 380, 0.8);
+    omgeving.ruisen = lus('bandpass', 1500, 0.6);
+    omgeving.waterval = lus('bandpass', 900, 0.45);
   }
 
   /** Een vogeltje: twee of drie snelle fluitjes, ergens links of rechts. */
@@ -367,6 +373,60 @@ export function maakGeluid() {
       toon(t, { freq: 180, freqEind: 90, piek: G.plof * 0.7, aanslag: 0.01, verval: 0.2 });
       toon(t + 0.25, { freq: G.toonladder[2] * 2, piek: G.plof * 0.4, verval: 0.4 });
       toon(t + 0.33, { freq: G.toonladder[4] * 2, piek: G.plof * 0.4, verval: 0.5 });
+    },
+
+    /**
+     * Elk beeld: het water van de rivier (stap 10).
+     * @param {number} nabij 0..1 hoe dicht bij het water
+     * @param {number} snel 0..1 hoe snel het water (of het vlot) gaat
+     * @param {number} val 0..1 hoe dicht bij de waterval
+     */
+    rivier(nabij, snel, val) {
+      if (!ctx || ctx.state !== 'running' || !omgeving.rivier) return;
+      const t = ctx.currentTime;
+      const R = G.rivier;
+      omgeving.rivier.g.gain.setTargetAtTime(R.gerommel * nabij * (0.5 + 0.5 * snel), t, 0.3);
+      omgeving.rivier.f.frequency.setTargetAtTime(300 + 260 * snel, t, 0.3);
+      omgeving.ruisen.g.gain.setTargetAtTime(R.ruisen * nabij * snel * snel, t, 0.25);
+      omgeving.ruisen.f.frequency.setTargetAtTime(1100 + 1400 * snel, t, 0.3);
+      omgeving.waterval.g.gain.setTargetAtTime(R.waterval * val, t, 0.3);
+    },
+
+    /** Een peddelslag: het blad gaat het water in. */
+    peddel(sterkte = 1) {
+      const t = plek(0.4);
+      if (t < 0) return;
+      const v = G.rivier.peddel * (0.5 + 0.5 * sterkte);
+      ruisStoot(t, { freq: 1300, freqEind: 600, q: 1.4, piek: v, aanslag: 0.015, verval: 0.18, pan: (Math.random() - 0.5) * 0.6 });
+      toon(t + 0.02, { freq: 420, freqEind: 220, piek: v * 0.25, verval: 0.07 });
+    },
+
+    /** Het vlot botst: een holle bamboe-bonk, en spetters als het een rots was. */
+    vlotBots(sterkte, rots) {
+      const t = plek(0.6);
+      if (t < 0) return;
+      const v = G.rivier.bots * (0.5 + 0.5 * sterkte);
+      toon(t, { vorm: 'triangle', freq: 190, freqEind: 120, piek: v, aanslag: 0.002, verval: 0.18 });
+      toon(t + 0.01, { vorm: 'triangle', freq: 470, freqEind: 330, piek: v * 0.5, aanslag: 0.002, verval: 0.1 });
+      toon(t + 0.07, { vorm: 'triangle', freq: 410, freqEind: 300, piek: v * 0.3, aanslag: 0.002, verval: 0.08 });
+      if (rots) ruisStoot(t + 0.02, { freq: 1600, freqEind: 500, q: 0.9, piek: v * 0.6, aanslag: 0.01, verval: 0.3 });
+    },
+
+    /** Over de sprong: een zoef, en de wind langs je oren. */
+    zoef() {
+      const t = plek(1.2);
+      if (t < 0) return;
+      ruisStoot(t, { freq: 500, freqEind: 2600, q: 1.6, piek: G.rivier.zoef, aanslag: 0.25, verval: 0.6 });
+      toon(t, { freq: G.toonladder[0], freqEind: G.toonladder[4], piek: G.rivier.zoef * 0.3, aanslag: 0.05, verval: 0.6 });
+    },
+
+    /** Een stam valt op het vlot (bouwen): een holle tik, steeds een toontje hoger. */
+    bamboe(n = 0) {
+      const t = plek(0.4);
+      if (t < 0) return;
+      const f = 300 * Math.pow(1.12, n % 12);
+      toon(t, { vorm: 'triangle', freq: f, freqEind: f * 0.7, piek: G.rivier.bamboe, aanslag: 0.002, verval: 0.12 });
+      toon(t, { vorm: 'sine', freq: f * 2.6, freqEind: f * 2, piek: G.rivier.bamboe * 0.3, aanslag: 0.002, verval: 0.06 });
     },
 
     // --- De pony (GD 16) ---

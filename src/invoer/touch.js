@@ -37,6 +37,26 @@ export const ACTIE_ICONEN = {
           fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
     <path d="M14 34 Q8 42 14 50 M86 34 Q92 42 86 50 M18 24 Q12 30 16 36 M82 24 Q88 30 84 36" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
   </svg>`,
+  // Het vlot (stap 10): bouwen (sterretje boven het vlot), varen (pijl), aanleggen (naar de steiger).
+  bouwen: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M12 66 H88 L82 80 H18 Z" fill="#cfe07a" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M30 66 V80 M50 66 V80 M70 66 V80" stroke="#8fb24a" stroke-width="4"/>
+    <path d="M50 10 L56 26 L72 27 L59 37 L64 53 L50 44 L36 53 L41 37 L28 27 L44 26 Z" fill="#ffd84d" stroke="#2f7d6d" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M8 90 q10 -7 21 0 t21 0 t21 0 t21 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  </svg>`,
+  varen: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M12 62 H88 L82 76 H18 Z" fill="#cfe07a" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M30 62 V76 M50 62 V76 M70 62 V76" stroke="#8fb24a" stroke-width="4"/>
+    <path d="M22 34 H62 V20 L86 40 L62 58 V46 H22 Z" fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round" transform="translate(0 -8)"/>
+    <path d="M8 88 q10 -7 21 0 t21 0 t21 0 t21 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  </svg>`,
+  aanleggen: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <rect x="56" y="22" width="36" height="12" fill="#d9a36a" stroke="#2f7d6d" stroke-width="4"/>
+    <path d="M64 34 V62 M84 34 V62" stroke="#a8703f" stroke-width="6"/>
+    <path d="M8 62 H52 L47 76 H13 Z" fill="#cfe07a" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
+    <path d="M30 48 V14 M18 26 L30 14 L42 26" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M8 88 q10 -7 21 0 t21 0 t21 0 t21 0" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  </svg>`,
   afstappen: `<svg viewBox="0 0 100 100" aria-hidden="true">
     <path d="M18 30 C30 18 70 18 82 30 L78 42 H22 Z" fill="#ffd84d" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
     <path d="M50 88 L74 62 H60 V48 H40 V62 H26 Z" fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>

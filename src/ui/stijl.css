@@ -331,6 +331,13 @@ body.touch .toetshulp {
   filter: none;
   animation: wip 0.4s ease-out;
 }
+/* Het vlot bouwen (stap 10): de vier bouwstukken. */
+.bouwbalk {
+  gap: 8px;
+}
+.hindernisicoon.wip {
+  animation: wip 0.5s ease-out 2;
+}
 .hindernisicoon.perfect {
   background: radial-gradient(circle, #fff6c8 55%, #ffd84d);
   box-shadow: 0 0 10px #ffd84d;

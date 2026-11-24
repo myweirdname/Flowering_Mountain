@@ -50,4 +50,5 @@ export const ZWEMMEN = {
   golfDiepte: 2.0,          // in zee, dieper dan dit, duwen de golven je terug
   golfDuw: 6,
   zeeGrens: 3.6,            // nog dieper: plof, terug naar veilige grond
+  rivierMee: 0.8,           // in de rivier voert de stroming je zoveel mee (1 = even snel als het water)
 };

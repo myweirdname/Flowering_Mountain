@@ -7,12 +7,14 @@ import { lagenruis, waardenruis } from './ruis.js';
 import { maakWeide } from './springweide.js';
 import { WEIDE } from '../../data/springweide.js';
 import { KLIMMEN } from '../../data/klimmen.js';
+import { RIVIER } from '../../data/rivier.js';
+import { maakRivier } from './rivier.js';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /**
  * @typedef {{ h:number, zand:number, kamp:number, pad:number, bos:number, lagune:number, d:number,
- *             weide:number, baan:number, nat:number }} Bodem
+ *             weide:number, baan:number, nat:number, rivier:number, oever:number }} Bodem
  */
 
 /**
@@ -74,6 +76,9 @@ export function maakWereldvorm(zaadje, W) {
   const geulX = (z) => lagX + 1.6 * Math.sin(z * 0.2 + geulFase);
   // De springweide ligt aan de andere kant van het kamp dan de lagune.
   const weide = maakWeide(WEIDE, { x: W.kamp.x, z: W.kamp.z, h: kampH }, kant, ruw);
+  // De benedenrivier (stap 10): van een bronnetje in de jungle naar de lagune.
+  const rivier = maakRivier(RIVIER, { x: lagX, z: lagZ, straal: lagR }, kant, ruw, W.kamp);
+  const rv = { h: 0, water: 0, oever: 0, pad: 0, gras: 0, vlak: 0 };
 
   /**
    * Vult `uit` met de hoogte en de soort ondergrond op (x, z).
@@ -109,20 +114,26 @@ export function maakWereldvorm(zaadje, W) {
     if (z < lagZ && d > -4) gw = 1 - glad((Math.abs(x - geulX(z)) - L.geulBreedte * 0.5) / L.geulBreedte);
     h += (Math.min(h, -L.geulDiepte) - h) * gw;
 
+    // De rivier: bedding, oevers en een paadje.
+    rivier.stempel(x, z, h, rv);
+    h = rv.h;
+
     // De springweide: vlak gemaakt, met de beek en de vijver erin gegraven.
     const st = weide.stempel(x, z, h);
     h = st.h;
 
-    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw) * (1 - st.weide);
+    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw) * (1 - st.weide) * (1 - rv.vlak);
     let zand = 1 - glad((d - S.breedte * 0.75) / 5);
-    zand = Math.max(zand, 1 - glad((dl - 1.08) / 0.3), gw, st.nat);
+    zand = Math.max(zand, 1 - glad((dl - 1.08) / 0.3), gw, st.nat, rv.oever);
     if (uit.h < 0.3) zand = 1;
     uit.zand = zand;
-    uit.kamp = kw * (1 - zand);
+    uit.kamp = Math.max(kw, rv.gras) * (1 - zand);
+    uit.rivier = rv.water;
+    uit.oever = rv.oever;
     uit.weide = st.weide * (1 - zand) * (1 - kw);
     uit.baan = st.baan * (1 - zand);
     uit.nat = st.nat;
-    uit.pad = Math.max(pw, st.pad, st.baan) * (1 - zand);
+    uit.pad = Math.max(pw, st.pad, st.baan, rv.pad * (1 - rv.oever)) * (1 - zand);
     uit.lagune = lw;
     uit.bos = Math.max(0, 1 - zand - uit.kamp - uit.pad - uit.weide);
     uit.d = d;
@@ -136,6 +147,9 @@ export function maakWereldvorm(zaadje, W) {
     kustZ,
     lagune: { x: lagX, z: lagZ, straal: lagR },
     weide,
+    rivier,
+    /** Het waterpeil op (x, z): 0 in zee en lagune, hoger in de rivier. */
+    waterOp: (x, z) => rivier.peilOp(x, z),
     kamp: { x: W.kamp.x, z: W.kamp.z, straal: W.kamp.straal, h: kampH },
   };
 }

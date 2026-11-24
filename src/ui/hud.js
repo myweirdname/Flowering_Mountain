@@ -42,6 +42,17 @@ const TOETS_ICONEN = {
   afstappen: `<svg viewBox="0 0 40 40"><path d="M7 12 C12 7 28 7 33 12 L31 16 H9 Z" fill="#ffd84d"/><path d="M20 36 L31 24 H25 V18 H15 V24 H9 Z" fill="#fff" stroke="#2f7d6d" stroke-width="2.5" stroke-linejoin="round"/></svg>`,
 };
 
+// Het vlot (stap 10): bouwstukken en wat de actieknop aan de rivier doet.
+export const BAMBOE_ICOON = `<svg viewBox="0 0 40 40"><g transform="rotate(-35 20 20)"><rect x="6" y="12" width="28" height="6" rx="3" fill="#cfe07a"/><rect x="6" y="19" width="28" height="6" rx="3" fill="#b8d465"/><rect x="6" y="26" width="28" height="6" rx="3" fill="#cfe07a"/><path d="M13 11 V33 M27 11 V33" stroke="#4caf50" stroke-width="2.6"/></g></svg>`;
+export const LIAAN_ICOON = `<svg viewBox="0 0 40 40"><path d="M20 8 C8 8 6 24 18 26 C28 27 28 16 20 16 C14 16 14 22 19 22" fill="none" stroke="#4f9e3a" stroke-width="3.4" stroke-linecap="round"/><path d="M19 26 C22 30 28 32 34 31" fill="none" stroke="#4f9e3a" stroke-width="3.4" stroke-linecap="round"/><ellipse cx="31" cy="27" rx="3" ry="5" transform="rotate(50 31 27)" fill="#6fd35e"/><ellipse cx="10" cy="12" rx="3" ry="5" transform="rotate(-30 10 12)" fill="#6fd35e"/></svg>`;
+const VLOT_KLEIN = `<path d="M5 26 H35 L33 31 H7 Z" fill="#cfe07a" stroke="#2f7d6d" stroke-width="2.2" stroke-linejoin="round"/><path d="M12 26 V31 M20 26 V31 M28 26 V31" stroke="#8fb24a" stroke-width="1.6"/><path d="M3 35 q4 -3 8 0 t8 0 t8 0 t8 0" fill="none" stroke="#3fb6e6" stroke-width="2.4" stroke-linecap="round"/>`;
+const VAAR_TOETS = {
+  bouwen: `<svg viewBox="0 0 40 40">${VLOT_KLEIN}<path d="M20 4 L22 10 L28 11 L23 15 L25 21 L20 17 L15 21 L17 15 L12 11 L18 10 Z" fill="#ffd84d" stroke="#2f7d6d" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+  varen: `<svg viewBox="0 0 40 40">${VLOT_KLEIN}<path d="M10 16 H26 V10 L35 18 L26 26 V20 H10 Z" fill="#fff" stroke="#2f7d6d" stroke-width="2.2" stroke-linejoin="round" transform="translate(0 -4)"/></svg>`,
+  aanleggen: `<svg viewBox="0 0 40 40"><rect x="22" y="8" width="14" height="5" fill="#d9a36a" stroke="#2f7d6d" stroke-width="1.6"/><path d="M25 13 V24 M33 13 V24" stroke="#a8703f" stroke-width="2.4"/>${VLOT_KLEIN.replace('M5 26 H35 L33 31 H7 Z', 'M3 26 H21 L19 31 H5 Z').replace('M12 26 V31 M20 26 V31 M28 26 V31', 'M9 26 V31 M15 26 V31')}<path d="M12 20 L12 6 M7 11 L12 6 L17 11" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+};
+Object.assign(TOETS_ICONEN, VAAR_TOETS);
+
 const tijdTekst = (t) => {
   const m = Math.floor(t / 60);
   const s = t - m * 60;
@@ -113,6 +124,12 @@ export function maakHud(ui, hindernissen = []) {
   brulKnop.addEventListener('pointercancel', brulLos);
   brulKnop.addEventListener('pointerleave', brulLos);
   let brulVul = -1;
+
+  // Het vlot bouwen (stap 10): drie bundels bamboe en een liaan; wat je al vond, kleurt.
+  const bouw = document.createElement('div');
+  bouw.className = 'rondebalk bouwbalk';
+  ui.appendChild(bouw);
+  let bouwSleutel = '';
 
   // Pc: welke toets doet nu de actie.
   const hint = document.createElement('div');
@@ -195,6 +212,21 @@ export function maakHud(ui, hindernissen = []) {
       teller.classList.remove('wip', 'schat');
       void teller.offsetWidth;
       teller.classList.add('schat');
+    },
+    /**
+     * De bouwstukken voor het vlot tonen.
+     * @param {boolean} zichtbaar @param {string[]} soorten 'bamboe' of 'liaan' @param {boolean[]} gevonden
+     */
+    bouw(zichtbaar, soorten, gevonden) {
+      bouw.classList.toggle('zichtbaar', zichtbaar);
+      const sleutel = soorten.map((s, i) => s + (gevonden[i] ? 1 : 0)).join();
+      if (sleutel === bouwSleutel) return;
+      const nieuw = bouwSleutel !== '';
+      const vorig = bouwSleutel.split(',');
+      bouwSleutel = sleutel;
+      bouw.innerHTML = soorten
+        .map((s, i) => `<span class="hindernisicoon${gevonden[i] ? ' gedaan' : ''}${nieuw && gevonden[i] && vorig[i]?.endsWith('0') ? ' wip' : ''}">${s === 'bamboe' ? BAMBOE_ICOON : LIAAN_ICOON}</span>`)
+        .join('');
     },
     /** Pc-seintje voor de actietoets. */
     actie(soort) {

@@ -56,9 +56,9 @@ export function stapPony(p, stuur, wereld, R, dt, meld) {
 const voorX = (p) => Math.sin(p.richting);
 const voorZ = (p) => Math.cos(p.richting);
 
-/** Waterpeil en diepte op (x, z): de zee en de lagune op 0, de beek en de vijver in de weide hoger. */
+/** Waterpeil en diepte op (x, z): de zee en de lagune op 0, de beek, de vijver en de rivier hoger. */
 function water(wereld, x, z, grond) {
-  const peil = Math.max(wereld.weide.water(x, z), 0);
+  const peil = Math.max(wereld.weide.water(x, z), wereld.waterOp(x, z));
   return { peil, diepte: peil - grond };
 }
 

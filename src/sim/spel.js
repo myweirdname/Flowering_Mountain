@@ -28,6 +28,9 @@ import { stapWelpjes, aaiWelp } from './modi/welpjes.js';
 import { KLIMMEN } from '../data/klimmen.js';
 import { maakOefenrots } from './klimmen/oefenrots.js';
 import { beginKlimmen, stapKlimmen, stopKlimmen, bereikbaar, planVoor } from './modi/klimmen.js';
+import { VLOT, ZWEMTIJGER } from '../data/rivier.js';
+import { maakVlot, zetKlaar, stukPlek, pakStukken, bijSteiger, beginBouwen, stapIn, stapVaren, aanlegPlek, legAan, stapVlotVrij } from './modi/varen.js';
+import { maakZwemtijger, stapZwemtijger } from './modi/zwemtijger.js';
 
 /** @param {string|number} berg bergcode of zaadje */
 export function maakSim(berg) {
@@ -39,7 +42,9 @@ export function maakSim(berg) {
   const weide = vorm.weide;
   // De oefenrots achter het kamp (stap 9): een rotsblok met een klimwand naar het kamp toe.
   const oefenrots = maakOefenrots(KLIMMEN, vorm.kamp, vorm.kamp.h + KLIMMEN.rots.voetBoven);
-  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z), oefenrots.blokOp);
+  // De benedenrivier (stap 10): rotsen en steigers om op te staan.
+  const rivier = vorm.rivier;
+  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z), (x, z) => Math.max(oefenrots.blokOp(x, z), rivier.blokOp(x, z)));
   const wereld = {
     raster,       // hoogteOp / hellingOp over alle tegels
     vorm,         // de hoogtefunctie en wat er ligt (zand, gras, bos, lagune, weide)
@@ -51,7 +56,11 @@ export function maakSim(berg) {
     rotsOp: grond.rotsOp,
     weide,        // de springweide: baan, hindernissen, water
     oefenrots,    // de klimwand met drie routes (stap 9)
+    rivier,       // de benedenrivier met het vlot (stap 10)
+    waterOp: vorm.waterOp, // het waterpeil: 0 in zee en lagune, hoger in de rivier
   };
+  // Waar de bouwstukken voor het vlot liggen (drie bundels bamboe en een liaan, rond de bron).
+  wereld.vlotStukken = VLOT.stukken.map((_, i) => stukPlek(rivier, VLOT, i, grond.grondOp));
   // Boven elke hindernis zweeft een bloesem: wie er met de pony over springt, pakt hem.
   const boven = weide.groepen.map((gr) => {
     const delen = gr.delen.map((i) => weide.delen[i]);
@@ -59,7 +68,7 @@ export function maakSim(berg) {
     const z = delen.reduce((a, d) => a + d.z, 0) / delen.length;
     return { x, z, y: weide.hoogte + BLOESEMS.bovenHindernis };
   });
-  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, boven);
+  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, [...boven, ...rivier.bloesems]);
   const wortels = maakWortels(weide);
   // De padvinder voor de tijger, en de slaapbloem die hij je komt tonen.
   const pad = maakPadvinder(wereld, GEZEL.pad);
@@ -78,6 +87,10 @@ export function maakSim(berg) {
   const gezinnen = new Map();
   /** @type {Map<string, import('./wezens/welp.js').Tak>} het takje bij elke mama (stap 8d) */
   const takken = new Map();
+  /** @type {import('./modi/varen.js').Vlot[]} */
+  const vlotten = [];
+  /** @type {import('./modi/zwemtijger.js').Zwemtijger[]} */
+  const zwemmers = [];
   /** @type {any[]} */
   let gebeurtenissen = [];
   const meld = (g) => gebeurtenissen.push(g);
@@ -86,6 +99,12 @@ export function maakSim(berg) {
   const ponyVan = (s) => ponies.find((p) => p.eigenaar === s.id);
   const tijgerVan = (s) => tijgers.find((t) => t.eigenaar === s.id);
   const ponyOnder = (s) => (s.rijdt ? ponies.find((p) => p.id === s.rijdt) : null);
+  const vlotVan = (s) => vlotten.find((v) => v.eigenaar === s.id);
+  /** De pony die met de speler meevaart (of null). */
+  const ponyAanBoord = (s, v) => {
+    const p = ponyVan(s);
+    return p && v && v.pony === p.id ? p : null;
+  };
   const bewaarVorige = (o) => {
     o.vorigePos[0] = o.pos[0];
     o.vorigePos[1] = o.pos[1];
@@ -112,7 +131,14 @@ export function maakSim(berg) {
   function actieVoor(s) {
     if (s.modus === 'rijden') return 'afstappen';
     if (s.modus === 'klimmen') return 'uitschudden';
+    if (s.modus === 'varen') return aanlegPlek(vlotVan(s), rivier, wereld, VLOT) ? 'aanleggen' : null;
     if (routeBij(s) >= 0) return 'klimmen';
+    // Aan de steiger bij de bron: het vlot bouwen (als je alle stukken hebt) of instappen.
+    const v = vlotVan(s);
+    if (v && s.modus === 'lopen' && s.opGrond && !s.klimt && v.bouwt <= 0 && bijSteiger(s, rivier, VLOT)) {
+      if (!v.gebouwd) return v.stukken.every(Boolean) ? 'bouwen' : null;
+      if (v.plek === 'boven') return 'varen';
+    }
     const p = ponyVan(s);
     if (!p || p.ruiter || s.modus !== 'lopen' || !s.opGrond || s.klimt || !p.opGrond || p.weigert > 0) return null;
     const d = Math.hypot(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]);
@@ -127,6 +153,8 @@ export function maakSim(berg) {
     spelers,
     ponies,
     tijgers,
+    vlotten,
+    zwemmers,
     welpjes,
     wortels,
 
@@ -165,6 +193,9 @@ export function maakSim(berg) {
       });
       s.brulMeter = GEZEL.meterStart;
       s.meterVolGemeld = false;
+      // Het vlot (nog te bouwen) aan de bron, en de Sumatraanse tijger die daar zwemt (stap 10).
+      vlotten.push(maakVlot('vlot-' + id, id, rivier, VLOT));
+      zwemmers.push(maakZwemtijger('zwemtijger-' + id, id, rivier, ZWEMTIJGER));
       return s;
     },
 
@@ -172,6 +203,19 @@ export function maakSim(berg) {
     terug(id) {
       const s = this.speler(id);
       if (s.modus === 'klimmen') stopKlimmen(s, oefenrots, KLIMMEN);
+      if (s.modus === 'varen') {
+        const v = vlotVan(s);
+        const p = ponyAanBoord(s, v);
+        v.ruiter = null;
+        s.vlot = null;
+        s.modus = 'lopen';
+        if (p) {
+          const [x, , z] = s.veilig;
+          Object.assign(p, { modus: 'staat', vlot: null, pos: [x + 1.6, grond.terreinOp(x + 1.6, z), z], opGrond: true });
+          p.vorigePos = [...p.pos];
+          v.pony = null;
+        }
+      }
       const p = ponyOnder(s);
       if (p) {
         stapAf(s, p, wereld, meld);
@@ -262,6 +306,31 @@ export function maakSim(berg) {
       return bereikbaar(this.speler(id), oefenrots, KLIMMEN, lid);
     },
 
+    /** Het vlot van een speler (stap 10). */
+    vlot(id) {
+      return vlotVan(this.speler(id));
+    },
+
+    /** De Sumatraanse tijger in de rivier (stap 10). */
+    zwemtijger(id) {
+      return zwemmers.find((t) => t.eigenaar === id);
+    },
+
+    /** Meteen op het vlot aan de bron (voor tests): het vlot is dan al gebouwd. */
+    vaar(id) {
+      const s = this.speler(id);
+      if (s.modus === 'rijden') this.rijd(id, false);
+      if (s.modus === 'varen') this.terug(id);
+      const v = vlotVan(s);
+      v.gebouwd = true;
+      v.stukken.fill(true);
+      zetKlaar(v, rivier);
+      const k = rivier.bovenDek;
+      s.pos = [k.x, k.y, k.z];
+      s.modus = 'lopen';
+      stapIn(s, v, ponyVan(s), rivier, VLOT, meld);
+    },
+
     /** Zet de pony van een speler op (x, z) (voor tests). */
     zetPony(id, x, z, richting = 0) {
       const p = ponyVan(this.speler(id));
@@ -297,6 +366,7 @@ export function maakSim(berg) {
     stap(intenties, dt) {
       tik++;
       const begin = gebeurtenissen.length;
+      for (const v of vlotten) bewaarVorige(v);
       for (const s of spelers) {
         bewaarVorige(s);
         let int = intenties[s.id] ?? legeIntentie();
@@ -309,7 +379,7 @@ export function maakSim(berg) {
         // Fluiten: de pony komt aangedraafd (of zoekt zelf een weg als ze ver weg is).
         const fluitNu = !!int.fluit && !s.fluitVorige;
         s.fluitVorige = !!int.fluit;
-        if (fluitNu && p && !p.ruiter) {
+        if (fluitNu && p && !p.ruiter && p.modus !== 'vlot') {
           meld({ soort: 'fluit', speler: s.id, pos: [...s.pos] });
           const d = Math.hypot(p.pos[0] - s.pos[0], p.pos[2] - s.pos[2]);
           if (d > RIJDEN.verFluit) verschijn(p, s, wereld, RIJDEN, meld);
@@ -325,6 +395,12 @@ export function maakSim(berg) {
           if (wat === 'opstappen') stapOp(s, p, meld);
           else if (wat === 'afstappen') ponyOnder(s).stopt = true;
           else if (wat === 'klimmen') beginKlimmen(s, oefenrots, routeBij(s), KLIMMEN, meld, int.besturing);
+          else if (wat === 'bouwen') beginBouwen(s, vlotVan(s), VLOT, meld);
+          else if (wat === 'varen') stapIn(s, vlotVan(s), p, rivier, VLOT, meld);
+          else if (wat === 'aanleggen') {
+            const v = vlotVan(s);
+            legAan(s, v, ponyAanBoord(s, v), aanlegPlek(v, rivier, wereld, VLOT), wereld, meld);
+          }
         }
 
         // Aaien kan altijd: dichtbij, of zittend op haar rug.
@@ -346,7 +422,13 @@ export function maakSim(berg) {
         }
 
         if (s.modus === 'klimmen') stapKlimmen(s, int, oefenrots, KLIMMEN, dt, meld);
-        else if (s.modus === 'lopen') stapLopen(s, int, wereld, LOPEN, dt, meld, ZWEMMEN);
+        else if (s.modus === 'varen') {
+          const v = vlotVan(s);
+          stapVaren(s, v, ponyAanBoord(s, v), int, rivier, wereld, VLOT, dt, meld);
+        } else if (s.modus === 'lopen') {
+          stapLopen(s, int, wereld, LOPEN, dt, meld, ZWEMMEN);
+          pakStukken(s, vlotVan(s), wereld.vlotStukken, VLOT, meld);
+        }
         else if (s.modus === 'zwemmen') stapZwemmen(s, int, wereld, ZWEMMEN, dt, meld);
         else if (s.modus === 'rijden') {
           const q = ponyOnder(s);
@@ -371,11 +453,26 @@ export function maakSim(berg) {
         }
       }
 
+      // Het vlot als niemand erop zit, en de Sumatraanse tijger in de rivier.
+      for (const v of vlotten) {
+        if (v.ruiter) continue;
+        stapVlotVrij(v, spelers.find((q) => q.id === v.eigenaar), rivier, VLOT, dt, meld);
+      }
+      for (const z of zwemmers) {
+        bewaarVorige(z);
+        const s = spelers.find((q) => q.id === z.eigenaar);
+        stapZwemtijger(z, s, s && vlotVan(s), rivier, ZWEMTIJGER, VLOT, dt, meld);
+      }
+
       // De tijgers, na de spelers (ze reageren op waar je nu bent).
       for (const t of tijgers) {
         bewaarVorige(t);
         const s = spelers.find((q) => q.id === t.eigenaar);
-        stapGezel(t, s, ponyVan(s), wereld.slaapbloemen, wereld, pad, GEZEL, dt, meld);
+        // Op het vlot wacht hij op de oever; daarna komt hij je weer zoeken.
+        if (s.modus === 'varen') {
+          t.snelheid = 0;
+          t.gang = 'stil';
+        } else stapGezel(t, s, ponyVan(s), wereld.slaapbloemen, wereld, pad, GEZEL, dt, meld);
         const kleintjes = gezinnen.get(t.id) ?? [];
         for (const w of kleintjes) bewaarVorige(w);
         // Jij springt of fluit: de welpjes kijken je verbaasd aan ("huh?", stap 8c).
@@ -390,7 +487,7 @@ export function maakSim(berg) {
 
       // Pony's waar niemand op zit.
       for (const p of ponies) {
-        if (p.ruiter) continue;
+        if (p.ruiter || p.modus === 'vlot') continue;
         bewaarVorige(p);
         stapPonyVrij(p, spelers.find((s) => s.id === p.eigenaar), wereld, RIJDEN, dt, meld);
         // Begroet de tijger haar? Dan draait ze haar hoofd naar hem toe.

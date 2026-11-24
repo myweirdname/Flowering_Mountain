@@ -21,6 +21,7 @@ export function maakPadvinder(wereld, P) {
     if (x < x0 || z < z0 || x > gr.maxX - 1 || z > gr.maxZ - 1) return false;
     const g = wereld.raster.hoogteOp(x, z);
     if (g < 0.15) return false; // zee of lagune
+    if (wereld.waterOp(x, z) > g + 0.25) return false; // de rivier
     if (wereld.weide.water(x, z) > -Infinity) return false;
     if (wereld.weide.hindernisOp(x, z) > -Infinity) return false;
     if (wereld.rotsOp(x, z) > g + 0.3) return false;

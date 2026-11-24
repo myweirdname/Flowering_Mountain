@@ -46,6 +46,7 @@ export function maakBloesems(vorm, w, zaadje, B, vast = []) {
     const z = k.z + Math.sin(a) * d;
     const h = w.grondOp(x, z);
     if (h < 0.15 || !vrij(x, z, B.tussenafstand)) continue;
+    if (vorm.waterOp(x, z) > h - 0.1) continue; // niet boven de rivier (daar liggen ze op de goede lijn)
     const slinger = r.getal() < B.slingerKans && lijst.length + 3 <= B.aantal;
     if (!slinger) {
       voeg(x, z, h + B.zweefHoogte);
