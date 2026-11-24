@@ -29,6 +29,7 @@ export const LOPEN = {
   veiligNa: 0.3,            // zo lang stevig staan en de plek telt als "laatste veilige grond"
   maxGlijTijd: 4,           // langer glijden: plof, terug naar veilige grond
   terugOnder: -15,          // dieper vallen: terug naar veilige grond
+  maxVal: 9,                // zo ver onder de laatste veilige grond landen (van een rotsrand, in een ravijn): plof, terug
 
   maxHelling: 45,           // graden: steiler is niet beloopbaar, je glijdt eraf
   glijVersnelling: 14,

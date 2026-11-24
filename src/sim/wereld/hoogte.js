@@ -13,6 +13,9 @@ import { SPEELBOS } from '../../data/speelbos.js';
 import { maakSpeelbos } from '../doorgangen/speelbos.js';
 import { EILAND } from '../../data/eiland.js';
 import { maakEiland, zachtMin } from './eiland.js';
+import { BERGPLAN } from '../../data/bergplan.js';
+import { maakBergplan } from './bergplan.js';
+import { plaatsBergplan } from './plaatsing.js';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
@@ -26,7 +29,7 @@ const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
  * @param {number} zaadje
  * @param {typeof import('../../data/wereld.js').WERELD} W
  */
-export function maakWereldvorm(zaadje, W) {
+export function maakWereldvorm(zaadje, W, waarom) {
   const w = maakWillekeur(zaadje);
   const zKust = w.volgende();
   const zHeuvel = w.volgende();
@@ -175,8 +178,19 @@ export function maakWereldvorm(zaadje, W) {
     return uit;
   }
 
+  // Het bergplan (stap 13): het netwerk van plekken en doorgangen, en de doorgangen op het eiland gezet
+  // (ponypaden, klimwanden, oversteken). Een eigen deelzaadje.
+  const bergplan = maakBergplan(eiland, BERGPLAN, (zaadje ^ 0xb3e9a1) >>> 0);
+  const geplaatst = plaatsBergplan({
+    eiland, plan: bergplan, bodem, laagland: ruw, D: BERGPLAN, HB: EILAND.hellingbaan, K: KLIMMEN, SB: SPEELBOS,
+    zaadje: (zaadje ^ 0x9a7c1) >>> 0, waarom,
+  });
+
   const tijdelijk = /** @type {Bodem} */ ({});
   return {
+    bergplan,
+    bergwanden: geplaatst.bergwanden,
+    oversteken: geplaatst.oversteken,
     bodem,
     hoogte: (x, z) => bodem(x, z, tijdelijk).h,
     kustZ,

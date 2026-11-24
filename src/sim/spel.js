@@ -47,7 +47,17 @@ export function maakSim(berg) {
   const rivier = vorm.rivier;
   // Het speelbos (stap 11): platforms, bruggen en bladeren om op te staan.
   const speelbos = vorm.speelbos;
-  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z), (x, z) => Math.max(oefenrots.blokOp(x, z), rivier.blokOp(x, z), speelbos.blokOp(x, z)));
+  // De berg (stap 13): klimwanden op de rotsrand en oversteken over de ravijnen.
+  // Alle klimwanden (de oefenrots eerst) en alle parcours (het speelbos eerst) werken met dezelfde regels.
+  const wanden = [oefenrots, ...vorm.bergwanden];
+  const parcours = [speelbos, ...vorm.oversteken];
+  const blokOp = (x, z) => {
+    let h = Math.max(rivier.blokOp(x, z), speelbos.blokOp(x, z));
+    for (const w of wanden) h = Math.max(h, w.blokOp(x, z));
+    for (let i = 1; i < parcours.length; i++) h = Math.max(h, parcours[i].blokOp(x, z));
+    return h;
+  };
+  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z), blokOp);
   // Botsen tegen de stammen: die van de jungle, en de reuzenbomen door de platforms van het speelbos.
   const T = WERELD.tegelGrootte;
   const bosStammen = new Map();
@@ -77,6 +87,9 @@ export function maakSim(berg) {
     oefenrots,    // de klimwand met drie routes (stap 9)
     rivier,       // de benedenrivier met het vlot (stap 10)
     speelbos,     // het speelbos met de eerste doorgangen (stap 11)
+    wanden,       // alle klimwanden: de oefenrots (0) en de klimwanden van de berg (stap 13)
+    parcours,     // alle parcours: het speelbos (0) en de oversteken over de ravijnen (stap 13)
+    bergplan: vorm.bergplan, // het netwerk van plekken en doorgangen (stap 13)
     waterOp: vorm.waterOp, // het waterpeil: 0 in zee en lagune, hoger in de rivier
   };
   // Waar de bouwstukken voor het vlot liggen (drie bundels bamboe en een liaan, rond de bron).
@@ -88,7 +101,7 @@ export function maakSim(berg) {
     const z = delen.reduce((a, d) => a + d.z, 0) / delen.length;
     return { x, z, y: weide.hoogte + BLOESEMS.bovenHindernis };
   });
-  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, [...boven, ...rivier.bloesems, ...speelbos.bloesems]);
+  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, [...boven, ...rivier.bloesems, ...parcours.flatMap((p) => p.bloesems)]);
   const wortels = maakWortels(weide);
   // De padvinder voor de tijger, en de slaapbloem die hij je komt tonen.
   const pad = maakPadvinder(wereld, GEZEL.pad);
@@ -132,28 +145,59 @@ export function maakSim(berg) {
     o.vorigeRichting = o.richting;
   };
 
-  /** Bij de voet van welke route staat de speler (index), of -1. */
-  function routeBij(s) {
-    if (s.modus !== 'lopen' || !s.opGrond || s.klimt) return -1;
-    let beste = -1;
+  /** Bij de voet van welke route van welke wand staat de speler: { wand, route }, of null. */
+  function wandBij(s) {
+    if (s.modus !== 'lopen' || !s.opGrond || s.klimt) return null;
+    let beste = null;
     let d0 = KLIMMEN.startAfstand;
-    oefenrots.routes.forEach((r, i) => {
-      const d = Math.hypot(r.voet[0] - s.pos[0], r.voet[2] - s.pos[2]);
-      if (d < d0 && Math.abs(s.pos[1] - oefenrots.voetHoogte) < 0.6) {
-        d0 = d;
-        beste = i;
-      }
+    wanden.forEach((w, wi) => {
+      if (Math.abs(s.pos[1] - w.voetHoogte) > 0.6 || Math.hypot(w.midden[0] - s.pos[0], w.midden[2] - s.pos[2]) > w.breedte + 3) return;
+      w.routes.forEach((r, ri) => {
+        const d = Math.hypot(r.voet[0] - s.pos[0], r.voet[2] - s.pos[2]);
+        if (d < d0) {
+          d0 = d;
+          beste = { wand: wi, route: ri };
+        }
+      });
     });
     return beste;
   }
+  /** Bij de voet van welke route van de oefenrots staat de speler (index), of -1 (voor de tests van stap 9). */
+  const routeBij = (s) => {
+    const b = wandBij(s);
+    return b && b.wand === 0 ? b.route : -1;
+  };
+  /** Begint te klimmen op route ri van wand wi. */
+  function klimOp(s, wi, ri, besturing) {
+    beginKlimmen(s, wanden[wi], ri, KLIMMEN, meld, besturing);
+    s.klim.wand = wi;
+  }
+  const wandVan = (s) => wanden[s.klim?.wand ?? s.laatsteWand ?? 0];
+
+  /**
+   * In welk parcours (speelbos of oversteek) is de speler bezig: de index, of -1. Verlaat je een parcours,
+   * dan begint het volgende met een lege voortgang (het record van het speelbos blijft).
+   */
+  function parcoursBij(s) {
+    const x = s.pos[0];
+    const z = s.pos[2];
+    if (s.parcours >= 0 && parcours[s.parcours].binnen(x, z, 2)) return s.parcours;
+    const i = parcours.findIndex((p) => p.binnen(x, z, 0));
+    if (i !== s.parcours) {
+      if (s.parcours >= 0) Object.assign(s.bos, { dek: -1, bezig: false, op: null, laatsteOp: null });
+      s.parcours = i;
+    }
+    return i;
+  }
+  const parcoursVan = (s) => parcours[parcoursBij(s)] ?? speelbos;
 
   /** Wat de actieknop nu zou doen voor deze speler. */
   function actieVoor(s) {
     if (s.modus === 'rijden') return 'afstappen';
     if (s.modus === 'klimmen') return 'uitschudden';
     if (s.modus === 'varen') return aanlegPlek(vlotVan(s), rivier, wereld, VLOT) ? 'aanleggen' : null;
-    if (routeBij(s) >= 0) return 'klimmen';
-    const bosWat = bosActie(speelbos, s);
+    if (wandBij(s)) return 'klimmen';
+    const bosWat = bosActie(parcoursVan(s), s);
     if (bosWat) return bosWat;
     // Aan de steiger bij de bron: het vlot bouwen (als je alle stukken hebt) of instappen.
     const v = vlotVan(s);
@@ -186,6 +230,7 @@ export function maakSim(berg) {
       const s = maakSpeler(id, x, grond.grondOp(x, z), z);
       s.ronde = maakRonde();
       s.bos = legeBosToestand();
+      s.parcours = -1;
       spelers.push(s);
       // Elke speler krijgt een eigen pony; ze staat naast het kamp, aan de kant van de springweide.
       const px = vorm.kamp.x + weide.su * 3.6;
@@ -225,8 +270,8 @@ export function maakSim(berg) {
     /** Plof: speler terug naar de laatste veilige grond (van de pony af als je erop zit). */
     terug(id) {
       const s = this.speler(id);
-      if (s.modus === 'klimmen') stopKlimmen(s, oefenrots, KLIMMEN);
-      bosLos(speelbos, s);
+      if (s.modus === 'klimmen') stopKlimmen(s, wandVan(s), KLIMMEN);
+      bosLos(parcoursVan(s), s);
       if (s.modus === 'varen') {
         const v = vlotVan(s);
         const p = ponyAanBoord(s, v);
@@ -305,14 +350,20 @@ export function maakSim(berg) {
       return routeBij(this.speler(id));
     },
 
-    /** Meteen beginnen klimmen op route ri (voor tests): de speler staat dan aan de voet. */
-    klim(id, ri, besturing) {
+    /** Meteen beginnen klimmen op route ri van wand wi (voor tests): de speler staat dan aan de voet. */
+    klim(id, ri, besturing, wi = 0) {
       const s = this.speler(id);
       if (s.modus === 'rijden') this.rijd(id, false);
-      if (s.modus === 'klimmen') stopKlimmen(s, oefenrots, KLIMMEN);
-      const v = oefenrots.routes[ri].voet;
-      s.pos = [v[0], oefenrots.voetHoogte, v[2]];
-      beginKlimmen(s, oefenrots, ri, KLIMMEN, meld, besturing);
+      if (s.modus === 'klimmen') stopKlimmen(s, wandVan(s), KLIMMEN);
+      const w = wanden[wi];
+      const v = w.routes[ri].voet;
+      s.pos = [v[0], w.voetHoogte, v[2]];
+      klimOp(s, wi, ri, besturing);
+    },
+
+    /** De wand waarop de speler klimt (of het laatst klom). */
+    wand(id) {
+      return wandVan(this.speler(id));
     },
 
     /** Een zet vragen op de wand (zoals een tik op een greep, of een hand slepen als `lid` gegeven is). */
@@ -322,12 +373,14 @@ export function maakSim(berg) {
 
     /** Welk plan het spel zou maken om hand `lid` op greep `greep` te krijgen (tests, klimbot). */
     klimPlan(id, greep, lid) {
-      return planVoor(this.speler(id), oefenrots, KLIMMEN, greep, lid);
+      const s = this.speler(id);
+      return planVoor(s, wandVan(s), KLIMMEN, greep, lid);
     },
 
     /** De grepen die de klimster nu kan bereiken (met hand `lid`, of met eender welke). */
     bereikbaar(id, lid = null) {
-      return bereikbaar(this.speler(id), oefenrots, KLIMMEN, lid);
+      const s = this.speler(id);
+      return bereikbaar(s, wandVan(s), KLIMMEN, lid);
     },
 
     /** Meteen aan het begin van doorgang i van het speelbos (voor tests, ?doorgang=...). */
@@ -342,9 +395,53 @@ export function maakSim(berg) {
       s.richting = s.vorigeRichting = plek.richting;
       s.opGrond = true;
       s.veilig = [...plek.pos];
+      s.parcours = 0;
       Object.assign(s.bos, { dek: i, op: i, laatsteOp: i, valVan: plek.pos[1], bezig: i === 0, geldig: i === 0 });
       // Op het eerste platform begint het parcours meteen (met de klok).
       if (i === 0) Object.assign(s.bos, { start: tik, fouten: speelbos.modules.map(() => 0) });
+    },
+
+    /**
+     * Meteen bij verbinding `vi` van het bergplan (voor tests, ?doorgang=v3): onderaan het ponypad, aan de voet
+     * van de klimwand, of op het eerste platform van een oversteek. boven = true: aan de andere kant.
+     */
+    naarVerbinding(id, vi, boven = false) {
+      const v = vorm.bergplan.verbindingen.find((q) => q.id === vi || q === vi);
+      if (!v?.geplaatst) return null;
+      const s = this.speler(id);
+      if (s.modus === 'rijden') this.rijd(id, false);
+      if (s.modus !== 'lopen') this.terug(id);
+      let x;
+      let z;
+      let richting;
+      if (v.soort === 'ponypad') {
+        const h = vorm.eiland.hellingen[v.plaats.helling];
+        const t = boven ? h.len + 4 : -4;
+        x = h.x0 + h.ex * t;
+        z = h.z0 + h.ez * t;
+        richting = boven ? Math.atan2(-h.ex, -h.ez) : Math.atan2(h.ex, h.ez);
+      } else if (v.soort === 'klimwand') {
+        const w = vorm.bergwanden[v.plaats.wand];
+        [x, , z] = boven ? w.uitstap(0) : w.routes[0].voet;
+        richting = Math.atan2(-w.N[0], -w.N[2]);
+      } else if (v.plaats?.parcours !== undefined) {
+        const plek = vorm.oversteken[v.plaats.parcours].startPlek(boven ? 1 : 0);
+        [x, , z] = plek.pos;
+        richting = plek.richting;
+      } else {
+        const p = vorm.bergplan.plekken.find((q) => q.id === v.van);
+        [x, z] = vorm.eiland.punt(p.midden, (vorm.eiland.randStraal(p.midden) + vorm.eiland.voetStraal(p.midden)) / 2);
+        richting = 0;
+      }
+      const y = grond.grondOp(x, z);
+      s.pos = [x, y, z];
+      s.vorigePos = [...s.pos];
+      s.vel = [0, 0, 0];
+      s.richting = s.vorigeRichting = richting;
+      s.opGrond = true;
+      s.veilig = [...s.pos];
+      parcoursBij(s);
+      return v;
     },
 
     /** Het vlot van een speler (stap 10). */
@@ -435,9 +532,12 @@ export function maakSim(berg) {
           const wat = actieVoor(s);
           if (wat === 'opstappen') stapOp(s, p, meld);
           else if (wat === 'afstappen') ponyOnder(s).stopt = true;
-          else if (wat === 'klimmen') beginKlimmen(s, oefenrots, routeBij(s), KLIMMEN, meld, int.besturing);
+          else if (wat === 'klimmen') {
+            const b = wandBij(s);
+            klimOp(s, b.wand, b.route, int.besturing);
+          }
           else if (wat === 'bouwen') beginBouwen(s, vlotVan(s), VLOT, meld);
-          else if (wat === 'slingeren') doeBosActie(speelbos, s, meld);
+          else if (wat === 'slingeren') doeBosActie(parcoursVan(s), s, meld);
           else if (wat === 'varen') stapIn(s, vlotVan(s), p, rivier, VLOT, meld);
           else if (wat === 'aanleggen') {
             const v = vlotVan(s);
@@ -463,13 +563,16 @@ export function maakSim(berg) {
           aaiWelp(aw, gezinnen.get(t.id), t, s, WELPJES, meld);
         }
 
-        if (s.modus === 'klimmen') stapKlimmen(s, int, oefenrots, KLIMMEN, dt, meld);
+        if (s.modus === 'klimmen') {
+          s.laatsteWand = s.klim.wand;
+          stapKlimmen(s, int, wandVan(s), KLIMMEN, dt, meld);
+        }
         else if (s.modus === 'varen') {
           const v = vlotVan(s);
           stapVaren(s, v, ponyAanBoord(s, v), int, rivier, wereld, VLOT, dt, meld);
-        } else if (s.modus === 'slingeren') bosSlinger(speelbos, s, int, dt, meld);
+        } else if (s.modus === 'slingeren') bosSlinger(parcoursVan(s), s, int, dt, meld);
         else if (s.modus === 'lopen') {
-          stapLopen(s, bosInvoer(speelbos, s, int), wereld, LOPEN, dt, meld, ZWEMMEN);
+          stapLopen(s, bosInvoer(parcoursVan(s), s, int), wereld, LOPEN, dt, meld, ZWEMMEN);
           pakStukken(s, vlotVan(s), wereld.vlotStukken, VLOT, meld);
         }
         else if (s.modus === 'zwemmen') stapZwemmen(s, int, wereld, ZWEMMEN, dt, meld);
@@ -483,11 +586,13 @@ export function maakSim(berg) {
             stopRonde(s.ronde, s.id, meld);
           }
         }
-        // Het speelbos: lianen grijpen, de springbloem, en terug naar het begin van een doorgang na een val.
+        // Het speelbos en de oversteken: lianen grijpen, de springbloem, en terug naar het begin van een
+        // doorgang na een val.
         if (s.modus === 'lopen' || s.modus === 'zwemmen' || s.modus === 'slingeren') {
-          const plek = bosNaStap(speelbos, s, dt, tik, meld);
+          const bos = parcoursVan(s);
+          const plek = bosNaStap(bos, s, dt, tik, meld);
           if (plek) {
-            bosLos(speelbos, s);
+            bosLos(bos, s);
             naarVeiligeGrond(s, meld);
             s.richting = s.vorigeRichting = plek.richting;
           }
@@ -505,8 +610,8 @@ export function maakSim(berg) {
         }
       }
 
-      // De bewegende delen van het speelbos: lianen, brug, bladeren en lotus.
-      stapSpeelbos(speelbos, spelers, dt);
+      // De bewegende delen van het speelbos en de oversteken: lianen, brug, bladeren en lotus.
+      for (const p of parcours) stapSpeelbos(p, spelers, dt);
 
       // Het vlot als niemand erop zit, en de Sumatraanse tijger in de rivier.
       for (const v of vlotten) {

@@ -1,3 +1,5 @@
+// Het beeld van het speelbos (stap 11), en van de oversteken over de ravijnen (stap 13: twee platforms en één
+// doorgang, zonder trap, vijver of finish; elk deel wordt alleen getekend als het er is).
 // Het beeld van het speelbos (stap 11): reuzenbomen met houten boomhutplatforms, een trap, lianen aan een
 // dikke tak, een touwbrug met ontbrekende plankjes, een balanceerstam, de springbloem, reuzenbladeren
 // en lotusbladeren in een vijvertje, en het finish-eilandje met een bloemenboog. Alles door code.
@@ -77,8 +79,8 @@ export function maakSpeelbosbeeld(bos, K) {
     openingen[m.i].push(Math.atan2(m.a[1], m.a[0]));
     openingen[m.i + 1].push(Math.atan2(-m.a[1], -m.a[0]));
   });
-  openingen[0].push(Math.atan2(bos.trap.a[1], bos.trap.a[0]));
-  openingen[openingen.length - 1].push(Math.atan2(bos.uitgang.a[1], bos.uitgang.a[0]));
+  if (bos.trap) openingen[0].push(Math.atan2(bos.trap.a[1], bos.trap.a[0]));
+  if (bos.uitgang) openingen[openingen.length - 1].push(Math.atan2(bos.uitgang.a[1], bos.uitgang.a[0]));
   // Waar de boom tegen het platform staat: geen leuning.
   bos.dekken.forEach((d, i) => d.boom && openingen[i].push(Math.atan2(d.boomRichting[1], d.boomRichting[0])));
 
@@ -121,7 +123,7 @@ export function maakSpeelbosbeeld(bos, K) {
       vorige = top;
     }
     // Eronder: palen tot op de bosvloer (of de bodem van de vijver), en een schuine steun tegen de boom.
-    const voet = d.soort === 'steiger' ? bos.vloer - D.vijver.diepte : bos.vloer;
+    const voet = d.soort === 'steiger' ? bos.vloer - D.vijver.diepte : d.soort === 'rand' ? d.h - d.hoogte - 2.5 : bos.vloer;
     for (let i = 0; i < 4; i++) {
       const h = (i / 4) * Math.PI * 2 + Math.PI / 4;
       const x = d.x + Math.cos(h) * (d.straal - 0.35);
@@ -145,9 +147,10 @@ export function maakSpeelbosbeeld(bos, K) {
   const kruinKleuren = [KL.kruin, KL.kruinLicht, 0x45c463, 0x3db97e];
   for (const dek of bos.dekken.filter((q) => q.boom)) {
     const d = { x: dek.bx, z: dek.bz };
-    const H = bos.vloer + D.boomHoogte;
+    const vloer = dek.grond ?? bos.vloer;
+    const H = vloer + D.boomHoogte;
     const stam = maakBuis(
-      [new THREE.Vector3(d.x, bos.vloer - 0.3, d.z), new THREE.Vector3(d.x + 0.05, (bos.vloer + H) / 2, d.z - 0.04), new THREE.Vector3(d.x - 0.08, H, d.z + 0.05)],
+      [new THREE.Vector3(d.x, vloer - 0.3, d.z), new THREE.Vector3(d.x + 0.05, (vloer + H) / 2, d.z - 0.04), new THREE.Vector3(d.x - 0.08, H, d.z + 0.05)],
       (t) => D.stam * (1.5 - 0.6 * Math.min(1, t * 4) + (t > 0.85 ? (t - 0.85) * 2 : 0)),
       fijn ? 12 : 6, zijden
     );
@@ -159,7 +162,7 @@ export function maakSpeelbosbeeld(bos, K) {
         [new THREE.Vector3(Math.cos(h) * 0.4, 1.4, Math.sin(h) * 0.4), new THREE.Vector3(Math.cos(h) * 0.9, 0.5, Math.sin(h) * 0.9), new THREE.Vector3(Math.cos(h) * 1.6, -0.1, Math.sin(h) * 1.6)],
         (t) => 0.22 * (1 - t * 0.6), fijn ? 6 : 3, fijn ? 7 : 4
       );
-      b.voegToe(w, { matrix: matrix(d.x, bos.vloer, d.z), kleur: KL.stamDonker });
+      b.voegToe(w, { matrix: matrix(d.x, vloer, d.z), kleur: KL.stamDonker });
     }
     // De kruin: een paar dikke wolkjes.
     const bollen = [[0, 0.6, 0, 3.0], [2.2, -0.2, 0.6, 2.1], [-1.9, 0, 1.2, 2.0], [0.4, -0.3, -2.2, 2.1], [-0.8, 1.4, -0.6, 1.8]];
@@ -215,8 +218,8 @@ export function maakSpeelbosbeeld(bos, K) {
       }
     }
   }
-  plank(bos.trap, true, true);
-  plank(bos.uitgang, false, true);
+  if (bos.trap) plank(bos.trap, true, true);
+  if (bos.uitgang) plank(bos.uitgang, false, true);
 
   // --- De doorgangen: wat vastligt ---
   for (const m of bos.modules) {
@@ -286,11 +289,12 @@ export function maakSpeelbosbeeld(bos, K) {
   }
 
   // --- Het finish-eilandje: een bloemenboog met een gouden klokje ---
+  const wedstrijd = bos.wedstrijd !== false;
   const G = bos.dekken[bos.dekken.length - 1];
   const mL = bos.modules[bos.modules.length - 1];
   const dwars = new THREE.Vector3(mL.b[0], 0, mL.b[1]);
   const bel = new THREE.Vector3(G.x + mL.a[0] * 0.5, G.h + 2.25, G.z + mL.a[1] * 0.5);
-  {
+  if (wedstrijd) {
     const punten = [];
     for (let i = 0; i <= 12; i++) {
       const f = i / 12;
@@ -306,7 +310,7 @@ export function maakSpeelbosbeeld(bos, K) {
   }
 
   // --- Een vlag boven de eerste boom: zo zie je van ver waar het speelbos is ---
-  {
+  if (wedstrijd) {
     const d = { x: bos.dekken[0].bx, z: bos.dekken[0].bz };
     const top = bos.vloer + D.boomHoogte + 3.6;
     b.voegToe(new THREE.CylinderGeometry(0.06, 0.06, 4.5, 6), { matrix: matrix(d.x, top - 2.25, d.z), kleur: 0xffffff });
@@ -323,300 +327,323 @@ export function maakSpeelbosbeeld(bos, K) {
   groep.add(vast);
 
   const effen = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x201810, emissiveIntensity: 0.3 });
-
-  // --- De vijver: water met golfjes en twinkels ---
-  const V = bos.vijver;
-  const vx0 = Math.min(V.van[0], V.tot[0]) - V.straal - 1;
-  const vx1 = Math.max(V.van[0], V.tot[0]) + V.straal + 1;
-  const vz0 = Math.min(V.van[1], V.tot[1]) - V.straal - 1;
-  const vz1 = Math.max(V.van[1], V.tot[1]) + V.straal + 1;
   const uTijd = { value: 0 };
-  const waterMat = new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.merge([
-      THREE.UniformsLib.fog,
-      {
-        uWater: { value: new THREE.Color(KL.vijver) },
-        uDiep: { value: new THREE.Color(KL.vijverDiep) },
-        uVan: { value: new THREE.Vector2(...V.van) },
-        uTot: { value: new THREE.Vector2(...V.tot) },
-        uStraal: { value: V.straal + 0.7 },
-      },
-    ]),
-    fog: true,
-    transparent: true,
-    depthWrite: false,
-    vertexShader: `
-      #include <fog_pars_vertex>
-      varying vec3 vWereld;
-      void main() {
-        vec4 w = modelMatrix * vec4(position, 1.0);
-        vWereld = w.xyz;
-        vec4 mvPosition = viewMatrix * w;
-        gl_Position = projectionMatrix * mvPosition;
-        #include <fog_vertex>
-      }`,
-    fragmentShader: `
-      #include <fog_pars_fragment>
-      uniform float uTijd, uStraal;
-      uniform vec3 uWater, uDiep;
-      uniform vec2 uVan, uTot;
-      varying vec3 vWereld;
-      void main() {
-        vec2 p = vWereld.xz;
-        vec2 d = uTot - uVan;
-        float f = clamp(dot(p - uVan, d) / dot(d, d), 0.0, 1.0);
-        float r = length(p - uVan - d * f);
-        if (r > uStraal) discard;
-        float t = uTijd;
-        float golf = sin(p.x * 1.7 + p.y * 0.6 + t * 1.1 + sin(p.y * 1.3 - t * 0.7) * 1.4);
-        float golf2 = sin(p.y * 2.3 - p.x * 0.8 - t * 0.9 + sin(p.x * 1.1 + t * 0.5) * 1.2);
-        float rimpel = golf * 0.6 + golf2 * 0.5;
-        float diep = 1.0 - smoothstep(uStraal - 2.8, uStraal - 0.4, r);
-        vec3 c = mix(uWater, uDiep, diep * 0.7);
-        c = mix(c, vec3(0.85, 1.0, 1.0), smoothstep(0.75, 1.05, rimpel) * 0.4);
-        vec2 cel = floor(p * 2.5);
-        float rnd = fract(sin(dot(cel, vec2(12.9898, 78.233))) * 43758.5453);
-        vec2 g = fract(p * 2.5) - 0.5;
-        float twinkel = step(0.94, rnd) * pow(max(sin(t * 3.0 + rnd * 50.0), 0.0), 10.0);
-        twinkel *= smoothstep(0.16, 0.0, abs(g.x) * abs(g.y) * 9.0 + length(g) * 0.35);
-        c += vec3(1.0) * twinkel * 0.8;
-        gl_FragColor = vec4(c, 0.85);
-        #include <colorspace_fragment>
-        #include <fog_fragment>
-      }`,
-  });
-  waterMat.uniforms.uTijd = uTijd;
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(vx1 - vx0, vz1 - vz0).rotateX(-Math.PI / 2), waterMat);
-  water.position.set((vx0 + vx1) / 2, bos.peil, (vz0 + vz1) / 2);
-  water.renderOrder = 1;
-  groep.add(water);
-
-  // --- De touwbrug: plankjes en touwen die zwaaien (bij elk beeld op hun plek gezet) ---
-  const brug = bos.modules.find((m) => m.soort === 'touwbrug');
-  const T = D.touwbrug;
-  const plankLang = 0.26;
-  const plankT = [];
-  for (let t = 0.12; t < brug.len - 0.05; t += plankLang + 0.05) if (!inGat(brug, t) && !inGat(brug, t - 0.1) && !inGat(brug, t + 0.1)) plankT.push(t);
-  const plankGeo = new THREE.BoxGeometry(T.breedte, 0.07, plankLang);
-  {
-    const kl = new Float32Array(plankGeo.attributes.position.count * 3);
-    for (let i = 0; i < plankGeo.attributes.position.count; i++) {
-      tmpV.fromBufferAttribute(plankGeo.attributes.position, i);
-      houtKleur(tmpV, tmpV.y < 0 ? 0.3 : 0).toArray(kl, i * 3);
-    }
-    plankGeo.setAttribute('color', new THREE.BufferAttribute(kl, 3));
-  }
-  const planken = new THREE.InstancedMesh(plankGeo, effen, plankT.length);
-  planken.castShadow = K.schaduw;
-  groep.add(planken);
-  const N_TOUW = 18;
-  const touwGeo = new THREE.CylinderGeometry(1, 1, 1, 5).translate(0, 0.5, 0);
-  touwGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(touwGeo.attributes.position.count * 3).fill(1), 3));
-  const touwMat = new THREE.MeshLambertMaterial({ color: KL.touw, emissive: 0x302010, emissiveIntensity: 0.3 });
-  const hangers = Math.ceil(brug.len / 1.0) + 1;
-  const touwen = new THREE.InstancedMesh(touwGeo, touwMat, N_TOUW * 4 + hangers * 2);
-  groep.add(touwen);
   const p0 = new THREE.Vector3();
   const p1 = new THREE.Vector3();
-  const as = Math.atan2(brug.a[0], brug.a[1]);
-  const brugPunt = (t, q, y, uit) => {
-    const [x, z] = naarWereld(brug, t, q + brugOpzij(brug, t));
-    return uit.set(x, y, z);
-  };
-  // De palen aan de uiteinden van de brug (vast).
-  {
-    const pb = new Bouwer();
-    for (const t of [-0.05, brug.len + 0.05]) for (const kant of [-1, 1]) {
-      const [x, z] = naarWereld(brug, t, kant * (T.breedte / 2 + 0.08));
-      const y = t < 1 ? brug.h0 : brug.h1;
-      pb.voegToe(new THREE.CylinderGeometry(0.08, 0.09, 1.1, 6), { matrix: matrix(x, y + 0.5, z), kleur: KL.houtDonker });
-    }
-    const palen = new THREE.Mesh(pb.maak(), effen);
-    groep.add(palen);
-  }
-  function werkBrugBij() {
-    const zwaaiHoek = brug.zwaai * 0.6;
-    plankT.forEach((t, i) => {
-      const y = bos.oppervlak(brug, t, brugOpzij(brug, t));
-      const yy = y > -1e9 ? y : brugHoogte(brug, D, t);
-      brugPunt(t, 0, yy - 0.035, p0);
-      const helling = Math.atan2(brugHoogte(brug, D, t + 0.1) - brugHoogte(brug, D, t - 0.1), 0.2);
-      tmpE.set(-helling, as, zwaaiHoek * Math.sin((Math.PI * t) / brug.len), 'YXZ');
-      tmpQ.setFromEuler(tmpE);
-      planken.setMatrixAt(i, tmpM.compose(p0, tmpQ, tmpS.set(1, 1, 1)));
+  // Wat elk beeld bewogen wordt; een deel dat er niet is, doet niets.
+  let werkBrugBij = () => {};
+  let werkLianenBij = () => {};
+  let werkBladerenBij = () => {};
+  let werkLotusBij = (_t) => {};
+  let bloem = null;
+  let klok = null;
+
+  if (bos.vijver) {
+    // --- De vijver: water met golfjes en twinkels ---
+    const V = bos.vijver;
+    const vx0 = Math.min(V.van[0], V.tot[0]) - V.straal - 1;
+    const vx1 = Math.max(V.van[0], V.tot[0]) + V.straal + 1;
+    const vz0 = Math.min(V.van[1], V.tot[1]) - V.straal - 1;
+    const vz1 = Math.max(V.van[1], V.tot[1]) + V.straal + 1;
+    const waterMat = new THREE.ShaderMaterial({
+      uniforms: THREE.UniformsUtils.merge([
+        THREE.UniformsLib.fog,
+        {
+          uWater: { value: new THREE.Color(KL.vijver) },
+          uDiep: { value: new THREE.Color(KL.vijverDiep) },
+          uVan: { value: new THREE.Vector2(...V.van) },
+          uTot: { value: new THREE.Vector2(...V.tot) },
+          uStraal: { value: V.straal + 0.7 },
+        },
+      ]),
+      fog: true,
+      transparent: true,
+      depthWrite: false,
+      vertexShader: `
+        #include <fog_pars_vertex>
+        varying vec3 vWereld;
+        void main() {
+          vec4 w = modelMatrix * vec4(position, 1.0);
+          vWereld = w.xyz;
+          vec4 mvPosition = viewMatrix * w;
+          gl_Position = projectionMatrix * mvPosition;
+          #include <fog_vertex>
+        }`,
+      fragmentShader: `
+        #include <fog_pars_fragment>
+        uniform float uTijd, uStraal;
+        uniform vec3 uWater, uDiep;
+        uniform vec2 uVan, uTot;
+        varying vec3 vWereld;
+        void main() {
+          vec2 p = vWereld.xz;
+          vec2 d = uTot - uVan;
+          float f = clamp(dot(p - uVan, d) / dot(d, d), 0.0, 1.0);
+          float r = length(p - uVan - d * f);
+          if (r > uStraal) discard;
+          float t = uTijd;
+          float golf = sin(p.x * 1.7 + p.y * 0.6 + t * 1.1 + sin(p.y * 1.3 - t * 0.7) * 1.4);
+          float golf2 = sin(p.y * 2.3 - p.x * 0.8 - t * 0.9 + sin(p.x * 1.1 + t * 0.5) * 1.2);
+          float rimpel = golf * 0.6 + golf2 * 0.5;
+          float diep = 1.0 - smoothstep(uStraal - 2.8, uStraal - 0.4, r);
+          vec3 c = mix(uWater, uDiep, diep * 0.7);
+          c = mix(c, vec3(0.85, 1.0, 1.0), smoothstep(0.75, 1.05, rimpel) * 0.4);
+          vec2 cel = floor(p * 2.5);
+          float rnd = fract(sin(dot(cel, vec2(12.9898, 78.233))) * 43758.5453);
+          vec2 g = fract(p * 2.5) - 0.5;
+          float twinkel = step(0.94, rnd) * pow(max(sin(t * 3.0 + rnd * 50.0), 0.0), 10.0);
+          twinkel *= smoothstep(0.16, 0.0, abs(g.x) * abs(g.y) * 9.0 + length(g) * 0.35);
+          c += vec3(1.0) * twinkel * 0.8;
+          gl_FragColor = vec4(c, 0.85);
+          #include <colorspace_fragment>
+          #include <fog_fragment>
+        }`,
     });
-    planken.instanceMatrix.needsUpdate = true;
-    // Twee leuningtouwen en twee onder de plankjes, en hangertjes ertussen.
-    let n = 0;
-    const L = brug.len + 0.1;
-    for (const [q, hoog] of [[-1, 0.95], [1, 0.95], [-1, -0.03], [1, -0.03]]) {
-      for (let i = 0; i < N_TOUW; i++) {
-        const ta = -0.05 + (i / N_TOUW) * L;
-        const tb = -0.05 + ((i + 1) / N_TOUW) * L;
-        const ya = brugHoogte(brug, D, ta) + hoog + (hoog > 0 ? 0.25 * Math.sin((Math.PI * Math.max(0, ta)) / brug.len) : 0);
-        const yb = brugHoogte(brug, D, tb) + hoog + (hoog > 0 ? 0.25 * Math.sin((Math.PI * Math.max(0, tb)) / brug.len) : 0);
-        brugPunt(ta, q * (T.breedte / 2 + 0.06), ya, p0);
-        brugPunt(tb, q * (T.breedte / 2 + 0.06), yb, p1);
-        touwen.setMatrixAt(n++, stukMatrix(p0, p1, 0.032, tmpM));
-      }
-    }
-    for (let i = 0; i < hangers; i++) {
-      const t = Math.min(brug.len, (i / (hangers - 1)) * brug.len);
-      for (const q of [-1, 1]) {
-        const y = brugHoogte(brug, D, t);
-        brugPunt(t, q * (T.breedte / 2 + 0.06), y - 0.03, p0);
-        brugPunt(t, q * (T.breedte / 2 + 0.06), y + 0.95 + 0.25 * Math.sin((Math.PI * t) / brug.len), p1);
-        touwen.setMatrixAt(n++, stukMatrix(p0, p1, 0.02, tmpM));
-      }
-    }
-    touwen.count = n;
-    touwen.instanceMatrix.needsUpdate = true;
+    waterMat.uniforms.uTijd = uTijd;
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(vx1 - vx0, vz1 - vz0).rotateX(-Math.PI / 2), waterMat);
+    water.position.set((vx0 + vx1) / 2, bos.peil, (vz0 + vz1) / 2);
+    water.renderOrder = 1;
+    groep.add(water);
   }
 
-  // --- De lianen: een groen touw met blaadjes, opgehangen aan de tak; ze draaien rond hun anker ---
+  const brug = bos.modules.find((m) => m.soort === 'touwbrug');
+  if (brug) {
+    // --- De touwbrug: plankjes en touwen die zwaaien (bij elk beeld op hun plek gezet) ---
+    const T = D.touwbrug;
+    const plankLang = 0.26;
+    const plankT = [];
+    for (let t = 0.12; t < brug.len - 0.05; t += plankLang + 0.05) if (!inGat(brug, t) && !inGat(brug, t - 0.1) && !inGat(brug, t + 0.1)) plankT.push(t);
+    const plankGeo = new THREE.BoxGeometry(T.breedte, 0.07, plankLang);
+    {
+      const kl = new Float32Array(plankGeo.attributes.position.count * 3);
+      for (let i = 0; i < plankGeo.attributes.position.count; i++) {
+        tmpV.fromBufferAttribute(plankGeo.attributes.position, i);
+        houtKleur(tmpV, tmpV.y < 0 ? 0.3 : 0).toArray(kl, i * 3);
+      }
+      plankGeo.setAttribute('color', new THREE.BufferAttribute(kl, 3));
+    }
+    const planken = new THREE.InstancedMesh(plankGeo, effen, plankT.length);
+    planken.castShadow = K.schaduw;
+    groep.add(planken);
+    const N_TOUW = 18;
+    const touwGeo = new THREE.CylinderGeometry(1, 1, 1, 5).translate(0, 0.5, 0);
+    touwGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(touwGeo.attributes.position.count * 3).fill(1), 3));
+    const touwMat = new THREE.MeshLambertMaterial({ color: KL.touw, emissive: 0x302010, emissiveIntensity: 0.3 });
+    const hangers = Math.ceil(brug.len / 1.0) + 1;
+    const touwen = new THREE.InstancedMesh(touwGeo, touwMat, N_TOUW * 4 + hangers * 2);
+    groep.add(touwen);
+    const as = Math.atan2(brug.a[0], brug.a[1]);
+    const brugPunt = (t, q, y, uit) => {
+      const [x, z] = naarWereld(brug, t, q + brugOpzij(brug, t));
+      return uit.set(x, y, z);
+    };
+    // De palen aan de uiteinden van de brug (vast).
+    {
+      const pb = new Bouwer();
+      for (const t of [-0.05, brug.len + 0.05]) for (const kant of [-1, 1]) {
+        const [x, z] = naarWereld(brug, t, kant * (T.breedte / 2 + 0.08));
+        const y = t < 1 ? brug.h0 : brug.h1;
+        pb.voegToe(new THREE.CylinderGeometry(0.08, 0.09, 1.1, 6), { matrix: matrix(x, y + 0.5, z), kleur: KL.houtDonker });
+      }
+      const palen = new THREE.Mesh(pb.maak(), effen);
+      groep.add(palen);
+    }
+    werkBrugBij = () => {
+      const zwaaiHoek = brug.zwaai * 0.6;
+      plankT.forEach((t, i) => {
+        const y = bos.oppervlak(brug, t, brugOpzij(brug, t));
+        const yy = y > -1e9 ? y : brugHoogte(brug, D, t);
+        brugPunt(t, 0, yy - 0.035, p0);
+        const helling = Math.atan2(brugHoogte(brug, D, t + 0.1) - brugHoogte(brug, D, t - 0.1), 0.2);
+        tmpE.set(-helling, as, zwaaiHoek * Math.sin((Math.PI * t) / brug.len), 'YXZ');
+        tmpQ.setFromEuler(tmpE);
+        planken.setMatrixAt(i, tmpM.compose(p0, tmpQ, tmpS.set(1, 1, 1)));
+      });
+      planken.instanceMatrix.needsUpdate = true;
+      // Twee leuningtouwen en twee onder de plankjes, en hangertjes ertussen.
+      let n = 0;
+      const L = brug.len + 0.1;
+      for (const [q, hoog] of [[-1, 0.95], [1, 0.95], [-1, -0.03], [1, -0.03]]) {
+        for (let i = 0; i < N_TOUW; i++) {
+          const ta = -0.05 + (i / N_TOUW) * L;
+          const tb = -0.05 + ((i + 1) / N_TOUW) * L;
+          const ya = brugHoogte(brug, D, ta) + hoog + (hoog > 0 ? 0.25 * Math.sin((Math.PI * Math.max(0, ta)) / brug.len) : 0);
+          const yb = brugHoogte(brug, D, tb) + hoog + (hoog > 0 ? 0.25 * Math.sin((Math.PI * Math.max(0, tb)) / brug.len) : 0);
+          brugPunt(ta, q * (T.breedte / 2 + 0.06), ya, p0);
+          brugPunt(tb, q * (T.breedte / 2 + 0.06), yb, p1);
+          touwen.setMatrixAt(n++, stukMatrix(p0, p1, 0.032, tmpM));
+        }
+      }
+      for (let i = 0; i < hangers; i++) {
+        const t = Math.min(brug.len, (i / (hangers - 1)) * brug.len);
+        for (const q of [-1, 1]) {
+          const y = brugHoogte(brug, D, t);
+          brugPunt(t, q * (T.breedte / 2 + 0.06), y - 0.03, p0);
+          brugPunt(t, q * (T.breedte / 2 + 0.06), y + 0.95 + 0.25 * Math.sin((Math.PI * t) / brug.len), p1);
+          touwen.setMatrixAt(n++, stukMatrix(p0, p1, 0.02, tmpM));
+        }
+      }
+      touwen.count = n;
+      touwen.instanceMatrix.needsUpdate = true;
+    }
+  }
+
   const lianen = bos.modules.find((m) => m.soort === 'liaan');
-  const L = touwLengte(D);
-  const lb = new Bouwer();
-  {
-    const punten = [];
-    for (let i = 0; i <= 8; i++) punten.push(new THREE.Vector3(Math.sin(i * 1.3) * 0.04, -(i / 8) * L, Math.cos(i * 1.1) * 0.04));
-    lb.voegToe(maakBuis(punten, (t) => 0.055 - t * 0.015, fijn ? 16 : 8, fijn ? 6 : 4), { kleur: KL.liaan });
-    for (let i = 0; i < (fijn ? 12 : 6); i++) {
-      const y = -(0.3 + (i / (fijn ? 12 : 6)) * (L - 0.6));
-      const h = i * 2.4;
-      const blad = new THREE.CircleGeometry(0.13, 6).scale(1, 1.6, 1).translate(0, 0.18, 0);
-      lb.voegToe(blad, { matrix: matrix(Math.cos(h) * 0.06, y, Math.sin(h) * 0.06, 0.5, h, 0.9), kleur: KL.liaanBlad });
+  if (lianen) {
+    // --- De lianen: een groen touw met blaadjes, opgehangen aan de tak; ze draaien rond hun anker ---
+    const L = touwLengte(D);
+    const lb = new Bouwer();
+    {
+      const punten = [];
+      for (let i = 0; i <= 8; i++) punten.push(new THREE.Vector3(Math.sin(i * 1.3) * 0.04, -(i / 8) * L, Math.cos(i * 1.1) * 0.04));
+      lb.voegToe(maakBuis(punten, (t) => 0.055 - t * 0.015, fijn ? 16 : 8, fijn ? 6 : 4), { kleur: KL.liaan });
+      for (let i = 0; i < (fijn ? 12 : 6); i++) {
+        const y = -(0.3 + (i / (fijn ? 12 : 6)) * (L - 0.6));
+        const h = i * 2.4;
+        const blad = new THREE.CircleGeometry(0.13, 6).scale(1, 1.6, 1).translate(0, 0.18, 0);
+        lb.voegToe(blad, { matrix: matrix(Math.cos(h) * 0.06, y, Math.sin(h) * 0.06, 0.5, h, 0.9), kleur: KL.liaanBlad });
+      }
+      // Een knoop met een bloemetje onderaan, om je aan vast te houden.
+      lb.voegToe(maakBol(0.1, 1), { matrix: matrix(0, -L, 0), kleur: KL.liaan });
+      lb.voegToe(maakBol(0.08, 1), { matrix: matrix(0.08, -L + 0.12, 0.04), kleur: 0xff7fb0 });
     }
-    // Een knoop met een bloemetje onderaan, om je aan vast te houden.
-    lb.voegToe(maakBol(0.1, 1), { matrix: matrix(0, -L, 0), kleur: KL.liaan });
-    lb.voegToe(maakBol(0.08, 1), { matrix: matrix(0.08, -L + 0.12, 0.04), kleur: 0xff7fb0 });
-  }
-  const liaanMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x102010, emissiveIntensity: 0.3 });
-  const liaanMesh = new THREE.InstancedMesh(lb.maak(), liaanMat, lianen.lianen.length);
-  groep.add(liaanMesh);
-  const la = Math.atan2(lianen.a[0], lianen.a[1]);
-  function werkLianenBij() {
-    lianen.lianen.forEach((l, i) => {
-      const [x, y, z] = anker(lianen, D, l);
-      tmpE.set(-l.hoek, la, 0, 'YXZ');
-      tmpQ.setFromEuler(tmpE);
-      liaanMesh.setMatrixAt(i, tmpM.compose(p0.set(x, y, z), tmpQ, tmpS.set(1, 1, 1)));
-    });
-    liaanMesh.instanceMatrix.needsUpdate = true;
+    const liaanMat = new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x102010, emissiveIntensity: 0.3 });
+    const liaanMesh = new THREE.InstancedMesh(lb.maak(), liaanMat, lianen.lianen.length);
+    groep.add(liaanMesh);
+    const la = Math.atan2(lianen.a[0], lianen.a[1]);
+    werkLianenBij = () => {
+      lianen.lianen.forEach((l, i) => {
+        const [x, y, z] = anker(lianen, D, l);
+        tmpE.set(-l.hoek, la, 0, 'YXZ');
+        tmpQ.setFromEuler(tmpE);
+        liaanMesh.setMatrixAt(i, tmpM.compose(p0.set(x, y, z), tmpQ, tmpS.set(1, 1, 1)));
+      });
+      liaanMesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
-  // --- De springbloem: een grote roze bloem met een geel hartje ---
   const sbm = bos.modules.find((m) => m.soort === 'springbloem');
-  const sb = new Bouwer();
-  {
-    const R = D.springbloem.straal;
-    const bladen = fijn ? 9 : 6;
-    for (let i = 0; i < bladen; i++) {
-      const h = (i / bladen) * Math.PI * 2;
-      const blad = maakBol(0.5, fijn ? 2 : 1);
-      sb.voegToe(blad, { matrix: matrix(Math.cos(h) * R * 0.75, 0.08, Math.sin(h) * R * 0.75, 0, -h, 0.35, 0.6, 0.14, 0.38), kleur: (p) => kleur(KL.springbloem).lerp(kA.set(0xffffff), Math.max(0, Math.hypot(p.x, p.z) - R * 0.6) * 0.8) });
+  if (sbm) {
+    // --- De springbloem: een grote roze bloem met een geel hartje ---
+    const sb = new Bouwer();
+    {
+      const R = D.springbloem.straal;
+      const bladen = fijn ? 9 : 6;
+      for (let i = 0; i < bladen; i++) {
+        const h = (i / bladen) * Math.PI * 2;
+        const blad = maakBol(0.5, fijn ? 2 : 1);
+        sb.voegToe(blad, { matrix: matrix(Math.cos(h) * R * 0.75, 0.08, Math.sin(h) * R * 0.75, 0, -h, 0.35, 0.6, 0.14, 0.38), kleur: (p) => kleur(KL.springbloem).lerp(kA.set(0xffffff), Math.max(0, Math.hypot(p.x, p.z) - R * 0.6) * 0.8) });
+      }
+      sb.voegToe(maakBol(R * 0.55, fijn ? 2 : 1), { matrix: matrix(0, 0.1, 0, 0, 0, 0, 1, 0.35, 1), kleur: (p) => kleur(KL.springHart).lerp(kA.set(0xffa83d), waardenruis(p.x * 9, p.z * 9, 1) * 0.6) });
+      for (let i = 0; i < 4; i++) {
+        const h = (i / 4) * Math.PI * 2 + 0.4;
+        sb.voegToe(new THREE.CircleGeometry(0.4, 7).scale(1, 0.55, 1).rotateX(-Math.PI / 2), { matrix: matrix(Math.cos(h) * R * 1.05, -0.12, Math.sin(h) * R * 1.05, 0, -h, 0), kleur: KL.springBlad });
+      }
     }
-    sb.voegToe(maakBol(R * 0.55, fijn ? 2 : 1), { matrix: matrix(0, 0.1, 0, 0, 0, 0, 1, 0.35, 1), kleur: (p) => kleur(KL.springHart).lerp(kA.set(0xffa83d), waardenruis(p.x * 9, p.z * 9, 1) * 0.6) });
-    for (let i = 0; i < 4; i++) {
-      const h = (i / 4) * Math.PI * 2 + 0.4;
-      sb.voegToe(new THREE.CircleGeometry(0.4, 7).scale(1, 0.55, 1).rotateX(-Math.PI / 2), { matrix: matrix(Math.cos(h) * R * 1.05, -0.12, Math.sin(h) * R * 1.05, 0, -h, 0), kleur: KL.springBlad });
-    }
+    bloem = new THREE.Mesh(sb.maak(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x301020, emissiveIntensity: 0.25 }));
+    const [bx, bz] = naarWereld(sbm, bloemT(D), 0);
+    bloem.position.set(bx, sbm.h0 + D.springbloem.hoogte - 0.08, bz);
+    groep.add(bloem);
   }
-  const bloem = new THREE.Mesh(sb.maak(), new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x301020, emissiveIntensity: 0.25 }));
-  const [bx, bz] = naarWereld(sbm, bloemT(D), 0);
-  bloem.position.set(bx, sbm.h0 + D.springbloem.hoogte - 0.08, bz);
-  groep.add(bloem);
 
-  // --- Reuzenbladeren: een groot blad met nerven, licht schotelvormig ---
   const rbm = bos.modules.find((m) => m.soort === 'reuzenblad');
-  const RB = D.reuzenblad;
-  const bladGeo = (() => {
-    const g = new THREE.CircleGeometry(1, fijn ? 28 : 14, 0, Math.PI * 2);
-    const pos = g.attributes.position;
-    const kl = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i);
-      const y = pos.getY(i);
-      const r = Math.hypot(x, y);
-      // Een puntje vooraan, en de randen iets omhoog.
-      const punt = y > 0 ? 1 + 0.25 * Math.max(0, 1 - Math.abs(x) * 3) * y : 1;
-      pos.setXYZ(i, x * RB.breed * 1.05, y * RB.lang * 1.05 * punt, 0.12 * r * r);
-      const nerf = Math.abs(x) < 0.04 || Math.abs(Math.sin(Math.atan2(y, Math.abs(x)) * 4)) < 0.08;
-      (nerf && r > 0.1 ? kA.set(KL.reuzenNerf) : kA.set(KL.reuzenblad).multiplyScalar(0.85 + 0.15 * r)).toArray(kl, i * 3);
+  if (rbm) {
+    // --- Reuzenbladeren: een groot blad met nerven, licht schotelvormig ---
+    const RB = D.reuzenblad;
+    const bladGeo = (() => {
+      const g = new THREE.CircleGeometry(1, fijn ? 28 : 14, 0, Math.PI * 2);
+      const pos = g.attributes.position;
+      const kl = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const y = pos.getY(i);
+        const r = Math.hypot(x, y);
+        // Een puntje vooraan, en de randen iets omhoog.
+        const punt = y > 0 ? 1 + 0.25 * Math.max(0, 1 - Math.abs(x) * 3) * y : 1;
+        pos.setXYZ(i, x * RB.breed * 1.05, y * RB.lang * 1.05 * punt, 0.12 * r * r);
+        const nerf = Math.abs(x) < 0.04 || Math.abs(Math.sin(Math.atan2(y, Math.abs(x)) * 4)) < 0.08;
+        (nerf && r > 0.1 ? kA.set(KL.reuzenNerf) : kA.set(KL.reuzenblad).multiplyScalar(0.85 + 0.15 * r)).toArray(kl, i * 3);
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(kl, 3));
+      g.rotateX(-Math.PI / 2);
+      g.computeVertexNormals();
+      return g;
+    })();
+    const bladMesh = new THREE.InstancedMesh(bladGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x103010, emissiveIntensity: 0.3 }), rbm.bladeren.length);
+    bladMesh.castShadow = K.schaduw;
+    groep.add(bladMesh);
+    const rbHoek = Math.atan2(rbm.a[0], rbm.a[1]);
+    werkBladerenBij = () => {
+      rbm.bladeren.forEach((bl, i) => {
+        const [x, z] = naarWereld(rbm, bl.t, bl.q);
+        tmpE.set(bl.zak * 0.25, rbHoek + (bl.q > 0 ? 0.1 : -0.1), bl.zakV * 0.02, 'YXZ');
+        tmpQ.setFromEuler(tmpE);
+        bladMesh.setMatrixAt(i, tmpM.compose(p0.set(x, bladTop(rbm, bl) - bl.zak - 0.1, z), tmpQ, tmpS.set(1, 1, 1)));
+      });
+      bladMesh.instanceMatrix.needsUpdate = true;
     }
-    g.setAttribute('color', new THREE.BufferAttribute(kl, 3));
-    g.rotateX(-Math.PI / 2);
-    g.computeVertexNormals();
-    return g;
-  })();
-  const bladMesh = new THREE.InstancedMesh(bladGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x103010, emissiveIntensity: 0.3 }), rbm.bladeren.length);
-  bladMesh.castShadow = K.schaduw;
-  groep.add(bladMesh);
-  const rbHoek = Math.atan2(rbm.a[0], rbm.a[1]);
-  function werkBladerenBij() {
-    rbm.bladeren.forEach((bl, i) => {
-      const [x, z] = naarWereld(rbm, bl.t, bl.q);
-      tmpE.set(bl.zak * 0.25, rbHoek + (bl.q > 0 ? 0.1 : -0.1), bl.zakV * 0.02, 'YXZ');
-      tmpQ.setFromEuler(tmpE);
-      bladMesh.setMatrixAt(i, tmpM.compose(p0.set(x, bladTop(rbm, bl) - bl.zak - 0.1, z), tmpQ, tmpS.set(1, 1, 1)));
-    });
-    bladMesh.instanceMatrix.needsUpdate = true;
   }
 
-  // --- Lotusbladeren: ronde bladeren met een hapje eruit, en hier en daar een roze lotusbloem ---
   const lm = bos.modules.find((m) => m.soort === 'lotus');
-  const lotusGeo = (() => {
-    const g = new THREE.CircleGeometry(1, fijn ? 24 : 12, 0.25, Math.PI * 2 - 0.5);
-    const pos = g.attributes.position;
-    const kl = new Float32Array(pos.count * 3);
-    for (let i = 0; i < pos.count; i++) {
-      const r = Math.hypot(pos.getX(i), pos.getY(i));
-      (r > 0.9 ? kA.set(KL.lotusRand) : kA.set(KL.lotus).multiplyScalar(0.88 + 0.12 * Math.sin(Math.atan2(pos.getY(i), pos.getX(i)) * 9))).toArray(kl, i * 3);
+  if (lm) {
+    // --- Lotusbladeren: ronde bladeren met een hapje eruit, en hier en daar een roze lotusbloem ---
+    const lotusGeo = (() => {
+      const g = new THREE.CircleGeometry(1, fijn ? 24 : 12, 0.25, Math.PI * 2 - 0.5);
+      const pos = g.attributes.position;
+      const kl = new Float32Array(pos.count * 3);
+      for (let i = 0; i < pos.count; i++) {
+        const r = Math.hypot(pos.getX(i), pos.getY(i));
+        (r > 0.9 ? kA.set(KL.lotusRand) : kA.set(KL.lotus).multiplyScalar(0.88 + 0.12 * Math.sin(Math.atan2(pos.getY(i), pos.getX(i)) * 9))).toArray(kl, i * 3);
+      }
+      g.setAttribute('color', new THREE.BufferAttribute(kl, 3));
+      g.rotateX(-Math.PI / 2);
+      return g;
+    })();
+    const lotusMesh = new THREE.InstancedMesh(lotusGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x103010, emissiveIntensity: 0.3 }), lm.bladeren.length);
+    groep.add(lotusMesh);
+    const lbm = new Bouwer();
+    for (let i = 0; i < 8; i++) {
+      const h = (i / 8) * Math.PI * 2;
+      lbm.voegToe(maakBol(0.1, 1), { matrix: matrix(Math.cos(h) * 0.08, 0.1, Math.sin(h) * 0.08, 0, -h, -0.6, 0.6, 1.6, 0.6), kleur: (p) => kleur(KL.lotusBloem).lerp(kA.set(0xffffff), Math.max(0, p.y - 0.1) * 3) });
     }
-    g.setAttribute('color', new THREE.BufferAttribute(kl, 3));
-    g.rotateX(-Math.PI / 2);
-    return g;
-  })();
-  const lotusMesh = new THREE.InstancedMesh(lotusGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x103010, emissiveIntensity: 0.3 }), lm.bladeren.length);
-  groep.add(lotusMesh);
-  const lbm = new Bouwer();
-  for (let i = 0; i < 8; i++) {
-    const h = (i / 8) * Math.PI * 2;
-    lbm.voegToe(maakBol(0.1, 1), { matrix: matrix(Math.cos(h) * 0.08, 0.1, Math.sin(h) * 0.08, 0, -h, -0.6, 0.6, 1.6, 0.6), kleur: (p) => kleur(KL.lotusBloem).lerp(kA.set(0xffffff), Math.max(0, p.y - 0.1) * 3) });
-  }
-  lbm.voegToe(maakBol(0.06, 1), { matrix: matrix(0, 0.12, 0), kleur: 0xffe066 });
-  const lotusBloemen = lm.bladeren.map((_, i) => i).filter((i) => i % 2 === 1);
-  const bloemMesh = new THREE.InstancedMesh(lbm.maak(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x301020, emissiveIntensity: 0.3 }), Math.max(1, lotusBloemen.length));
-  bloemMesh.count = lotusBloemen.length;
-  groep.add(bloemMesh);
-  function werkLotusBij(tijd) {
-    lm.bladeren.forEach((bl, i) => {
-      const [x, z] = naarWereld(lm, bl.t, bl.q);
-      const y = Math.max(bos.peil - 0.45, lotusTop(lm, bl)) - 0.04;
-      tmpE.set(Math.sin(tijd * 0.7 + i) * 0.02 + bl.dobberV * 0.04, i * 1.9, Math.cos(tijd * 0.6 + i) * 0.02, 'YXZ');
-      tmpQ.setFromEuler(tmpE);
-      lotusMesh.setMatrixAt(i, tmpM.compose(p0.set(x, y, z), tmpQ, tmpS.set(bl.r, 1, bl.r)));
-    });
-    lotusBloemen.forEach((i, j) => {
-      const bl = lm.bladeren[i];
-      const [x, z] = naarWereld(lm, bl.t + bl.r * 0.45, bl.q + bl.r * 0.3);
-      bloemMesh.setMatrixAt(j, tmpM.compose(p0.set(x, Math.max(bos.peil - 0.45, lotusTop(lm, bl)) - 0.04, z), tmpQ.identity(), tmpS.set(1.2, 1.2, 1.2)));
-    });
-    lotusMesh.instanceMatrix.needsUpdate = true;
-    bloemMesh.instanceMatrix.needsUpdate = true;
+    lbm.voegToe(maakBol(0.06, 1), { matrix: matrix(0, 0.12, 0), kleur: 0xffe066 });
+    const lotusBloemen = lm.bladeren.map((_, i) => i).filter((i) => i % 2 === 1);
+    const bloemMesh = new THREE.InstancedMesh(lbm.maak(), new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0x301020, emissiveIntensity: 0.3 }), Math.max(1, lotusBloemen.length));
+    bloemMesh.count = lotusBloemen.length;
+    groep.add(bloemMesh);
+    werkLotusBij = (tijd) => {
+      lm.bladeren.forEach((bl, i) => {
+        const [x, z] = naarWereld(lm, bl.t, bl.q);
+        const y = Math.max(bos.peil - 0.45, lotusTop(lm, bl)) - 0.04;
+        tmpE.set(Math.sin(tijd * 0.7 + i) * 0.02 + bl.dobberV * 0.04, i * 1.9, Math.cos(tijd * 0.6 + i) * 0.02, 'YXZ');
+        tmpQ.setFromEuler(tmpE);
+        lotusMesh.setMatrixAt(i, tmpM.compose(p0.set(x, y, z), tmpQ, tmpS.set(bl.r, 1, bl.r)));
+      });
+      lotusBloemen.forEach((i, j) => {
+        const bl = lm.bladeren[i];
+        const [x, z] = naarWereld(lm, bl.t + bl.r * 0.45, bl.q + bl.r * 0.3);
+        bloemMesh.setMatrixAt(j, tmpM.compose(p0.set(x, Math.max(bos.peil - 0.45, lotusTop(lm, bl)) - 0.04, z), tmpQ.identity(), tmpS.set(1.2, 1.2, 1.2)));
+      });
+      lotusMesh.instanceMatrix.needsUpdate = true;
+      bloemMesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
-  // --- Het gouden klokje op de finishboog (slingert als je aankomt) ---
-  const klok = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.08, 0.2, 0.26, fijn ? 14 : 8, 1, true).translate(0, -0.13, 0),
-    new THREE.MeshLambertMaterial({ color: KL.finish, emissive: 0x806010, emissiveIntensity: 0.5, side: THREE.DoubleSide })
-  );
-  klok.position.copy(bel).add(tmpV.set(0, -0.22, 0));
-  groep.add(klok);
+  if (wedstrijd) {
+    // --- Het gouden klokje op de finishboog (slingert als je aankomt) ---
+    klok = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.2, 0.26, fijn ? 14 : 8, 1, true).translate(0, -0.13, 0),
+      new THREE.MeshLambertMaterial({ color: KL.finish, emissive: 0x806010, emissiveIntensity: 0.5, side: THREE.DoubleSide })
+    );
+    klok.position.copy(bel).add(tmpV.set(0, -0.22, 0));
+    groep.add(klok);
+  }
+
   let klokZwaai = 0;
 
   const midden = new THREE.Vector3((bos.grenzen.minX + bos.grenzen.maxX) / 2, bos.vloer, (bos.grenzen.minZ + bos.grenzen.maxZ) / 2);
-  const dichtbij = Math.max(bos.grenzen.maxX - bos.grenzen.minX, bos.grenzen.maxZ - bos.grenzen.minZ) / 2 + 70;
+  // Een oversteek is klein en hoog: die zie je van verder.
+  const dichtbij = Math.max(bos.grenzen.maxX - bos.grenzen.minX, bos.grenzen.maxZ - bos.grenzen.minZ) / 2 + (wedstrijd ? 70 : 160);
   let tijd = 0;
 
   return {
@@ -635,11 +662,13 @@ export function maakSpeelbosbeeld(bos, K) {
       werkLianenBij();
       werkBladerenBij();
       werkLotusBij(tijd);
-      const v = Math.max(-0.5, Math.min(0.6, sbm.veer));
-      bloem.scale.set(1 + v * 0.5, 1 - v * 1.6, 1 + v * 0.5);
-      bloem.rotation.y = Math.sin(tijd * 0.5) * 0.15;
+      if (bloem) {
+        const v = Math.max(-0.5, Math.min(0.6, sbm.veer));
+        bloem.scale.set(1 + v * 0.5, 1 - v * 1.6, 1 + v * 0.5);
+        bloem.rotation.y = Math.sin(tijd * 0.5) * 0.15;
+      }
       klokZwaai *= Math.exp(-dt * 0.8);
-      klok.rotation.set(Math.sin(tijd * 9) * 0.6 * klokZwaai, 0, Math.cos(tijd * 9) * 0.3 * klokZwaai);
+      if (klok) klok.rotation.set(Math.sin(tijd * 9) * 0.6 * klokZwaai, 0, Math.cos(tijd * 9) * 0.3 * klokZwaai);
     },
   };
 }

@@ -59,7 +59,8 @@ export const EILAND = {
     kopWand: 5,          // de achterwand, aan de voet van de kegel
     uitloop: 40,         // zo ver loopt het ravijn als een geultje door het laagland
     vrijKamp: 0.8,       // niet in de buurt van het kamp of de hellingbaan (radialen)
-    spreiding: 0.35,     // hoeveel een ravijn van zijn regelmatige plaats mag afwijken (deel van de tussenruimte)
+    spreiding: 0.15,     // hoeveel een ravijn van zijn regelmatige plaats mag afwijken (deel van de tussenruimte);
+                         // klein genoeg dat elke plek plaats heeft voor een ponypad en een klimwand (stap 13)
   },
 
   // Voorlopige weg naar de etage (BOUWPLAN 12): een hellingbaan schuin langs de rotsrand,

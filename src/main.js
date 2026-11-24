@@ -59,6 +59,8 @@ import { maakRivierbeeld } from './beeld/rivier.js';
 import { maakVlotbeeld, maakZwemvest, maakZwemtijgerbeeld } from './beeld/vlot.js';
 import { SPEELBOS } from './data/speelbos.js';
 import { maakSpeelbosbeeld } from './beeld/speelbos.js';
+import { maakWegwijzers } from './beeld/wegwijzers.js';
+import { BERGPLAN } from './data/bergplan.js';
 import { maakBot } from './sim/doorgangen/bots.js';
 import { maakVogelvlucht, maakPrestatievlucht } from './beeld/vogelvlucht.js';
 
@@ -137,12 +139,13 @@ function ondergrond(s) {
   if (s.modus === 'zwemmen') return 'water';
   const x = s.pos[0];
   const z = s.pos[2];
-  // Het speelbos: houten platforms en bruggen, zachte bladeren, natte lotus.
-  const op = sim.wereld.speelbos.waarOp(s);
+  // Het speelbos en de oversteken: houten platforms en bruggen, zachte bladeren, natte lotus.
+  const bos = sim.wereld.parcours[s.parcours] ?? sim.wereld.speelbos;
+  const op = bos.waarOp(s);
   if (op !== null) {
-    if (op === sim.wereld.speelbos.dekken.length - 1) return 'gras';
+    if (bos.wedstrijd !== false && op === bos.dekken.length - 1) return 'gras';
     if (typeof op === 'string' && op.startsWith('m')) {
-      const soort = sim.wereld.speelbos.modules[+op.slice(1)].soort;
+      const soort = bos.modules[+op.slice(1)].soort;
       return soort === 'lotus' ? 'water' : soort === 'reuzenblad' || soort === 'springbloem' ? 'gras' : 'hout';
     }
     return 'hout';
@@ -216,13 +219,34 @@ const slaapbloembeeld = maakSlaapbloembeeld(scene, sim.wereld.slaapbloemen, GEZE
 // --- De welpjes bij mama (stap 8b) ---
 const welpjesbeeld = maakWelpjesbeeld(scene, sim.welpjesVan(LOKAAL), K, sim.takVan(LOKAAL));
 // --- De oefenrots en de klimster (stap 9) ---
-const rots = sim.wereld.oefenrots;
+let rots = sim.wereld.oefenrots;
 const rotsbeeld = maakOefenrotsbeeld(rots, KLIMMEN, K);
 scene.add(rotsbeeld.groep);
 const rotsMidden = new THREE.Vector3(...rots.midden);
 const klimmer = maakKlimmerbeeld(scene, avonturier, rots, KLIMMEN, K);
 const rotsN = new THREE.Vector3(...rots.N);
 const rotsR = new THREE.Vector3(...rots.R);
+// --- De klimwanden van de berg (stap 13): elk zijn eigen beeld. De klimster en de witte tijger gaan mee naar
+// de wand waarop je begint te klimmen; `rots` is altijd die wand. ---
+const wanden = sim.wereld.wanden;
+const wandbeelden = [rotsbeeld, ...wanden.slice(1).map((w) => {
+  const b = maakOefenrotsbeeld(w, KLIMMEN, K);
+  scene.add(b.groep);
+  return b;
+})];
+let huidigeWand = 0;
+const geenLicht = new Map();
+const wandPlek = new THREE.Vector3();
+function kiesWand(wi) {
+  if (wi === huidigeWand) return;
+  huidigeWand = wi;
+  rots = wanden[wi];
+  rotsMidden.set(...rots.midden);
+  rotsN.set(...rots.N);
+  rotsR.set(...rots.R);
+  klimmer.zetWand(rots);
+  klimbediening.zetWand(rots);
+}
 // --- De benedenrivier, het vlot en de Sumatraanse tijger (stap 10) ---
 const rivier = sim.wereld.rivier;
 const rivierbeeld = maakRivierbeeld(rivier, VLOT, sim.wereld.vlotStukken, K, zonRichting, SCENE.hemel.horizon);
@@ -235,6 +259,14 @@ const zwemtijger = maakZwemtijgerbeeld(scene, ZWEMTIJGER, K, GEZEL.laag);
 const speelbos = sim.wereld.speelbos;
 const speelbosbeeld = maakSpeelbosbeeld(speelbos, K);
 scene.add(speelbosbeeld.groep);
+// --- De berg (stap 13): de oversteken over de ravijnen en de wegwijzers bij elke doorgang ---
+const oversteekbeelden = sim.wereld.parcours.slice(1).map((bos) => {
+  const b = maakSpeelbosbeeld(bos, K);
+  scene.add(b.groep);
+  return b;
+});
+const wegwijzers = maakWegwijzers(sim.wereld.bergplan.verbindingen.flatMap((v) => v.wegwijzers), sim.wereld.grondOp, BERGPLAN.wegwijzer, K);
+scene.add(wegwijzers.groep);
 figuur.rotation.order = 'YXZ'; // aan de liaan kantelt ze rond haar eigen dwarsas
 let zwaaiBeeld = 0;
 let zwaaiGeluid = 0;
@@ -658,8 +690,9 @@ function klimGebeurtenis(g) {
       const s = sim.speler(LOKAAL);
       deeltjes.glinsters(s.pos[0], s.pos[1] + 0.9, s.pos[2], 0xfff3a0, 26);
       deeltjes.glinsters(s.pos[0], s.pos[1] + 0.9, s.pos[2], 0xff9ad0, 14);
-      rotsbeeld.hangtouw(g.route, false);
-      rotsbeeld.sluit(g.route);
+      kiesWand(s.klim?.wand ?? 0);
+      wandbeelden[huidigeWand].hangtouw(g.route, false);
+      wandbeelden[huidigeWand].sluit(g.route);
       return true;
     }
     case 'klimGreep':
@@ -692,11 +725,12 @@ function klimGebeurtenis(g) {
       return true;
     case 'top': {
       geluid.top();
-      rotsbeeld.bloei(g.route);
+      wandbeelden[huidigeWand].bloei(g.route);
       const [x, y, z] = g.pos;
+      const kleur = rots.routes[g.route].kleur;
       setTimeout(() => {
         deeltjes.bloemenregen(x, y + 0.8, z, 70);
-        deeltjes.glinsters(x, y + 0.3, z, KLIMMEN.routes[g.route].kleur, 30);
+        deeltjes.glinsters(x, y + 0.3, z, kleur, 30);
       }, 150);
       klimmer.tijgerBlij();
       setTimeout(() => geluid.proest(3), 500);
@@ -709,11 +743,20 @@ function klimGebeurtenis(g) {
       return true;
     case 'beneden': {
       geluid.landing(2);
-      rotsbeeld.hangtouw(g.route, true);
+      wandbeelden[huidigeWand].hangtouw(g.route, true);
       const s = sim.speler(LOKAAL);
       deeltjes.stof(s.pos[0], s.pos[1], s.pos[2], EFFECTEN.stof);
       deeltjes.glinsters(s.pos[0], s.pos[1] + 0.9, s.pos[2], 0xfff3a0, 16);
       // De camera staat voor de wand, met de rots in beeld.
+      volgcamera.zet(Math.atan2(rotsN.x, rotsN.z), CAMERA.kanteling);
+      return true;
+    }
+    case 'uitgestapt': {
+      // Bovenaan een klimwand van de berg over de rand geklauterd (stap 13): je staat op de etage.
+      geluid.landing(1.5);
+      wandbeelden[huidigeWand].hangtouw(g.route, true);
+      deeltjes.glinsters(g.pos[0], g.pos[1] + 0.9, g.pos[2], 0xfff3a0, 20);
+      deeltjes.hartjes(g.pos[0], g.pos[1] + 1.4, g.pos[2], 4);
       volgcamera.zet(Math.atan2(rotsN.x, rotsN.z), CAMERA.kanteling);
       return true;
     }
@@ -968,9 +1011,10 @@ function bosGebeurtenis(g) {
     }
     case 'landing': {
       // Op een blad of lotus: eigen geluidje (en de gewone landing erbij als het hard was).
-      const op = speelbos.waarOp(s);
+      const bos = sim.wereld.parcours[s.parcours] ?? speelbos;
+      const op = bos.waarOp(s);
       if (typeof op === 'string' && op.startsWith('m')) {
-        const soort = speelbos.modules[+op.slice(1)].soort;
+        const soort = bos.modules[+op.slice(1)].soort;
         if (soort === 'reuzenblad') geluid.blad();
         else if (soort === 'lotus') {
           geluid.lotus();
@@ -1247,7 +1291,12 @@ const lus = maakSpellus({
     // Aan de klimwand: de klimster hangt aan haar grepen (en de witte tijger zekert).
     const klim = klimbediening.werkBij(dt);
     klimmer.werkBij(s, dt, camera, sim.wereld.terreinOp, klimbediening.hint);
-    if (s.klim || camera.position.distanceToSquared(rotsMidden) < 60 * 60) rotsbeeld.werkBij(dt, tijd, klim.licht, klim.flitsen);
+    wandbeelden.forEach((b, wi) => {
+      const nu = wi === huidigeWand;
+      if ((s.klim && nu) || camera.position.distanceToSquared(wandPlek.set(...wanden[wi].midden)) < 60 * 60) {
+        b.werkBij(dt, tijd, nu ? klim.licht : geenLicht, nu ? klim.flitsen : geenLicht);
+      }
+    });
     if (s.klim && Math.max(s.klim.hand.lh.pomp, s.klim.hand.rh.pomp) > KLIMMEN.kracht.trillenVanaf) {
       ademTijd -= dt;
       if (ademTijd <= 0) {
@@ -1358,6 +1407,7 @@ const lus = maakSpellus({
     zee.werkBij(tijd, camera);
     rivierbeeld.werkBij(tijd, dt, camera);
     speelbosbeeld.werkBij(dt, camera);
+    for (const b of oversteekbeelden) b.werkBij(dt, camera);
     stralen?.werkBij(tijd);
     stuifmeel.werkBij(tijd, camera, pixel);
     if (K.schaduw) {
@@ -1385,7 +1435,7 @@ const lus = maakSpellus({
         `tijger         ${tg.modus}${tg.wacht ? ' (wacht)' : ''} ${tg.gang} ${tg.snelheid.toFixed(1)} m/s · brul ${Math.round(s.brulMeter * 100)}%` +
         (s.klim
           ? `
-klimmen        ${KLIMMEN.routes[s.klim.route].graad} ${s.klim.toestand} · arm ${s.klim.armBelasting.toFixed(2)} · kracht ${Math.round(s.klim.hand.lh.pomp * 100)}/${Math.round(s.klim.hand.rh.pomp * 100)}%`
+klimmen        wand ${s.klim.wand} · ${rots.routes[s.klim.route].graad} ${s.klim.toestand} · arm ${s.klim.armBelasting.toFixed(2)} · kracht ${Math.round(s.klim.hand.lh.pomp * 100)}/${Math.round(s.klim.hand.rh.pomp * 100)}%`
           : '') +
         (s.bos.dek >= 0
           ? `
@@ -1538,15 +1588,35 @@ window.spel = {
   },
   /** Zet de speler aan de voet van route ri van de oefenrots (0 = geel 3, 1 = turkoois 5, 2 = koraal 6a). */
   naarRots(ri = 0) {
-    const v = rots.routes[ri].voet;
+    const r0 = sim.wereld.oefenrots;
+    const v = r0.routes[ri].voet;
     this.zet(v[0], v[2]);
     const s = sim.speler(LOKAAL);
-    s.richting = s.vorigeRichting = Math.atan2(-rotsN.x, -rotsN.z);
-    volgcamera.zet(Math.atan2(rotsN.x, rotsN.z), CAMERA.kanteling);
+    s.richting = s.vorigeRichting = Math.atan2(-r0.N[0], -r0.N[2]);
+    volgcamera.zet(Math.atan2(r0.N[0], r0.N[2]), CAMERA.kanteling);
   },
-  /** Meteen beginnen klimmen op route ri, met besturing 'tikken' of 'handen'. */
-  klim(ri = 0, besturing = klimbediening.besturing) {
-    sim.klim(LOKAAL, ri, besturing);
+  /** Meteen beginnen klimmen op route ri van wand wi (0 = de oefenrots), met besturing 'tikken' of 'handen'. */
+  klim(ri = 0, besturing = klimbediening.besturing, wi = 0) {
+    sim.klim(LOKAAL, ri, besturing, wi);
+  },
+  /** Het bergplan (stap 13): plekken, scheidingen en doorgangen (met waar ze liggen). */
+  get bergplan() {
+    return sim.wereld.bergplan;
+  },
+  /** Alle klimwanden: 0 = de oefenrots, daarna de klimwanden van de berg. */
+  wanden,
+  /**
+   * Meteen bij doorgang vi van het bergplan ('v3', of een soort: 'klimwand', 'ponypad', 'touwbrug', ...):
+   * onderaan (of bovenaan, met boven = true).
+   */
+  naarDoorgang(vi = 'klimwand', boven = false) {
+    const lijst = sim.wereld.bergplan.verbindingen;
+    const v = lijst.find((q) => q.id === vi) ?? lijst.find((q) => q.soort === vi && q.geplaatst);
+    if (!v || !sim.naarVerbinding(LOKAAL, v.id, boven)) return null;
+    const s = sim.speler(LOKAAL);
+    volgcamera.zet(s.richting + Math.PI, CAMERA.kanteling);
+    wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+    return v;
   },
   /** Tik op greep id (of sleep hand lid ernaartoe). */
   klimGreep(id, lid = null) {
@@ -1641,7 +1711,7 @@ window.spel = {
     if (!opEtage && Math.hypot(s.pos[0] - e.pad.x0, s.pos[2] - e.pad.z0) > Math.hypot(s.pos[0] - hb.x0, s.pos[2] - hb.z0)) bergBot.splice(0, 2);
   },
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN, RIVIER, VLOT, ZWEMTIJGER, SPEELBOS, EILAND },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN, RIVIER, VLOT, ZWEMTIJGER, SPEELBOS, EILAND, BERGPLAN },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */
@@ -1670,10 +1740,15 @@ if (INSTELLINGEN.plek === 'rivier') {
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
 }
 // ?plek=bos: aan de voet van de trap naar het speelbos; ?doorgang=liaan (of touwbrug, ...): meteen aan die doorgang (stap 11).
+// ?doorgang=v3 of ?doorgang=klimwand (ponypad, ...; met -boven: bovenaan): meteen bij een doorgang van de berg (stap 13).
 {
   const doorgang = new URLSearchParams(location.search).get('doorgang');
   const i = speelbos.modules.findIndex((m) => m.soort === doorgang);
-  if (i >= 0) window.spel.naarBos(i);
+  const berg = doorgang && (/^v\d+/.test(doorgang) || ['klimwand', 'ponypad'].includes(doorgang.replace(/-boven$/, '')) || doorgang.startsWith('ravijn-'));
+  if (berg) {
+    const naam = doorgang.replace(/-boven$/, '').replace(/^ravijn-/, '');
+    window.spel.naarDoorgang(naam, doorgang.endsWith('-boven'));
+  } else if (i >= 0) window.spel.naarBos(i);
   else if (INSTELLINGEN.plek === 'bos') {
     window.spel.naarSpeelbos();
     const s = sim.speler(LOKAAL);

@@ -1,6 +1,8 @@
 // De oefenrots in beeld (stap 9): een zachte lila rots met een vlakke klimwand, mos en bloemetjes bovenop,
 // gekleurde grepen per route (zoals in een klimhal), een bordje met de graad aan de voet, een ankerring en een
 // topbloem boven elke route. Alles in wandcoördinaten: x = u (naar rechts), y = v (omhoog), z = uit de wand.
+// Dezelfde maker tekent ook de klimwanden van de berg (stap 13): elke wand geeft zijn eigen maten (`rots.maat`)
+// en routes mee.
 import * as THREE from 'three';
 import { Bouwer, maakBol, matrix } from './vorm.js';
 import { waardenruis } from '../../sim/wereld/ruis.js';
@@ -30,10 +32,15 @@ function maakBlok(R, detail) {
   const x0 = -R.rand;
   const x1 = B + R.rand;
   const y0 = -0.8;
-  const y1 = H + 1.1;
+  // De bovenkant: de oefenrots heeft een bolle kop boven de wand; op een klimwand van de berg (stap 13) loop je
+  // bovenop, dus die is vlak op de hoogte waar je uitstapt (met alleen kuiltjes naar beneden).
+  const bovenaan = R.bovenaan ?? 1.1;
+  const bult = R.bult ?? [1.5, 0.35];
+  const y1 = H + bovenaan;
   const z0 = -D;
   const z1 = 0;
-  const f = detail ? 3 : 1.6;
+  // Een hoge wand (stap 13) krijgt minder hoekpunten per meter, zodat hij niet zwaar wordt.
+  const f = (detail ? 3 : 1.6) * Math.min(1, 10 / Math.max(H, D, B));
   const box = new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0, Math.round((x1 - x0) * f), Math.round((y1 - y0) * f), Math.round((z1 - z0) * f));
   box.translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
   // Hoekpunten van aangrenzende zijden samenvoegen, zodat de rots één gladde huid is.
@@ -87,7 +94,7 @@ function maakBlok(R, detail) {
     p.addScaledVector(n, ruis * 0.6 * (1 - inWand) + reliëf * inWand);
     // Een grillige bovenrand: bulten en kopjes, zodat de rots niet als een doos tegen de lucht staat.
     const top = glad(0.15, 0.6, n.y);
-    p.y += top * (waardenruis(p.x * 0.32 + 7, p.z * 0.4, 53) - 0.35) * 1.5;
+    p.y += top * (waardenruis(p.x * 0.32 + 7, p.z * 0.4, 53) - bult[1]) * bult[0];
     if (p.y < y0 + 0.2) p.y = y0; // de onderkant zit in de grond
     const wand = inWand;
     pos[i] = p.x;
@@ -100,7 +107,7 @@ function maakBlok(R, detail) {
       .lerp(laag, glad(0.55, 0.95, band) * 0.75)
       .lerp(donker, klem(-ruis * 1.4, 0, 1) * 0.7 + glad(0.78, 0.95, spikkel) * 0.35);
     if (wand > 0.5) c.lerp(laag, 0.1);
-    const boven = glad(0.35, 0.7, n.y) * glad(H - 0.2, H + 0.6, p.y);
+    const boven = glad(0.35, 0.7, n.y) * glad(y1 - 1.3, y1 - 0.5, p.y);
     c.lerp(mos, Math.max(boven, glad(0.5, -0.3, p.y) * 0.45));
     kleur.push(c.r, c.g, c.b);
   }
@@ -208,7 +215,9 @@ export function maakOefenrotsbeeld(rots, K, kw) {
   groep.matrixAutoUpdate = false;
   groep.matrix.copy(basis);
 
-  const blok = new THREE.Mesh(maakBlok(K.rots, kw.detail), gloeiMateriaal(K.rots.gloed));
+  const M = rots.maat;
+  const routes = rots.routes;
+  const blok = new THREE.Mesh(maakBlok(M, kw.detail), gloeiMateriaal(M.gloed));
   blok.castShadow = kw.schaduw;
   blok.receiveShadow = kw.schaduw;
   groep.add(blok);
@@ -216,14 +225,14 @@ export function maakOefenrotsbeeld(rots, K, kw) {
   // Bovenop: bosjes en een paar palmen, op de echte bovenkant van de rots (van boven af gezocht).
   const straal = new THREE.Raycaster();
   const bovenOp = (x, z) => {
-    straal.set(new THREE.Vector3(x, K.rots.hoogte + 6, z), new THREE.Vector3(0, -1, 0));
+    straal.set(new THREE.Vector3(x, M.hoogte + 6, z), new THREE.Vector3(0, -1, 0));
     const raak = straal.intersectObject(blok)[0];
-    return raak ? raak.point.y : K.rots.hoogte;
+    return raak ? raak.point.y : M.hoogte;
   };
   const w = maakWillekeur(4242);
   const plantMat = maakPlantMateriaal({ gloed: 0x0c160c });
   const bosjeGeo = maakBosje(FLORA.bosje, kw.detail ? 1 : 0, w.getal);
-  for (const [x, z, sc] of K.rots.bosjes) {
+  for (const [x, z, sc] of M.bosjes) {
     const b = new THREE.Mesh(bosjeGeo, plantMat);
     b.position.set(x, bovenOp(x, z) - 0.12, z);
     b.scale.setScalar(sc);
@@ -231,7 +240,7 @@ export function maakOefenrotsbeeld(rots, K, kw) {
     groep.add(b);
   }
   const palmGeo = maakPalm(FLORA.palm, kw.detail ? 1 : 0, w.getal);
-  for (const [x, z, sc] of K.rots.palmen) {
+  for (const [x, z, sc] of M.palmen) {
     const pm = new THREE.Mesh(palmGeo, plantMat);
     pm.position.set(x, bovenOp(x, z) - 0.2, z);
     pm.scale.setScalar(sc);
@@ -242,7 +251,7 @@ export function maakOefenrotsbeeld(rots, K, kw) {
 
   // --- Grepen: één InstancedMesh per soort, kleur per route ---
   const soorten = [...new Set(rots.grepen.map((g) => g.soort))];
-  const greepMat = gloeiMateriaal(K.rots.greepGloed);
+  const greepMat = gloeiMateriaal(M.greepGloed);
   /** @type {Record<string, THREE.InstancedMesh>} */
   const lagen = {};
   /** per greep: [laag, index] */
@@ -255,7 +264,7 @@ export function maakOefenrotsbeeld(rots, K, kw) {
     lagen[s] = m;
     groep.add(m);
   }
-  const kleurVan = rots.grepen.map((g) => new THREE.Color(K.routes[g.route].kleur));
+  const kleurVan = rots.grepen.map((g) => new THREE.Color(routes[g.route].kleur));
   const tmpM = new THREE.Matrix4();
   const tmpC = new THREE.Color();
   const wit = new THREE.Color(0xffffff);
@@ -285,7 +294,7 @@ export function maakOefenrotsbeeld(rots, K, kw) {
   const metaal = new THREE.MeshLambertMaterial({ color: 0xdfe6f2, emissive: 0x6a7490 });
   const topbloemen = [];
   const ankers = [];
-  K.routes.forEach((route, ri) => {
+  routes.forEach((route, ri) => {
     const r = rots.routes[ri];
     for (const id of r.startGrepen) {
       const g = rots.grepen[id];
@@ -315,7 +324,7 @@ export function maakOefenrotsbeeld(rots, K, kw) {
 
   // De bordjes met de graad: een paaltje en een rond bord, aan de voet van elke route.
   const hout = new THREE.MeshLambertMaterial({ color: 0xc98a5a });
-  const bordjes = K.routes.map((route, ri) => {
+  const bordjes = routes.map((route, ri) => {
     const r = rots.routes[ri];
     const b = new THREE.Group();
     const paal = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.9, 8), hout);
@@ -333,7 +342,7 @@ export function maakOefenrotsbeeld(rots, K, kw) {
 
   // Losse touwen die van elk anker naar beneden hangen (zolang niemand die route klimt).
   const touwMat = new THREE.MeshLambertMaterial({ color: K.touw.kleur, emissive: K.touw.kleur, emissiveIntensity: 0.25 });
-  const hangtouwen = K.routes.map((_, ri) => {
+  const hangtouwen = routes.map((_, ri) => {
     const [au, av] = rots.anker(ri);
     const t = new THREE.Mesh(new THREE.CylinderGeometry(K.touw.dikte, K.touw.dikte, 1, 6), touwMat);
     const lengte = av - 0.4;

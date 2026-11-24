@@ -11,7 +11,7 @@ import { maakSpringbloem, oppervlakSpringbloem, stapSpringbloem, stapSpelerSprin
 import { maakReuzenblad, oppervlakReuzenblad, stapReuzenblad, bloesemsReuzenblad, doelenReuzenblad } from './reuzenblad.js';
 import { maakLotus, oppervlakLotus, stapLotus, bloesemsLotus, doelenLotus } from './lotus.js';
 
-const SOORTEN = {
+export const SOORTEN = {
   liaan: { maak: maakLianen, oppervlak: () => -Infinity, bloesems: bloesemsLiaan, doelen: () => [] },
   touwbrug: { maak: maakTouwbrug, oppervlak: oppervlakTouwbrug, bloesems: bloesemsTouwbrug, doelen: doelenTouwbrug },
   balanceerstam: { maak: maakBalanceerstam, oppervlak: oppervlakBalanceerstam, bloesems: bloesemsBalanceerstam, doelen: doelenBalanceerstam },
@@ -315,6 +315,11 @@ export function bosNaStap(bos, s, dt, tik, meld) {
     b.valVan = s.pos[1];
   }
   if (typeof op === 'number') {
+    // Een oversteek over een ravijn (stap 13): geen klok, alleen onthouden op welk platform je stond.
+    if (bos.wedstrijd === false) {
+      b.dek = op;
+      return;
+    }
     if (op === 0 && (!b.bezig || b.dek > 0)) {
       // Op het eerste platform: het parcours begint (opnieuw).
       Object.assign(b, { bezig: true, geldig: true, start: tik, fouten: D.modules.map(() => 0) });
@@ -338,8 +343,10 @@ export function bosNaStap(bos, s, dt, tik, meld) {
   // Op de grond = er ligt niets van het parcours onder je voetjes.
   const opDeGrond = s.modus === 'lopen' && s.opGrond && op === null && bos.blokOp(s.pos[0], s.pos[2]) < s.pos[1] - 0.35;
   const inVijver = s.modus === 'zwemmen' && bos.peilOp(s.pos[0], s.pos[2]) > -Infinity;
-  if (b.dek >= 0 && b.dek < bos.dekken.length - 1 && ((opDeGrond && b.valVan - s.pos[1] > D.val) || inVijver)) {
-    const i = Math.min(b.dek, bos.modules.length - 1);
+  const kanTerug = bos.wedstrijd === false ? b.dek >= 0 : b.dek >= 0 && b.dek < bos.dekken.length - 1;
+  if (kanTerug && ((opDeGrond && b.valVan - s.pos[1] > D.val) || inVijver)) {
+    // Bij een oversteek ga je terug naar het platform waar je vandaan kwam (je kan beide kanten op).
+    const i = bos.wedstrijd === false ? b.dek : Math.min(b.dek, bos.modules.length - 1);
     if (b.bezig) b.fouten[i]++;
     const plek = bos.startPlek(i);
     s.veilig = [...plek.pos];

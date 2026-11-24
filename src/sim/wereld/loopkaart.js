@@ -77,5 +77,54 @@ export function maakLoopkaart(vorm, stap = 2, maxHelling = 45) {
     return { gelukt: true, lengte, bereikt };
   }
 
-  return { H, S, nx, nz, x0, z0, stap, weg };
+  /**
+   * Alles wat je te voet bereikt vanaf (x, z), in één keer (stap 13: van elk eindpunt van een doorgang).
+   * Geeft een functie die zegt of een plek (x, z) erbij hoort (de dichtste rastercel, of een buur ervan).
+   */
+  function vanuit(x, z, verboden) {
+    const doel = cel(x, z);
+    const gezien = new Uint8Array(nx * nz);
+    const rij = new Int32Array(nx * nz);
+    let kop = 0;
+    let staart = 0;
+    if (doel >= 0) {
+      rij[staart++] = doel;
+      gezien[doel] = 1;
+    }
+    while (kop < staart) {
+      const a = rij[kop++];
+      const ai = a % nx;
+      const aj = (a - ai) / nx;
+      for (const [di, dj] of buren) {
+        const i = ai + di;
+        const j = aj + dj;
+        if (i < 0 || j < 0 || i >= nx || j >= nz) continue;
+        const b = j * nx + i;
+        if (gezien[b]) continue;
+        const hb = H[b];
+        if (hb < 0.15) continue;
+        const d = di && dj ? stap * Math.SQRT2 : stap;
+        if (hb - H[a] > d * steil) continue;
+        if (hb > H[a] + 0.05 && S[b] > steil) continue;
+        if (verboden && verboden(x0 + i * stap, z0 + j * stap)) continue;
+        gezien[b] = 1;
+        rij[staart++] = b;
+      }
+    }
+    return (px, pz) => {
+      const c = cel(px, pz);
+      if (c < 0) return false;
+      if (gezien[c]) return true;
+      const ci = c % nx;
+      const cj = (c - ci) / nx;
+      for (const [di, dj] of buren) {
+        const i = ci + di;
+        const j = cj + dj;
+        if (i >= 0 && j >= 0 && i < nx && j < nz && gezien[j * nx + i]) return true;
+      }
+      return false;
+    };
+  }
+
+  return { H, S, nx, nz, x0, z0, stap, weg, vanuit };
 }

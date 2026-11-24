@@ -147,12 +147,19 @@ function verplaats(p, stuur, wereld, R, dt, meld) {
 
   // Te hoge rand of te diep water vlak voor haar: tegenhouden (langs de rand schuiven mag).
   const richting = Math.sign(p.snelheid) || 1;
+  const steil = Math.tan((R.maxHelling * Math.PI) / 180);
   const kan = (x, z) => {
     const vx = x + hx * R.borst * 0.7 * richting;
     const vz = z + hz * R.borst * 0.7 * richting;
     const g = ter(vx, vz);
     const peil = Math.max(wereld.weide.water(vx, vz), 0);
-    return g - p.pos[1] <= R.stapHoogte && peil - g <= R.maxDiepte;
+    if (g - p.pos[1] > R.stapHoogte || peil - g > R.maxDiepte) return false;
+    // Te steil omhoog (een rotswand): daar kan ze niet op, ook niet stapje voor stapje.
+    if (g > p.pos[1] + 0.01) {
+      const [gx, gz] = wereld.raster.hellingOp(vx, vz);
+      if (gx * gx + gz * gz > steil * steil) return false;
+    }
+    return true;
   };
   if (!kan(p.pos[0], p.pos[2])) {
     // Een rots, een hoge rand of diep water: ze blijft er gewoon zacht voor staan (weigeren is alleen

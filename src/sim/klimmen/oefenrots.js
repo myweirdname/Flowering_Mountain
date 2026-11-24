@@ -73,6 +73,11 @@ export function maakOefenrots(K, kamp, voetHoogte) {
   }
 
   return {
+    soort: 'oefenrots',
+    /** Voor het beeld: de maten en kleuren van de rots (een bergwand heeft hetzelfde, sim/klimmen/bergwand.js). */
+    maat: R,
+    /** Bovenaan uitstappen kan hier niet: de witte tijger laat je zakken. */
+    uitstap: null,
     breedte: R.breedte,
     hoogte: R.hoogte,
     diepte: R.diepte,

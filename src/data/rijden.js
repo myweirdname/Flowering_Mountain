@@ -49,6 +49,7 @@ export const RIJDEN = {
   borst: 0.62,            // van het midden van de pony tot haar borst
   lijfBreedte: 0.35,
   stapHoogte: 0.45,       // zo hoog stapt ze zonder springen ergens op
+  maxHelling: 40,         // graden: steiler kan ze niet omhoog (een rotsrand neem je via het ponypad, stap 13)
   straal: 0.55,           // om tegen stammen te botsen
 
   // --- Water ---

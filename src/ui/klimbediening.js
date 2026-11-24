@@ -93,10 +93,16 @@ export function maakKlimbediening(canvas, ui, camera, rots, K, spel) {
     uit[1] = (-p.y * 0.5 + 0.5) * innerHeight;
     return uit;
   };
-  const greepWereld = rots.grepen.map((g) => {
-    const w = rots.naarWereld(g.u, g.v, 0.05);
-    return new THREE.Vector3(w[0], w[1], w[2]);
-  });
+  let greepWereld = [];
+  /** Naar een andere klimwand (stap 13): de grepen van die wand op het scherm. */
+  function zetWand(nieuw) {
+    rots = nieuw;
+    greepWereld = rots.grepen.map((g) => {
+      const w = rots.naarWereld(g.u, g.v, 0.05);
+      return new THREE.Vector3(w[0], w[1], w[2]);
+    });
+  }
+  zetWand(rots);
   const straal = () => Math.max(30, innerHeight * 0.06);
   /** De dichtste greep bij (x, y) op het scherm: eerst van de eigen route, anders eender welke. */
   function greepBij(x, y, enkelRoute = false) {
@@ -242,8 +248,8 @@ export function maakKlimbediening(canvas, ui, camera, rots, K, spel) {
         sleutel = '';
         return { licht, flitsen };
       }
-      badge.textContent = K.routes[k.route].graad;
-      badge.style.background = '#' + new THREE.Color(K.routes[k.route].kleur).getHexString();
+      badge.textContent = rots.routes[k.route].graad;
+      badge.style.background = '#' + new THREE.Color(rots.routes[k.route].kleur).getHexString();
       // Bereikbare grepen: alleen opnieuw uitrekenen als de houding veranderd is.
       const lid = gebaar?.lid ?? null;
       const nu = `${k.toestand}|${k.zet ? 1 : 0}|${k.rij.length}|${['lh', 'rh', 'lv', 'rv'].map((l) => k.op[l]?.greep ?? 'x').join(',')}|${lid}|${besturing}`;

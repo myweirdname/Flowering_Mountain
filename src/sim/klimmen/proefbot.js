@@ -9,17 +9,20 @@ const leeg = { beweeg: [0, 0], spring: false, actie: false };
 /**
  * @param {any} sim de simulatie (sim/spel.js)
  * @param {number} ri route
- * @param {{ speler?: string, maxRisico?: number, maxTijd?: number, rusten?: boolean }} [opties]
+ * @param {{ speler?: string, maxRisico?: number, maxTijd?: number, rusten?: boolean, wand?: number }} [opties]
+ *   wand: welke wand (0 = de oefenrots, daarna de klimwanden van de berg, stap 13). Op een klimwand van de berg
+ *   klimt hij door tot hij bovenaan is uitgestapt (uitkomst 'uitgestapt').
  */
 export function klimProef(sim, ri, opties = {}) {
   const id = opties.speler ?? 'speler1';
   const maxRisico = opties.maxRisico ?? 2.0;
   const rusten = opties.rusten ?? true;
-  const R = sim.wereld.oefenrots;
+  const wi = opties.wand ?? 0;
+  const R = sim.wereld.wanden[wi];
   const G = R.grepen;
   const r = R.routes[ri];
   const handGrepen = r.ids.filter((g) => !['voet', 'korrel'].includes(G[g].soort));
-  sim.klim(id, ri, 'handen');
+  sim.klim(id, ri, 'handen', wi);
   const tel = {};
   const zetten = [];
   let maxPomp = 0;
@@ -31,11 +34,11 @@ export function klimProef(sim, ri, opties = {}) {
     const s = sim.speler(id);
     const k = s.klim;
     if (!k) {
-      uitkomst = 'van de wand';
+      uitkomst = tel.uitgestapt ? 'uitgestapt' : 'van de wand';
       break;
     }
     maxPomp = Math.max(maxPomp, k.hand.lh.pomp, k.hand.rh.pomp);
-    if (k.toestand === 'boven') {
+    if ((k.toestand === 'boven' || k.toestand === 'uitstap') && !R.uitstap) {
       uitkomst = 'top';
       break;
     }
@@ -43,7 +46,8 @@ export function klimProef(sim, ri, opties = {}) {
     if (k.toestand === 'klimt' && !k.zet && !k.rij.length && k.los.lh <= 0 && k.los.rh <= 0) {
       // Uitschudden zolang een arm te vol zit en we op een goede greep hangen.
       const pomp = Math.max(k.hand.lh.pomp, k.hand.rh.pomp);
-      if (rusten && (k.schudt ? pomp > 0.08 : pomp > 0.45 && k.armBelasting < 0.35)) {
+      // Uitschudden tot die hand weer fris is; daarna (als het nodig is) de andere hand.
+      if (rusten && (k.schudt ? k.hand[k.schudt].pomp > 0.08 : pomp > 0.45 && k.armBelasting < 0.35)) {
         actie = true;
         if (!k.schudt) schudden++;
       } else if (!k.schudt) {

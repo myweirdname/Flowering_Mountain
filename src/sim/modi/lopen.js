@@ -40,7 +40,10 @@ export function stapLopen(s, int, wereld, L, dt, meld, Z) {
   // --- Helling onder de voeten ---
   const [gx, gz] = wereld.raster.hellingOp(s.pos[0], s.pos[2]);
   const steilte = Math.atan(Math.hypot(gx, gz));
-  const glijdt = s.opGrond && steilte > L.maxHelling * naarRad;
+  // Wie op iets staat (een platform, een brug, een stam, bovenop een klimwand of een rots), glijdt niet af,
+  // ook al is de grond eronder steil (een ravijn, de rotsrand).
+  const opIets = wereld.grondOp(s.pos[0], s.pos[2]) > wereld.raster.hoogteOp(s.pos[0], s.pos[2]) + 0.1;
+  const glijdt = s.opGrond && steilte > L.maxHelling * naarRad && !opIets;
   s.glijdt = glijdt;
 
   // --- Horizontaal versnellen naar het doel ---
@@ -159,7 +162,9 @@ export function stapLopen(s, int, wereld, L, dt, meld, Z) {
   // Laatste veilige grond onthouden; te lang glijden of ver vallen brengt je daar terug.
   onthoudVeilig(s, grond - Math.max(0, peil), dt, L.veiligNa); // in de rivier is het niet veilig
   s.glijTijd = glijdt ? s.glijTijd + dt : 0;
-  if (s.glijTijd > L.maxGlijTijd || s.pos[1] < L.terugOnder) {
+  // Van een rotsrand gevallen of gegleden, of in een ravijn (stap 13): zachte plof, terug naar boven.
+  const diep = s.veilig[1] - s.pos[1] > (L.maxVal ?? Infinity) && (glijdt || (s.opGrond && !wasOpGrond));
+  if (s.glijTijd > L.maxGlijTijd || s.pos[1] < L.terugOnder || diep) {
     naarVeiligeGrond(s, meld);
     return;
   }

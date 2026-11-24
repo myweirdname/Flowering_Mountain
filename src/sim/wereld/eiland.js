@@ -125,18 +125,25 @@ export function maakEiland(zaadje, E, su) {
   // --- Ravijnen en de hellingbaan: pas te bouwen als het laagland bekend is ---
   /** @type {{ a:number, voet:number, kop:number, vloer:number, breed:number }[]} */
   const ravijnen = [];
-  /** @type {null | { x0:number, z0:number, x1:number, z1:number, ex:number, ez:number, len:number, hA:number, hB:number, a0:number, a1:number }} */
-  let helling = null;
-  /** @type {null | { x0:number, z0:number, x1:number, z1:number, ex:number, ez:number, len:number }} */
-  let pad = null;
-
   /**
-   * @param {(x:number, z:number) => number} laagland de hoogte van het land zonder berg
-   * @param {[number, number]} padBegin waar het zandpaadje naar de hellingbaan begint
+   * De hellingbanen: de eerste is die van stap 12 (bij de springweide), de andere zijn de ponypaden van het
+   * bergplan (stap 13), één per plek.
+   * @type {{ x0:number, z0:number, x1:number, z1:number, ex:number, ez:number, len:number, hA:number, hB:number, a0:number, a1:number }[]}
    */
-  function bouw(laagland, padBegin) {
-    // De hellingbaan: onderaan net voor de rotsrand, bovenaan net erachter, schuin langs de wand.
-    const a0 = su * HB.hoek;
+  const hellingen = [];
+  /** De zandpaadjes naar het begin van een hellingbaan. @type {{ x0:number, z0:number, x1:number, z1:number, ex:number, ez:number, len:number }[]} */
+  const paden = [];
+  /**
+   * Vlakke grasplekken voor de klimwanden (stap 13): voor de wand (v >= 0) vlak op voetH, geen bomen of rotsblokken.
+   * u = langs de wand vanaf de linkerrand (richting R), v = uit de wand (richting N).
+   * @type {{ x0:number, z0:number, rx:number, rz:number, nx:number, nz:number, breedte:number, voetH:number, voor:number, opzij:number, zacht:number, diep:number }[]}
+   */
+  const wanden = [];
+  /** Open plekjes (geen bomen, geen rotsblokken), bv. rond de platforms van een oversteek. @type {{ x:number, z:number, r:number }[]} */
+  const openPlekken = [];
+
+  /** Een hellingbaan schuin langs de rotsrand: onderaan net voor de rotsrand, bovenaan net erachter. */
+  function maakHelling(a0, zin, lengte, laagland) {
     const r0 = randStraal(a0) + half + HB.breedte + HB.marge;
     const [x0, z0] = punt(a0, r0);
     let a1 = a0;
@@ -144,21 +151,34 @@ export function maakEiland(zaadje, E, su) {
     let z1 = z0;
     let r1 = r0;
     for (let i = 1; i <= 400; i++) {
-      a1 = a0 + su * i * 0.004;
+      a1 = a0 + zin * i * 0.004;
       r1 = randStraal(a1) - half - HB.breedte - HB.marge;
       [x1, z1] = punt(a1, r1);
-      if (Math.hypot(x1 - x0, z1 - z0) >= HB.lengte) break;
+      if (Math.hypot(x1 - x0, z1 - z0) >= lengte) break;
     }
     const len = Math.hypot(x1 - x0, z1 - z0);
     const hA = laagland(x0, z0);
     const hB = etageHoogte(x1, z1, r1, a1, randStraal(a1), voetStraal(a1));
-    helling = { x0, z0, x1, z1, ex: (x1 - x0) / len, ez: (z1 - z0) / len, len, hA, hB, a0, a1 };
+    return { x0, z0, x1, z1, ex: (x1 - x0) / len, ez: (z1 - z0) / len, len, hA, hB, a0, a1 };
+  }
+  /** Een zandpaadje van (xa, za) naar (xb, zb). */
+  function maakPad(xa, za, xb, zb) {
+    const l = Math.hypot(xb - xa, zb - za);
+    return { x0: xa, z0: za, x1: xb, z1: zb, ex: (xb - xa) / l, ez: (zb - za) / l, len: l };
+  }
+
+  /**
+   * @param {(x:number, z:number) => number} laagland de hoogte van het land zonder berg
+   * @param {[number, number]} padBegin waar het zandpaadje naar de hellingbaan begint
+   */
+  function bouw(laagland, padBegin) {
+    // De hellingbaan: onderaan net voor de rotsrand, bovenaan net erachter, schuin langs de wand.
+    const helling = maakHelling(su * HB.hoek, su, HB.lengte, laagland);
+    hellingen.push(helling);
+    const { a0, a1, x0, z0 } = helling;
 
     // Het zandpaadje van de springweide tot net voor de hellingbaan.
-    const px = x0 - helling.ex * 3;
-    const pz = z0 - helling.ez * 3;
-    const pl = Math.hypot(px - padBegin[0], pz - padBegin[1]);
-    pad = { x0: padBegin[0], z0: padBegin[1], x1: px, z1: pz, ex: (px - padBegin[0]) / pl, ez: (pz - padBegin[1]) / pl, len: pl };
+    paden.push(maakPad(padBegin[0], padBegin[1], x0 - helling.ex * 3, z0 - helling.ez * 3));
 
     // De ravijnen: gelijk verdeeld over het stuk ring buiten het kamp en de hellingbaan, met wat speling.
     const n = RV.aantal[0] + w.geheel(RV.aantal[1] - RV.aantal[0] + 1);
@@ -196,13 +216,14 @@ export function maakEiland(zaadje, E, su) {
     uit.ravijn = 0;
     let h = L;
 
-    // Het zandpaadje naar de hellingbaan.
-    if (pad) {
+    // De zandpaadjes naar de hellingbanen.
+    for (const pad of paden) {
       const ux = x - pad.x0;
       const uz = z - pad.z0;
+      if (Math.abs(ux) > pad.len + 4 || Math.abs(uz) > pad.len + 4) continue;
       const s = Math.min(pad.len, Math.max(0, ux * pad.ex + uz * pad.ez));
       const dd = Math.hypot(ux - pad.ex * s, uz - pad.ez * s);
-      if (dd < HB.pad * 2) uit.pad = 1 - glad((dd - HB.pad * 0.6) / HB.pad);
+      if (dd < HB.pad * 2) uit.pad = Math.max(uit.pad, 1 - glad((dd - HB.pad * 0.6) / HB.pad));
     }
 
     const dx = x - C.x;
@@ -261,8 +282,8 @@ export function maakEiland(zaadje, E, su) {
       }
     }
 
-    // De hellingbaan: een vlakke strook die schuin langs de rotsrand omhoog loopt.
-    if (helling) {
+    // De hellingbanen: een vlakke strook die schuin langs de rotsrand omhoog loopt.
+    for (const helling of hellingen) {
       const ux = x - helling.x0;
       const uz = z - helling.z0;
       const s = ux * helling.ex + uz * helling.ez;
@@ -280,7 +301,58 @@ export function maakEiland(zaadje, E, su) {
         }
       }
     }
+
+    // Voor de klimwanden: vlak gras op de hoogte van de wandvoet.
+    for (const wd of wanden) {
+      const ux = x - wd.x0;
+      const uz = z - wd.z0;
+      const u = ux * wd.rx + uz * wd.rz;
+      const v = ux * wd.nx + uz * wd.nz;
+      if (v < -wd.diep - 2 || v > wd.voor + wd.zacht || u < -wd.opzij - wd.zacht || u > wd.breedte + wd.opzij + wd.zacht) continue;
+      const du = Math.max(0, Math.abs(u - wd.breedte / 2) - (wd.breedte / 2 + wd.opzij));
+      if (v >= -0.2) {
+        const k = 1 - glad(Math.hypot(du, Math.max(0, v - wd.voor)) / wd.zacht);
+        h += (wd.voetH - h) * k;
+        uit.open = Math.max(uit.open, k);
+        uit.vlak = Math.max(uit.vlak, k);
+        if (k > 0.3) {
+          uit.voet = 0;
+          uit.wand = 0;
+          uit.ravijn = 0;
+        }
+      } else if (du <= 0) {
+        // Onder de pijler zelf: geen rotsblokken en geen planten (die zouden door de wand prikken).
+        uit.voet = 0;
+        uit.wand = 1;
+        uit.open = 0;
+      }
+    }
+
+    // Open plekjes: geen bomen en geen rotsblokken (de hoogte blijft).
+    for (const o of openPlekken) {
+      const d = Math.hypot(x - o.x, z - o.z);
+      if (d < o.r + 3) {
+        const k = 1 - glad((d - o.r) / 3);
+        uit.open = Math.max(uit.open, k);
+        if (k > 0.3) uit.voet = 0;
+      }
+    }
     return h;
+  }
+
+  /**
+   * Een ponypad (stap 13): een hellingbaan die op hoek a0 begint en in de richting `zin` omhoog loopt,
+   * met een zandpaadje uit het laagland ernaartoe.
+   */
+  function voegPonypadToe(a0, zin, lengte, padje, laagland) {
+    const hl = maakHelling(a0, zin, lengte, laagland);
+    hellingen.push(hl);
+    // Het paadje komt recht van buiten (weg van de berg) naar het begin van de hellingbaan.
+    const bx = hl.x0 - hl.ex * 3;
+    const bz = hl.z0 - hl.ez * 3;
+    const [ox, oz] = [Math.sin(a0), -Math.cos(a0)];
+    paden.push(maakPad(bx + ox * padje, bz + oz * padje, bx, bz));
+    return hellingen.length - 1;
   }
 
   return {
@@ -301,12 +373,27 @@ export function maakEiland(zaadje, E, su) {
     get ravijnen() {
       return ravijnen;
     },
+    /** De hellingbaan van stap 12 (het eerste ponypad). */
     get hellingbaan() {
-      return helling;
+      return hellingen[0] ?? null;
     },
+    hellingen,
     get pad() {
-      return pad;
+      return paden[0] ?? null;
     },
+    paden,
+    voegPonypadToe,
+    /** Een vlakke grasplek voor een klimwand (zie `wanden` hierboven). */
+    voegWandToe: (wd) => wanden.push(wd),
+    /** Een open plekje zonder bomen of rotsblokken. */
+    voegOpenToe: (x, z, r) => openPlekken.push({ x, z, r }),
+    /** Hoogte van de etage (zonder rotsrand en zonder fijne ruis) op hoek a, afstand r: voor de klimwanden. */
+    etageOp(a, r) {
+      const [x, z] = punt(a, r);
+      return etageHoogte(x, z, r, a, randStraal(a), voetStraal(a));
+    },
+    /** Halve breedte van de rotsrand, en hoe ver ze grillig voor en achteruit springt. */
+    randMaat: { half, grillig: et.grillig },
     /** Punt op afstand r van de top, in richting a. */
     punt,
   };

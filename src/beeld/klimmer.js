@@ -133,7 +133,7 @@ export function maakKlimmerbeeld(scene, avonturier, rots, K, kw) {
   // --- De witte tijger die zekert ---
   const zekeraar = maakGezelbeeld(scene, kw, K.zekeraar.soort);
   const thuis = new THREE.Vector3(...rots.zekeraar);
-  const naarWand = Math.atan2(-N.x, -N.z);
+  let naarWand = Math.atan2(-N.x, -N.z);
   const zt = {
     pos: [thuis.x, thuis.y, thuis.z],
     vorigePos: [thuis.x, thuis.y, thuis.z],
@@ -417,6 +417,22 @@ export function maakKlimmerbeeld(scene, avonturier, rots, K, kw) {
       lijf.localToWorld(tmp);
       zetTussen(touwA, bek, anker);
       zetTussen(touwB, anker, tmp);
+    },
+
+    /**
+     * Naar een andere klimwand (stap 13): de klimster en de witte tijger horen voortaan bij die wand.
+     * De tijger springt meteen naar zijn plekje aan de voet.
+     */
+    zetWand(nieuw) {
+      if (nieuw === rots) return;
+      rots = nieuw;
+      N.set(...rots.N);
+      R.set(...rots.R);
+      thuis.set(...rots.zekeraar);
+      naarWand = Math.atan2(-N.x, -N.z);
+      zt.pos = [thuis.x, thuis.y, thuis.z];
+      zt.vorigePos = [thuis.x, thuis.y, thuis.z];
+      zt.richting = zt.vorigeRichting = naarWand;
     },
 
     /** Een vrolijk sprongetje van de witte tijger (bij de top) of schrikken (bij een val). */

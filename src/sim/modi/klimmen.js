@@ -14,7 +14,8 @@ const klem = (x, a, b) => (x < a ? a : x > b ? b : x);
 function maakKlim(route, besturing) {
   return {
     route,
-    toestand: 'op',      // 'op' (op de wand stappen) | 'klimt' | 'val' | 'hangt' | 'terug' | 'boven' | 'zakt'
+    toestand: 'op',      // 'op' (op de wand stappen) | 'klimt' | 'val' | 'hangt' | 'terug' | 'boven' | 'zakt' | 'uitstap'
+    wand: 0,             // op welke wand (0 = de oefenrots, daarna de klimwanden van de berg)
     t: 0,
     P: [0, 0],           // de romp: het midden van de heupen, op de wandkaart
     /** @type {Record<string, Plek | null>} */
@@ -83,6 +84,23 @@ export function stopKlimmen(s, rots, K) {
   s.modus = 'lopen';
   s.klim = null;
   s.opGrond = true;
+}
+
+const UITSTAP_DUUR = 0.9;
+
+/** Bovenaan een klimwand van de berg: uitstappen op de pijler, met je neus naar de berg (stap 13). */
+function uitstappen(s, rots, meld) {
+  const k = s.klim;
+  const p = rots.uitstap(k.route);
+  s.pos = [p[0], p[1], p[2]];
+  s.vorigePos = [...s.pos];
+  s.vel = [0, 0, 0];
+  s.richting = s.vorigeRichting = Math.atan2(-rots.N[0], -rots.N[2]);
+  s.modus = 'lopen';
+  s.klim = null;
+  s.opGrond = true;
+  s.veilig = [...s.pos];
+  meld({ soort: 'uitgestapt', speler: s.id, route: k.route, wand: k.wand, pos: [...s.pos] });
 }
 
 const kopie = (op) => Object.fromEntries(LEDEN.map((l) => [l, op[l] ? { ...op[l] } : null]));
@@ -177,12 +195,30 @@ export function stapKlimmen(s, int, rots, K, dt, meld) {
       break;
     }
     case 'boven':
-      // Boven! Even genieten, dan laat de tijger je zakken.
+      // Boven! Op een klimwand van de berg stap je uit op de etage (stap 13); op de oefenrots laat de tijger
+      // je na een tijdje zakken.
+      if (rots.uitstap && !zakNu) {
+        if (k.t >= K.touw.bovenWacht * 0.45) {
+          k.valVan = [...k.P];
+          naar(k, 'uitstap');
+        }
+        break;
+      }
       if (zakNu || k.t >= K.touw.bovenWacht) naarZakken(s, k, rots, meld);
       break;
+    case 'uitstap': {
+      // Over de rand klauteren: de heupen gaan omhoog tot boven de rand, dan sta je op de pijler.
+      const f = glad(k.t / UITSTAP_DUUR);
+      k.P[1] = k.valVan[1] + (rots.hoogte + 0.2 - k.valVan[1]) * f;
+      if (k.t >= UITSTAP_DUUR) {
+        uitstappen(s, rots, meld);
+        return;
+      }
+      break;
+    }
     case 'zakt': {
-      // Laten zakken: handen aan het touw, voeten lopen tegen de wand naar beneden.
-      k.P[1] -= K.touw.zakSnelheid * dt * glad(k.t / 0.5);
+      // Laten zakken: handen aan het touw, voeten lopen tegen de wand naar beneden (op een hoge wand wat sneller).
+      k.P[1] -= Math.max(K.touw.zakSnelheid, rots.hoogte / 7) * dt * glad(k.t / 0.5);
       k.P[0] += (k.zakU - k.P[0]) * Math.min(1, dt * 0.8);
       if (k.P[1] <= L.minHeup + 0.12) {
         meld({ soort: 'beneden', speler: s.id, route: k.route });
