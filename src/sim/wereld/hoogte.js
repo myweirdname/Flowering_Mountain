@@ -1,7 +1,7 @@
-// De hoogtefunctie hoogte(x, z) van de kampplek (TP 5.2): zee, strand, baai, lagune met geul,
-// een open plek in de jungle, een zandpaadje en junglebulten die naar de berg oplopen.
-// Daarnaast geeft bodem() per plek ook wat er ligt (zand, gras, pad, bos), voor kleur en planten.
-// In stap 12 groeit dit uit tot het hele eiland; de vorm van de functie blijft dezelfde.
+// De hoogtefunctie hoogte(x, z) van het eiland (TP 5.2): zee, strand, de baai met het kamp, lagune met geul,
+// een open plek in de jungle, een zandpaadje en junglebulten, en daarachter de berg (stap 12, sim/wereld/eiland.js):
+// een rotsrand met een etage, ravijnen en de bergtop.
+// Daarnaast geeft bodem() per plek ook wat er ligt (zand, gras, pad, bos, rotswand), voor kleur en planten.
 import { maakWillekeur } from '../../kern/willekeur.js';
 import { lagenruis, waardenruis } from './ruis.js';
 import { maakWeide } from './springweide.js';
@@ -11,12 +11,15 @@ import { RIVIER } from '../../data/rivier.js';
 import { maakRivier } from './rivier.js';
 import { SPEELBOS } from '../../data/speelbos.js';
 import { maakSpeelbos } from '../doorgangen/speelbos.js';
+import { EILAND } from '../../data/eiland.js';
+import { maakEiland, zachtMin } from './eiland.js';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /**
  * @typedef {{ h:number, zand:number, kamp:number, pad:number, bos:number, lagune:number, d:number,
- *             weide:number, baan:number, nat:number, rivier:number, oever:number, speelbos:number, vijver:number }} Bodem
+ *             weide:number, baan:number, nat:number, rivier:number, oever:number, speelbos:number, vijver:number,
+ *             wand:number, voet:number, berg:number, top:number, ravijn:number }} Bodem
  */
 
 /**
@@ -48,13 +51,21 @@ export function maakWereldvorm(zaadje, W) {
   }
   const lagZ = kustZ(lagX) + lagR + 3;
 
-  /** Ruwe landvorm zonder stempels en fijne ruis. */
-  function ruw(x, z) {
-    const d = z - kustZ(x);
+  // Het eiland rond de kampplek (stap 12): een eigen deelzaadje, zodat het kamp er niet door verandert.
+  // De hellingbaan naar de etage komt aan de kant van de springweide (die ligt tegenover de lagune).
+  const eiland = maakEiland((zaadje ^ 0x1e1a4d) >>> 0, EILAND, -kant);
+
+  /**
+   * Hoe ver (x, z) van de waterlijn ligt, het land in. Rond het kamp is dat de oude kust met de baai;
+   * verderop de kust van het eiland. Waar ze meer dan `zacht` verschillen, telt precies de dichtste.
+   */
+  const kustAfstand = (x, z) => zachtMin(z - kustZ(x), eiland.kustAfstand(x, z), EILAND.kust.zacht);
+
+  /** Ruwe landvorm zonder stempels, berg en fijne ruis. */
+  function ruw(x, z, d = kustAfstand(x, z)) {
     let h = d < 0 ? d * S.helling - S.zeeDiepte * glad(-d / 40) : S.hoogte * glad(d / S.breedte) + d * J.stijging;
     const bosW = glad((d - J.heuvelStart) / J.heuvelOvergang);
     h += J.heuvels * (lagenruis(x / J.heuvelSchaal, z / J.heuvelSchaal, zHeuvel, 3) * 0.5 + 0.5) * bosW;
-    h += J.bergHoogte * glad((z - J.bergStart) / J.bergSchaal);
     return h;
   }
   const kampH = ruw(W.kamp.x, W.kamp.z);
@@ -85,15 +96,18 @@ export function maakWereldvorm(zaadje, W) {
   // Een eigen deelzaadje, zodat de rest van de wereld er niet door verandert.
   const speelbos = maakSpeelbos(SPEELBOS, W.kamp, kant, ruw, (zaadje ^ 0x5eedb05) >>> 0);
   const sb = { h: 0, vlak: 0, vijver: 0 };
+  // De berg: ravijnen en hellingbaan kennen nu het laagland. Het zandpaadje begint achter de springweide.
+  const padBegin = weide.naarWereld(0, weide.R + weide.B + 3);
+  eiland.bouw(ruw, padBegin);
+  const bg = /** @type {import('./eiland.js').BergUit} */ ({});
 
   /**
    * Vult `uit` met de hoogte en de soort ondergrond op (x, z).
    * @param {number} x @param {number} z @param {Bodem} uit
    */
   function bodem(x, z, uit) {
-    const kz = kustZ(x);
-    const d = z - kz;
-    let h = ruw(x, z);
+    const d = kustAfstand(x, z);
+    let h = ruw(x, z, d);
     const bosW = glad((d - S.breedte * 0.8) / 18);
     const fijn = lagenruis(x / W.fijneRuis.schaal, z / W.fijneRuis.schaal, zFijn, 2) * W.fijneRuis.hoogte * (0.3 + 0.7 * bosW);
 
@@ -132,12 +146,16 @@ export function maakWereldvorm(zaadje, W) {
     speelbos.stempel(x, z, h, sb);
     h = sb.h;
 
-    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw) * (1 - st.weide) * (1 - rv.vlak) * (1 - sb.vlak);
+    // De berg: rotsrand, etage, bergtop, ravijnen en de hellingbaan met het zandpaadje ernaartoe.
+    h = eiland.berg(x, z, h, bg);
+    pw = Math.max(pw, bg.pad);
+
+    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw) * (1 - st.weide) * (1 - rv.vlak) * (1 - sb.vlak) * (1 - bg.vlak);
     let zand = 1 - glad((d - S.breedte * 0.75) / 5);
     zand = Math.max(zand, 1 - glad((dl - 1.08) / 0.3), gw, st.nat, rv.oever, sb.vijver);
     if (uit.h < 0.3) zand = 1;
     uit.zand = zand;
-    uit.kamp = Math.max(kw, rv.gras, sb.vlak) * (1 - zand);
+    uit.kamp = Math.max(kw, rv.gras, sb.vlak, bg.open) * (1 - zand);
     uit.speelbos = sb.vlak;
     uit.vijver = sb.vijver;
     uit.rivier = rv.water;
@@ -149,6 +167,11 @@ export function maakWereldvorm(zaadje, W) {
     uit.lagune = lw;
     uit.bos = Math.max(0, 1 - zand - uit.kamp - uit.pad - uit.weide);
     uit.d = d;
+    uit.wand = bg.wand;
+    uit.voet = bg.voet * (1 - zand);
+    uit.berg = bg.berg;
+    uit.top = bg.top;
+    uit.ravijn = bg.ravijn;
     return uit;
   }
 
@@ -157,6 +180,8 @@ export function maakWereldvorm(zaadje, W) {
     bodem,
     hoogte: (x, z) => bodem(x, z, tijdelijk).h,
     kustZ,
+    kustAfstand,
+    eiland,
     lagune: { x: lagX, z: lagZ, straal: lagR },
     weide,
     rivier,

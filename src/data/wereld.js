@@ -1,17 +1,11 @@
 // Afsteltabel voor de kampplek (stap 4): strand, zee, lagune en een open plek in de jungle.
-// De zee ligt aan de -z-kant (daar staat ook de zon), de jungle en later de berg aan de +z-kant.
+// De zee ligt aan de -z-kant (daar staat ook de zon), de jungle en de berg aan de +z-kant.
+// De rest van het eiland (kust rondom, rotsrand, etage, bergtop) staat in data/eiland.js.
 // Afstanden en hoogtes in meter. Waterpeil = 0.
 
 export const WERELD = {
   tegelGrootte: 32,      // het eiland is verdeeld in vierkante tegels (TP 5.4)
   rasterStap: 1,         // afstand tussen twee hoogtepunten in een tegel
-  verGebied: 320,        // tot zo ver (halve zijde) bestaat het grove landschap rond het kamp
-  grofStap: 8,           // rasterafstand van het grove landschap in de verte
-
-  // Zo ver mag je lopen (een rechthoek; het echte eiland komt in stap 12).
-  speelGrens: { minX: -118, maxX: 118, minZ: -110, maxZ: 115 },
-  // Zo zie je waar de speelwereld ophoudt: een gestreept lint met een zacht gloeiend gordijntje.
-  grensLint: { kleur1: 0xff4d6d, kleur2: 0xffffff, breedte: 0.5, stap: 1, hoogte: 1.6, gloed: 0xff7fb0, gloedSterkte: 0.45 },
 
   kust: {
     z: -26,              // waar de kustlijn in het midden van de baai ligt
@@ -32,9 +26,6 @@ export const WERELD = {
     heuvelSchaal: 30,
     heuvelStart: 30,     // zo ver van de waterlijn beginnen de bulten (het kamp blijft laag bij het strand)
     heuvelOvergang: 35,
-    bergStart: 90,       // vanaf hier (z) begint de berg te stijgen
-    bergHoogte: 40,
-    bergSchaal: 220,
   },
   fijneRuis: { hoogte: 0.35, schaal: 6 },
 
@@ -58,9 +49,14 @@ export const WERELD = {
     bos: 0x4cbc5c,
     mos: 0x6fd35e,
     rots: 0xc6b4e6,
+    // Rotswanden (de rotsrand, de ravijnen): lagen in lichter en donkerder lila, zoals gelaagd gesteente.
+    rotsLicht: 0xe2d4f6,
+    rotsDonker: 0xa18cc9,
+    rotsLagen: 0.6,      // hoe dicht de lagen op elkaar liggen (per meter hoogte)
   },
 
-  // De verre berg aan de horizon: een voorproefje van wat je later beklimt.
+  // De verre berg aan de horizon uit stap 4 (alleen decor, niet meer in gebruik sinds het echte eiland er is, stap 12).
+  // Bewaard voor als we hem nog eens nodig hebben (beeld/maak/berg.js).
   verreBerg: {
     afstand: 760, hoogte: 210, straal: 430,
     etages: 3,

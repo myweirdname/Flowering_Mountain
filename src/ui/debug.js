@@ -12,12 +12,15 @@ export function maakDebugscherm(ouder, zichtbaar) {
   let sinds = performance.now();
   let laagste = Infinity;
   let start = performance.now();
+  let langste = 0; // het langste beeld in dit venster (ms): zo zie je haperingen tijdens het laden
+  let vorigBeeld = -1;
 
   function wissel() {
     el.hidden = !el.hidden;
     // Opnieuw beginnen met meten, zodat "laagste" over deze meting gaat.
     laagste = Infinity;
     beelden = 0;
+    vorigBeeld = -1;
     sinds = start = performance.now();
   }
 
@@ -49,17 +52,21 @@ export function maakDebugscherm(ouder, zichtbaar) {
       if (el.hidden) return;
       beelden++;
       const nu = performance.now();
+      if (vorigBeeld >= 0) langste = Math.max(langste, nu - vorigBeeld);
+      vorigBeeld = nu;
       if (nu - sinds >= 500) {
         const bps = (beelden * 1000) / (nu - sinds);
         if (nu - start > 3000) laagste = Math.min(laagste, bps);
         el.textContent =
           `versie         ${VERSIE}\n` +
           `beelden/s      ${bps.toFixed(0)}  (laagste ${laagste === Infinity ? '-' : laagste.toFixed(0)})\n` +
+          `langste beeld  ${langste.toFixed(0)} ms\n` +
           `tekenopdr.     ${info.render.calls}\n` +
           `driehoeken     ${info.render.triangles.toLocaleString('nl-BE')}\n` +
           (extra ? extra() : '');
         beelden = 0;
         sinds = nu;
+        langste = 0;
       }
     },
   };

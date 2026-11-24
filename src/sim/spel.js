@@ -68,7 +68,7 @@ export function maakSim(berg) {
     raster,       // hoogteOp / hellingOp over alle tegels
     vorm,         // de hoogtefunctie en wat er ligt (zand, gras, bos, lagune, weide)
     begroeiing,   // waar de planten staan
-    grens: WERELD.speelGrens,
+    grens: vorm.eiland.grenzen, // geen onzichtbare muren: de zee houdt je tegen (GD 2), dit is alleen een vangnet
     stammen,
     grondOp: grond.grondOp,     // terrein met rotsen en hindernissen: waar je op staat
     terreinOp: grond.terreinOp, // zonder de hindernissen (de pony springt erover)

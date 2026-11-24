@@ -38,12 +38,12 @@ export const SCENE = {
     kaartResolutie: 192,
   },
 
-  // Kawaii wolkjes aan de horizon; een paar hebben een gezichtje.
+  // Kawaii wolkjes aan de horizon, rond het eiland; een paar hebben een gezichtje.
   wolken: {
     aantal: 9,
     metGezicht: 2,
-    afstand: [380, 520],
-    hoogte: [70, 140],
+    afstand: [560, 720],  // gemeten vanaf de top: zo blijven ze boven zee, rond het eiland
+    hoogte: [95, 175],
     kleur: 0xffffff,
     onderKleur: 0xeadcff,
     wangKleur: 0xffa8c8,

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>De Bloeiende Berg: testbots</title>
+  <title>De Bloeiende Berg: testbots en het eiland</title>
   <style>
     body { font-family: system-ui, sans-serif; background: #f3fbff; color: #234; margin: 24px; }
     h1 { font-size: 22px; margin: 0 0 4px; }
@@ -15,7 +15,8 @@
     .fout { color: #c0392b; font-weight: 600; }
     .balk { height: 8px; background: #e6eef3; border-radius: 4px; width: 140px; overflow: hidden; }
     .balk > div { height: 100%; background: #4fd6a0; }
-    #klaar { margin-top: 14px; font-weight: 600; }
+    #klaar, #eilandKlaar { margin-top: 14px; font-weight: 600; }
+    h2 { font-size: 19px; margin: 34px 0 4px; }
   </style>
 </head>
 <body>
@@ -91,6 +92,82 @@
       }
     }
     stap();
+  </script>
+
+  <h2>Het eiland (stap 12)</h2>
+  <p>Per bergcode wordt het eiland twee keer gebouwd: dezelfde code moet exact hetzelfde eiland geven (alle hoogtes op een raster van 4 m),
+     en een andere code een ander eiland. Op een raster van 2 m met de loopregels (omhoog tot 45°, omlaag altijd) wordt gezocht
+     of je van het kamp te voet de top haalt, en of de rotsrand je tegenhoudt als de hellingbaan er niet is.
+     <code>?eilanden=20</code> kiest het aantal codes.</p>
+  <table>
+    <thead><tr><th>bergcode</th><th>2× hetzelfde</th><th>anders dan vorige</th><th>top te voet</th><th>weg</th><th>zonder hellingbaan</th><th>ravijnen</th><th>bouwtijd</th></tr></thead>
+    <tbody id="eilandRijen"></tbody>
+  </table>
+  <div id="eilandKlaar">Bezig ...</div>
+  <script type="module">
+    import { WERELD } from './src/data/wereld.js';
+    import { EILAND } from './src/data/eiland.js';
+    import { maakZaadje } from './src/kern/willekeur.js';
+    import { maakWereldvorm } from './src/sim/wereld/hoogte.js';
+    import { maakLoopkaart } from './src/sim/wereld/loopkaart.js';
+
+    const N = +(new URLSearchParams(location.search).get('eilanden') ?? 20);
+    const codes = ['bloei', ...Array.from({ length: N - 1 }, (_, i) => `berg${i + 1}`)];
+    const rijen = document.getElementById('eilandRijen');
+    const ja = (b, tekst = b ? 'ja' : 'nee') => `<td class="${b ? 'ok' : 'fout'}">${tekst}</td>`;
+    // Een vingerafdruk van alle hoogtes (in millimeter) op een raster van 4 m.
+    function vingerafdruk(vorm) {
+      const G = vorm.eiland.grenzen;
+      let h = 2166136261 >>> 0;
+      for (let z = G.minZ; z <= G.maxZ; z += 4) for (let x = G.minX; x <= G.maxX; x += 4) {
+        h ^= Math.round(vorm.hoogte(x, z) * 1000);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      return h;
+    }
+    const fouten = [];
+    let vorigeAfdruk = null;
+    let k = 0;
+    const t0 = performance.now();
+    function volgende() {
+      const code = codes[k];
+      const tb = performance.now();
+      const vorm = maakWereldvorm(maakZaadje(code), WERELD);
+      const bouw = performance.now() - tb;
+      const tweede = maakWereldvorm(maakZaadje(code), WERELD);
+      const a1 = vingerafdruk(vorm);
+      const zelfde = a1 === vingerafdruk(tweede);
+      const anders = vorigeAfdruk === null || a1 !== vorigeAfdruk;
+      vorigeAfdruk = a1;
+      const kaart = maakLoopkaart(vorm, 2);
+      const top = vorm.eiland.top;
+      const k0 = vorm.kamp;
+      const naarTop = kaart.weg(k0.x, k0.z + 2, top.x, top.z);
+      // Zonder de hellingbaan (en het stukje ervoor en erna) mag je niet op de etage komen.
+      const hb = vorm.eiland.hellingbaan;
+      const opBaan = (x, z) => {
+        const ux = x - hb.x0;
+        const uz = z - hb.z0;
+        const s = Math.max(-8, Math.min(hb.len + 8, ux * hb.ex + uz * hb.ez));
+        return Math.hypot(ux - hb.ex * s, uz - hb.ez * s) < EILAND.hellingbaan.breedte + EILAND.hellingbaan.rand + 3;
+      };
+      const zonder = kaart.weg(k0.x, k0.z + 2, top.x, top.z, opBaan);
+      const rotsrandHoudt = !zonder.gelukt;
+      if (!zelfde || !anders || !naarTop.gelukt || !rotsrandHoudt) fouten.push(code);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${code}</td>${ja(zelfde)}${ja(anders)}${ja(naarTop.gelukt)}<td>${naarTop.gelukt ? naarTop.lengte.toFixed(0) + ' m' : '-'}</td>` +
+        `${ja(rotsrandHoudt, rotsrandHoudt ? 'rotsrand houdt' : 'er is een andere weg!')}<td>${vorm.eiland.ravijnen.length}</td><td>${bouw.toFixed(0)} ms</td>`;
+      rijen.appendChild(tr);
+      k++;
+      if (k < codes.length) setTimeout(volgende, 0);
+      else {
+        document.getElementById('eilandKlaar').innerHTML = (fouten.length ? `<span class="fout">Fout bij: ${fouten.join(', ')}.</span>` : '<span class="ok">Alle eilanden in orde.</span>') +
+          ` ${codes.length} bergcodes in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
+        window.eilandUitslag = { fouten, n: codes.length };
+        window.eilandKlaar = true;
+      }
+    }
+    setTimeout(volgende, 0);
   </script>
 </body>
 </html>

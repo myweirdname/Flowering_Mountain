@@ -16,6 +16,7 @@ export function maakGrondkleur(vorm, K) {
   const c = Object.fromEntries(Object.entries(K).map(([n, v]) => [n, new THREE.Color(v)]));
   const b = /** @type {any} */ ({});
   const zand = new THREE.Color();
+  const rots = new THREE.Color();
   const weideGras = new THREE.Color(WEIDE.kleuren.weideGras);
   const baan = new THREE.Color(WEIDE.kleuren.baan);
   return function kleurOp(x, z, steil, uit) {
@@ -30,7 +31,14 @@ export function maakGrondkleur(vorm, K) {
     zand.copy(c.zand).lerp(c.natZand, 1 - glad((b.h - 0.05) / 0.45));
     if (b.h < -0.1) zand.lerp(c.onderwater, glad((-b.h - 0.1) / 0.8));
     uit.lerp(zand, b.zand);
-    uit.lerp(c.rots, glad((steil - 0.75) / 0.4));
+    // Steile plekken worden rots; op echte rotswanden in lagen, licht en donker, met wat vlekken.
+    const rw = glad((steil - 0.75) / 0.4);
+    if (rw > 0) {
+      const laag = Math.sin(b.h * K.rotsLagen + waardenruis(x / 14, z / 14, 5) * 1.6);
+      rots.copy(c.rots).lerp(laag > 0 ? c.rotsLicht : c.rotsDonker, Math.abs(laag) * glad((steil - 1.2) / 0.8) * 0.8);
+      rots.lerp(c.rotsDonker, glad((waardenruis(x * 0.4, z * 0.4, 13) - 0.6) / 0.3) * 0.35);
+      uit.lerp(rots, rw);
+    }
     uit.multiplyScalar(0.95 + 0.1 * waardenruis(x * 0.6, z * 0.6, 7));
     return uit;
   };
@@ -140,36 +148,49 @@ export function maakTegelTerrein(r, hoogte, kleurOp, materiaal, sprong = 1) {
 }
 
 /**
- * Het grove landschap voor de verte: één mesh. `verberg` laat de cellen onder geladen tegels weg.
+ * Het grove eilandvlak voor de verte (TP 5.4): het hele eiland plus een strook zeebodem, één mesh.
+ * `verberg` laat de cellen onder geladen fijne tegels weg.
  * @param {ReturnType<typeof import('../sim/wereld/hoogte.js').maakWereldvorm>} vorm
- * @param {typeof import('../data/wereld.js').WERELD} W
+ * @param {number} S rasterafstand (meter)
+ * @param {number} T tegelgrootte
  */
-export function maakGrofTerrein(vorm, W, kleurOp, materiaal) {
-  const S = W.grofStap;
-  const half = W.verGebied;
-  const n = Math.round((2 * half) / S);
-  const p = n + 1;
-  const H = new Float32Array(p * p);
-  for (let j = 0; j < p; j++) for (let i = 0; i < p; i++) H[j * p + i] = vorm.hoogte(-half + i * S, -half + j * S);
-  const pos = new Float32Array(p * p * 3);
-  const nor = new Float32Array(p * p * 3);
-  const kl = new Float32Array(p * p * 3);
+export function maakGrofTerrein(vorm, S, T, kleurOp, materiaal) {
+  // Het raster begint op een tegelrand en de cellen passen precies in een tegel (S deelt T):
+  // zo valt een cel altijd helemaal binnen of buiten een geladen tegel, zonder kiertjes.
+  const G = vorm.eiland.grenzen;
+  const x0 = Math.floor(G.minX / T) * T;
+  const z0 = Math.floor(G.minZ / T) * T;
+  const nx = Math.ceil((G.maxX - x0) / S);
+  const nz = Math.ceil((G.maxZ - z0) / S);
+  const px = nx + 1;
+  const pz = nz + 1;
+  const H = new Float32Array(px * pz);
+  for (let j = 0; j < pz; j++) for (let i = 0; i < px; i++) H[j * px + i] = vorm.hoogte(x0 + i * S, z0 + j * S);
+  const pos = new Float32Array(px * pz * 3);
+  const nor = new Float32Array(px * pz * 3);
+  const kl = new Float32Array(px * pz * 3);
   const k = new THREE.Color();
   const v = new THREE.Vector3();
-  const h = (i, j) => H[Math.min(n, Math.max(0, j)) * p + Math.min(n, Math.max(0, i))];
-  for (let j = 0; j < p; j++) {
-    for (let i = 0; i < p; i++) {
-      const q = j * p + i;
-      const x = -half + i * S;
-      const z = -half + j * S;
-      pos.set([x, H[q], z], q * 3);
+  const h = (i, j) => H[Math.min(nz, Math.max(0, j)) * px + Math.min(nx, Math.max(0, i))];
+  for (let j = 0; j < pz; j++) {
+    for (let i = 0; i < px; i++) {
+      const q = j * px + i;
+      const x = x0 + i * S;
+      const z = z0 + j * S;
+      pos[q * 3] = x;
+      pos[q * 3 + 1] = H[q];
+      pos[q * 3 + 2] = z;
       v.set(h(i - 1, j) - h(i + 1, j), 2 * S, h(i, j - 1) - h(i, j + 1)).normalize();
-      nor.set([v.x, v.y, v.z], q * 3);
+      nor[q * 3] = v.x;
+      nor[q * 3 + 1] = v.y;
+      nor[q * 3 + 2] = v.z;
       kleurOp(x, z, Math.hypot(h(i + 1, j) - h(i - 1, j), h(i, j + 1) - h(i, j - 1)) / (2 * S), k);
-      kl.set([k.r, k.g, k.b], q * 3);
+      kl[q * 3] = k.r;
+      kl[q * 3 + 1] = k.g;
+      kl[q * 3 + 2] = k.b;
     }
   }
-  const index = new Uint32Array(n * n * 6);
+  const index = new Uint32Array(nx * nz * 6);
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
@@ -179,34 +200,29 @@ export function maakGrofTerrein(vorm, W, kleurOp, materiaal) {
   geo.computeBoundingSphere();
   const mesh = new THREE.Mesh(geo, materiaal);
   mesh.matrixAutoUpdate = false;
-  const T = W.tegelGrootte;
 
-  /**
-   * @param {(tx:number, tz:number) => boolean} geladen
-   * @param {number} x @param {number} z waar de speler is
-   * @param {number} max cellen verder dan dit liggen volledig in de mist en worden niet getekend
-   */
-  function verberg(geladen, x = 0, z = 0, max = Infinity) {
+  /** @param {(tx:number, tz:number) => boolean} geladen */
+  function verberg(geladen) {
     let q = 0;
-    const m2 = max * max;
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        const cx = -half + (i + 0.5) * S;
-        const cz = -half + (j + 0.5) * S;
-        if ((cx - x) ** 2 + (cz - z) ** 2 > m2) continue;
+    for (let j = 0; j < nz; j++) {
+      for (let i = 0; i < nx; i++) {
+        const cx = x0 + (i + 0.5) * S;
+        const cz = z0 + (j + 0.5) * S;
         if (geladen(Math.floor(cx / T), Math.floor(cz / T))) continue;
-        const a = j * p + i;
+        const a = j * px + i;
         index[q++] = a;
-        index[q++] = a + p + 1;
+        index[q++] = a + px + 1;
         index[q++] = a + 1;
         index[q++] = a;
-        index[q++] = a + p;
-        index[q++] = a + p + 1;
+        index[q++] = a + px;
+        index[q++] = a + px + 1;
       }
     }
     geo.setDrawRange(0, q);
     indexAttr.needsUpdate = true;
   }
   verberg(() => false);
-  return { mesh, verberg };
+  /** Het hoogteraster, ook voor de dieptekaart van de zee. */
+  const raster = { H, x0, z0, nx: px, nz: pz, stap: S };
+  return { mesh, verberg, raster };
 }

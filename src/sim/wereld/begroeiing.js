@@ -3,6 +3,7 @@
 // de simulatie gebruikt de stammen om tegen te botsen, het beeld maakt er vormen van.
 import { maakWillekeur, maakZaadje } from '../../kern/willekeur.js';
 import { waardenruis } from './ruis.js';
+import { EILAND } from '../../data/eiland.js';
 
 /**
  * @typedef {{ x:number, y:number, z:number, draai:number, schaal:number, tint:number, kans:number, soort:number }} Plant
@@ -124,7 +125,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     const kampAfstand = (x, z) => Math.hypot(x - kamp.x, z - kamp.z);
 
     overRaster(tx, tz, L.boom.afstand, 'boom', (x, z, r1, r2, r3, r4) => {
-      if (b.bos < 0.8 || b.h < 0.8 || b.pad > 0.01 || b.weide > 0.01 || r1 > 0.85) return;
+      if (b.bos < 0.8 || b.h < 0.8 || b.pad > 0.01 || b.weide > 0.01 || b.wand > 0.5 || r1 > 0.85) return;
       if (kampAfstand(x, z) < kamp.straal + 5 || steilte(x, z) > 0.6) return;
       const p = plant(x, z, r2 * Math.PI * 2, 0.8 + r3 * 0.45, r4, r1);
       g.boom.push(p);
@@ -149,11 +150,14 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     });
 
     overRaster(tx, tz, L.rots.afstand, 'rots', (x, z, r1, r2, r3, r4) => {
-      if (b.h < -1.2 || r1 > (b.zand > 0.5 ? 0.28 : 0.4) || b.pad > 0.05 || b.kamp > 0.6 || b.weide > 0.05) return;
+      // Vlak voor de rotsrand liggen veel grote rotsblokken; op de steile wand zelf geen.
+      const voet = b.voet > 0.35;
+      if (b.h < -1.2 || r1 > (voet ? EILAND.voetRotsen.kans : b.zand > 0.5 ? 0.28 : 0.4) || b.pad > 0.05 || b.kamp > 0.6 || b.weide > 0.05) return;
       if (b.rivier > 0.01 || b.oever > 0.2) return; // de rivier heeft haar eigen rotsen
+      if (b.wand > 0.5 && !voet) return;
       // Af en toe een grote rots: een lage rand om op te klimmen.
       const R = F.rots;
-      const [a, bmax] = r1 < R.grootKans ? R.grootte : R.klein;
+      const [a, bmax] = voet ? EILAND.voetRotsen.grootte : r1 < R.grootKans ? R.grootte : R.klein;
       const p = plant(x, z, r2 * Math.PI * 2, r3, r4, r1);
       p.maat = a + r3 * (bmax - a);
       p.cos = Math.cos(p.draai);
@@ -191,7 +195,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
 
     overRaster(tx, tz, L.struik.afstand, 'struik', (x, z, r1, r2, r3, r4) => {
       const kampRand = b.kamp > 0.02 && b.kamp < 0.5;
-      if (b.h < 0.4 || b.pad > 0.15 || b.weide > 0.35 || !(b.bos > 0.35 || kampRand)) return;
+      if (b.h < 0.4 || b.pad > 0.15 || b.weide > 0.35 || b.wand > 0.5 || !(b.bos > 0.35 || kampRand)) return;
       if (steilte(x, z) > 0.9 || opRots(x, z, 0.9)) return;
       g.struik.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1, kiesGewogen(flora.struikGewichten, r4)));
     });
@@ -200,7 +204,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     const B = F.bosje;
     overRaster(tx, tz, B.afstand, 'bosje', (x, z, r1, r2, r3) => {
       const kampRand = b.kamp > 0.02 && b.kamp < 0.5;
-      if (r1 > B.kans || b.h < 0.4 || b.pad > 0.15 || b.weide > 0.2 || b.zand > 0.4 || !(b.bos > 0.2 || kampRand)) return;
+      if (r1 > B.kans || b.h < 0.4 || b.pad > 0.15 || b.weide > 0.2 || b.zand > 0.4 || b.wand > 0.5 || !(b.bos > 0.2 || kampRand)) return;
       if (steilte(x, z) > 0.7 || opRots(x, z, 0.9)) return;
       g.bosje.push(plant(x, z, r2 * Math.PI * 2, r3, 0.5, r1));
     });
@@ -214,7 +218,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     }
 
     overRaster(tx, tz, L.bloem.afstand, 'bloem', (x, z, r1, r2, r3, r4) => {
-      if (b.h < 0.35 || b.zand > 0.4 || b.pad > 0.55) return;
+      if (b.h < 0.35 || b.zand > 0.4 || b.pad > 0.55 || b.wand > 0.5) return;
       // Veel bloemen langs de rand van de open plek en het pad, trosjes in de jungle.
       const rand = (b.kamp > 0.04 && b.kamp < 0.92) || b.pad > 0.05;
       const tros = waardenruis(x / 8, z / 8, zaadje ^ 0x77);
@@ -233,7 +237,7 @@ export function maakBegroeiing(vorm, F, zaadje, T) {
     });
 
     overRaster(tx, tz, L.gras.afstand, 'gras', (x, z, r1, r2, r3, r4) => {
-      if (b.h < 0.3 || b.zand > 0.25 || b.pad > 0.5 || b.nat > 0.02) return;
+      if (b.h < 0.3 || b.zand > 0.25 || b.pad > 0.5 || b.nat > 0.02 || b.wand > 0.5) return;
       if (!(b.kamp > 0.05 || b.pad > 0.05 || (b.weide > 0.05 && r4 < 0.55) || (b.bos > 0.3 && r4 < 0.35))) return;
       if (opRots(x, z, -0.2)) return;
       g.gras.push(plant(x, z, r2 * Math.PI * 2, r3, r4, r1));

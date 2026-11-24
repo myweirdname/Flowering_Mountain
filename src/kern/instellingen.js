@@ -11,4 +11,6 @@ export const INSTELLINGEN = {
   berg: p.get('berg') ?? 'bloei', // bergcode = zaadje van de wereld
   plek: p.get('plek'),            // waar je begint (bv. 'weide': bij de springweide)
   kwaliteit: ['laag', 'midden', 'hoog'].includes(p.get('kwaliteit')) ? p.get('kwaliteit') : touch ? 'laag' : 'hoog',
+  vogel: p.get('vogel') === '1',  // meteen in vogelvlucht (vrije camera)
+  vlucht: p.get('vlucht') === '1', // de prestatievlucht: een vaste ronde over het eiland die meet hoe vlot het beeld is
 };

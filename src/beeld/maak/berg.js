@@ -1,5 +1,6 @@
-// De verre berg aan de horizon: een zacht silhouet met drie etages en een roze gloed op de top
-// (de Hartbloem). Alleen decor; in stap 12 komt de echte berg.
+// De verre berg aan de horizon uit stap 4: een zacht silhouet met drie etages en een roze gloed op de top.
+// Sinds stap 12 staat de echte berg op het eiland; dit decor wordt niet meer getekend, maar blijft bewaard.
+// maakTopGloed wordt wel nog gebruikt: de roze gloed op de echte top (daar komt later de Hartbloem).
 import * as THREE from 'three';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
@@ -59,22 +60,29 @@ export function maakVerreBerg(B, horizon) {
   berg.position.set(-80, -6, B.afstand);
   berg.renderOrder = -8;
 
-  // De Hartbloem: een roze gloed op de top.
+  const gloed = maakTopGloed(B.hartbloem);
+  gloed.position.set(berg.position.x, berg.position.y + B.hoogte + 6, berg.position.z);
+  gloed.scale.setScalar(70);
+  return { berg, gloed };
+}
+
+/** Een zacht roze gloeiende bol (een sprite) voor op de top. @param {number} kleur */
+export function maakTopGloed(kleur) {
+  const k = new THREE.Color(kleur);
+  const rgb = `${Math.round(k.r * 255)},${Math.round(k.g * 255)},${Math.round(k.b * 255)}`;
   const n2 = 64;
   const doek = document.createElement('canvas');
   doek.width = doek.height = n2;
   const g = doek.getContext('2d');
   const v = g.createRadialGradient(n2 / 2, n2 / 2, 0, n2 / 2, n2 / 2, n2 / 2);
   v.addColorStop(0, 'rgba(255,255,255,1)');
-  v.addColorStop(0.25, 'rgba(255,150,210,0.9)');
-  v.addColorStop(1, 'rgba(255,120,200,0)');
+  v.addColorStop(0.25, `rgba(${rgb},0.9)`);
+  v.addColorStop(1, `rgba(${rgb},0)`);
   g.fillStyle = v;
   g.fillRect(0, 0, n2, n2);
   const tex = new THREE.CanvasTexture(doek);
   tex.colorSpace = THREE.SRGBColorSpace;
   const gloed = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, blending: THREE.AdditiveBlending }));
-  gloed.position.set(berg.position.x, berg.position.y + B.hoogte + 6, berg.position.z);
-  gloed.scale.setScalar(70);
   gloed.renderOrder = -7;
-  return { berg, gloed };
+  return gloed;
 }

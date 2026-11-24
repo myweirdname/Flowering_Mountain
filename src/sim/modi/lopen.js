@@ -110,7 +110,7 @@ export function stapLopen(s, int, wereld, L, dt, meld, Z) {
     const hv = Math.hypot(s.vel[0], s.vel[2]);
     const rand = hv > 0.5 ? randHoogte(s, wereld, L, hv) : hoger;
     if (rand > L.stapHoogte) {
-      if (rand <= L.klimHoogte && kracht > 0.2 && hv > 0.5) {
+      if (rand <= L.klimHoogte && kracht > 0.2 && hv > 0.5 && bovenVlak(s, wereld, L, hv)) {
         beginOpklimmen(s, wereld, L, hv);
         meld({ soort: 'opklimmen', speler: s.id });
         return;
@@ -120,7 +120,20 @@ export function stapLopen(s, int, wereld, L, dt, meld, Z) {
   }
 
   // --- Grond ---
-  const grond = wereld.grondOp(s.pos[0], s.pos[2]);
+  let grond = wereld.grondOp(s.pos[0], s.pos[2]);
+  // Op een te steile helling kom je nooit hoger, alleen naar beneden of opzij: zo is een rotswand echt een grens
+  // (stap 12). Geen stapje vooruit dat je optilt, en de snelheid de helling op valt weg.
+  if (glijdt && grond > s.vorigePos[1] + 0.02) {
+    s.pos[0] = s.vorigePos[0];
+    s.pos[2] = s.vorigePos[2];
+    const len = Math.hypot(gx, gz);
+    const op = (s.vel[0] * gx + s.vel[2] * gz) / len;
+    if (op > 0) {
+      s.vel[0] -= (op * gx) / len;
+      s.vel[2] -= (op * gz) / len;
+    }
+    grond = wereld.grondOp(s.pos[0], s.pos[2]);
+  }
   const wasOpGrond = s.opGrond;
   if (s.pos[1] <= grond) {
     if (!wasOpGrond) meld({ soort: 'landing', speler: s.id, snelheid: -s.vel[1] });
@@ -167,6 +180,18 @@ function randHoogte(s, wereld, L, hv) {
   const nx = s.vorigePos[0] + (s.vel[0] / hv) * L.klimVooruit;
   const nz = s.vorigePos[2] + (s.vel[2] / hv) * L.klimVooruit;
   return Math.max(wereld.grondOp(nx, nz), wereld.grondOp(s.pos[0], s.pos[2])) - s.pos[1];
+}
+
+/**
+ * Kan je bovenop de rand staan? Net achter de rand mag het niet nog steil verder omhoog gaan:
+ * zo klauter je wel op een rots of een lage rand, maar niet stukje per stukje een rotswand op (stap 12).
+ */
+function bovenVlak(s, wereld, L, hv) {
+  const dx = s.vel[0] / hv;
+  const dz = s.vel[2] / hv;
+  const op = wereld.grondOp(s.vorigePos[0] + dx * L.klimVooruit, s.vorigePos[2] + dz * L.klimVooruit);
+  const verder = wereld.grondOp(s.vorigePos[0] + dx * (L.klimVooruit + 0.6), s.vorigePos[2] + dz * (L.klimVooruit + 0.6));
+  return verder - op <= 0.6 * Math.tan(L.maxHelling * naarRad);
 }
 
 /** Start het opklimmen vanaf de vorige plek naar een plekje net op de rand. */

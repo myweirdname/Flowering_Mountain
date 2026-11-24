@@ -29,10 +29,11 @@ import { ANIMATIE } from './data/animatie.js';
 import { maakHibiscus } from './beeld/maak/hibiscus.js';
 import { maakHemel } from './beeld/hemel.js';
 import { maakZee } from './beeld/water.js';
-import { maakVerreBerg } from './beeld/maak/berg.js';
+import { maakTopGloed } from './beeld/maak/berg.js';
+import { EILAND } from './data/eiland.js';
+import { zetMist } from './beeld/mist.js';
 import { maakLichtstralen, maakStuifmeel } from './beeld/sfeer.js';
 import { maakWereldbeeld } from './beeld/wereldbeeld.js';
-import { maakGrens } from './beeld/grens.js';
 import { WIND } from './beeld/wind.js';
 import { maakDebugscherm } from './ui/debug.js';
 import { PONY } from './data/dieren.js';
@@ -59,6 +60,7 @@ import { maakVlotbeeld, maakZwemvest, maakZwemtijgerbeeld } from './beeld/vlot.j
 import { SPEELBOS } from './data/speelbos.js';
 import { maakSpeelbosbeeld } from './beeld/speelbos.js';
 import { maakBot } from './sim/doorgangen/bots.js';
+import { maakVogelvlucht, maakPrestatievlucht } from './beeld/vogelvlucht.js';
 
 const K = KWALITEIT[INSTELLINGEN.kwaliteit];
 
@@ -78,7 +80,7 @@ if (K.schaduw) {
 }
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(SCENE.hemel.horizon, K.mist[0], K.mist[1]);
+zetMist(scene, SCENE.hemel.horizon, K); // mist dichtbij, en een lichte waas tot ver op het eiland
 const camera = new THREE.PerspectiveCamera(CAMERA.beeldhoek, 1, 0.15, 1500);
 
 scene.add(new THREE.HemisphereLight(SCENE.hemelLicht, SCENE.grondLicht, SCENE.hemelLichtSterkte));
@@ -100,18 +102,21 @@ if (K.schaduw) {
   zonlicht.shadow.intensity = SCENE.schaduwSterkte; // zachte schaduw: kawaii, nooit grauw
 }
 
-// Hemel, zon, wolken en de verre berg.
+// Hemel, zon en wolken (de wolken drijven rond het eiland, buiten de kust).
 const zonRichting = new THREE.Vector3(...SCENE.zon.richting).normalize();
 const hemel = maakHemel(SCENE, zonRichting, K.detail);
+const bergTop = sim.wereld.vorm.eiland.top;
+hemel.wolken.position.set(bergTop.x, 0, bergTop.z);
 scene.add(hemel.koepel, hemel.zon, hemel.wolken);
-const verreBerg = maakVerreBerg(WERELD.verreBerg, SCENE.hemel.horizon);
-scene.add(verreBerg.berg, verreBerg.gloed);
+// Een roze gloed op de top van de berg: daar komt later de Hartbloem (stap 18). Van overal te zien.
+const topGloed = maakTopGloed(EILAND.top.gloed);
+topGloed.position.set(bergTop.x, bergTop.h + 7, bergTop.z);
+topGloed.scale.setScalar(34);
+scene.add(topGloed);
 
-// Het landschap en de jungle, in tegels rond de speler.
+// Het landschap en de jungle, in tegels rond de speler, en het grove eiland in de verte.
 const wereldbeeld = maakWereldbeeld(scene, sim, K);
-const grens = maakGrens(sim.wereld.vorm.hoogte, WERELD.speelGrens, WERELD.grensLint);
-scene.add(grens.lint, grens.gordijn);
-const zee = maakZee(sim.wereld.vorm.hoogte, SCENE, zonRichting, K.detail === 0);
+const zee = maakZee(sim.wereld.vorm.hoogte, SCENE, zonRichting, K.detail === 0, wereldbeeld.grofRaster);
 scene.add(zee.vlak);
 const stralen = K.lichtstralen ? maakLichtstralen(sim.wereld.vorm, SCENE.lichtstralen, lichtRichting) : null;
 if (stralen) scene.add(stralen.mesh);
@@ -386,6 +391,15 @@ pasGrootteAan();
 
 const debug = maakDebugscherm(uiLaag, INSTELLINGEN.debug);
 
+// Vogelvlucht (toets V of ?vogel=1) en de prestatievlucht (?vlucht=1): de camera vliegt los van de speler.
+const vogel = maakVogelvlucht(CAMERA.vogelvlucht);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyV' && !e.repeat) vogel.wissel(camera);
+});
+const vlucht = INSTELLINGEN.vlucht ? maakPrestatievlucht(sim.wereld.vorm, CAMERA.vlucht, uiLaag, { kwaliteit: INSTELLINGEN.kwaliteit }) : null;
+let laatsteInvoer = { beweeg: [0, 0], spring: false, actie: false };
+const stilInvoer = { beweeg: /** @type {[number, number]} */ ([0, 0]), spring: false, actie: false, fluit: false, brul: false };
+
 // Alles rond het startpunt meteen klaarzetten, zodat het eerste beeld al vol is.
 {
   const s = sim.speler(LOKAAL);
@@ -393,6 +407,7 @@ const debug = maakDebugscherm(uiLaag, INSTELLINGEN.debug);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
   // Alle shaders nu al klaarmaken, zodat er onderweg nooit een hapering komt als iets voor het eerst in beeld komt.
   renderer.compile(scene, camera);
+  if (INSTELLINGEN.vogel) vogel.wissel(camera);
 }
 
 /** Beeld en geluid bij wat de tijger doet (en de slaapbloem). Geeft true als de gebeurtenis van hem was. */
@@ -975,6 +990,8 @@ let testCamera = null;
 let opgelegd = null;
 /** De testbot van het speelbos die het parcours voordoet (spel.bosBot()): { bot, i, tot }. */
 let bosBot = null;
+/** De bergbot (spel.bergBot()): loopt met de gewone loopregels langs het pad en de hellingbaan naar de top. */
+let bergBot = null;
 let tijd = 0;
 let kringTijd = 0;
 let bosRond = 0;
@@ -1001,7 +1018,22 @@ const lus = maakSpellus({
       }
       if (bosBot) opgelegd = { fluit: false, ...bosBot.bot(s, sim.tik) };
     }
-    const invoer = voegSamen(toetsenbord.lees(), touch.lees());
+    if (bergBot) {
+      const s = sim.speler(LOKAAL);
+      const [dx, dz] = bergBot[0];
+      const vx = dx - s.pos[0];
+      const vz = dz - s.pos[2];
+      const d = Math.hypot(vx, vz);
+      if (d < 2.5) bergBot.shift();
+      if (!bergBot.length) bergBot = opgelegd = null;
+      else opgelegd = { beweeg: [vx / Math.max(d, 1e-3), vz / Math.max(d, 1e-3)], spring: false, actie: false, fluit: false, brul: false, aai: false, aaiTijger: false, aaiWelp: null };
+    }
+    let invoer = voegSamen(toetsenbord.lees(), touch.lees());
+    // In vogelvlucht stuurt de invoer de camera; de speler blijft staan.
+    if (vogel.aan || vlucht) {
+      laatsteInvoer = invoer;
+      invoer = stilInvoer;
+    }
     const intentie = { ...(opgelegd ?? naarIntentie(invoer, volgcamera.hoek)) };
     if (aaiWacht) intentie.aai = true;
     aaiWacht = false;
@@ -1307,24 +1339,30 @@ const lus = maakSpellus({
       camera.lookAt(...d);
     }
 
-    // De wereld rond de speler, en alles wat met de camera meeschuift.
-    wereldbeeld.werkBij(tekenpos.x, tekenpos.z, camera);
+    // Vogelvlucht of prestatievlucht: de camera vliegt vrij, en de wereld laadt rond de camera in plaats van rond de speler.
+    if (vlucht) vlucht.werkBij(dt, camera, renderer.info);
+    else if (vogel.aan) vogel.werkBij(dt, laatsteInvoer, volgcamera.hoek, volgcamera.kanteling, camera, sim.wereld.vorm.hoogte);
+    const focus = vlucht ? vlucht.pos : vogel.aan ? vogel.pos : tekenpos;
+
+    // De wereld rond de speler (of de vrije camera), en alles wat met de camera meeschuift.
+    wereldbeeld.werkBij(focus.x, focus.z, camera);
     hemel.koepel.position.copy(camera.position);
     hemel.zon.position.copy(camera.position).addScaledVector(zonRichting, SCENE.zon.afstand);
     hemel.wolken.rotation.y = tijd * SCENE.wolken.draaisnelheid;
-    verreBerg.gloed.material.opacity = 0.75 + 0.25 * Math.sin(tijd * 1.3);
+    // De gloed op de top: van ver een baken, van dichtbij weg (anders sta je er middenin).
+    const gloedAfstand = camera.position.distanceTo(topGloed.position);
+    topGloed.material.opacity = (0.75 + 0.25 * Math.sin(tijd * 1.3)) * THREE.MathUtils.smoothstep(gloedAfstand, 30, 80);
     WIND.uTijd.value = tijd;
     WIND.uWind.value = SCENE.wind.sterkte;
-    WIND.uSpeler.value.copy(tekenpos);
+    WIND.uSpeler.value.copy(focus);
     zee.werkBij(tijd, camera);
     rivierbeeld.werkBij(tijd, dt, camera);
     speelbosbeeld.werkBij(dt, camera);
     stralen?.werkBij(tijd);
-    grens.werkBij(tijd);
     stuifmeel.werkBij(tijd, camera, pixel);
     if (K.schaduw) {
-      zonlicht.target.position.copy(tekenpos);
-      zonlicht.position.copy(tekenpos).addScaledVector(lichtRichting, 70);
+      zonlicht.target.position.copy(focus);
+      zonlicht.position.copy(focus).addScaledVector(lichtRichting, 70);
     }
 
     bloem.rotation.y = tijd * H.draaisnelheid;
@@ -1570,8 +1608,40 @@ window.spel = {
     s.richting = s.vorigeRichting = Math.atan2(-t.a[0], -t.a[1]);
     volgcamera.zet(Math.atan2(t.a[0], t.a[1]), CAMERA.kanteling);
   },
+  /**
+   * Naar de berg (stap 12): 'helling' = onderaan de hellingbaan, 'etage' = bovenaan, 'top' = op de top,
+   * 'zee' = op het water voor het kamp (om de berg te zien liggen).
+   */
+  naarBerg(waar = 'top') {
+    const e = sim.wereld.vorm.eiland;
+    const hb = e.hellingbaan;
+    let x = e.top.x;
+    let z = e.top.z - e.top.plateau + 1;
+    let kijk = Math.PI; // de camera aan de zeekant: je kijkt naar de berg
+    if (waar === 'helling') {
+      x = hb.x0 - hb.ex * 6;
+      z = hb.z0 - hb.ez * 6;
+      kijk = Math.atan2(-hb.ex, -hb.ez);
+    } else if (waar === 'etage') {
+      x = hb.x1 + hb.ex * 4;
+      z = hb.z1 + hb.ez * 4;
+      kijk = Math.atan2(-hb.ex, -hb.ez);
+    } else if (waar === 'top') kijk = 0; // op de top: kijken naar de zee en het kamp
+    this.zet(x, z);
+    volgcamera.zet(kijk, CAMERA.kanteling);
+  },
+  /** Laat de avonturier met de gewone loopregels naar de top lopen: langs het zandpaadje en de hellingbaan. */
+  bergBot() {
+    const e = sim.wereld.vorm.eiland;
+    const hb = e.hellingbaan;
+    const s = sim.speler(LOKAAL);
+    const opEtage = Math.hypot(s.pos[0] - e.midden.x, s.pos[2] - e.midden.z) < e.randStraal(Math.atan2(s.pos[0] - e.midden.x, e.midden.z - s.pos[2]));
+    bergBot = opEtage ? [] : [[e.pad.x0, e.pad.z0], [e.pad.x1, e.pad.z1], [hb.x0, hb.z0], [hb.x1, hb.z1]];
+    bergBot.push([e.top.x, e.top.z]);
+    if (!opEtage && Math.hypot(s.pos[0] - e.pad.x0, s.pos[2] - e.pad.z0) > Math.hypot(s.pos[0] - hb.x0, s.pos[2] - hb.z0)) bergBot.splice(0, 2);
+  },
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN, RIVIER, VLOT, ZWEMTIJGER, SPEELBOS },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN, RIVIER, VLOT, ZWEMTIJGER, SPEELBOS, EILAND },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */
@@ -1609,6 +1679,12 @@ if (INSTELLINGEN.plek === 'rivier') {
     const s = sim.speler(LOKAAL);
     wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
   }
+}
+// ?plek=helling, ?plek=etage of ?plek=top: meteen op de berg (stap 12).
+if (['helling', 'etage', 'top'].includes(INSTELLINGEN.plek)) {
+  window.spel.naarBerg(INSTELLINGEN.plek);
+  const s = sim.speler(LOKAAL);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
 }
 // ?plek=rots: meteen aan de voet van de oefenrots (stap 9).
 if (INSTELLINGEN.plek === 'rots') {

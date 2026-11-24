@@ -1,7 +1,8 @@
 // Het tegelsysteem in het beeld (TP 5.4, 7):
 // - grof landschap voor de verte, fijne terreintegels rond de speler (gespreid geladen, geen haperingen);
 // - elke plantsoort is één tekenopdracht (instancing), met per afstand een rijkere of eenvoudigere vorm;
-// - bomen ver weg worden kruinbollen; struiken, bloemen en gras staan alleen dichtbij;
+// - bomen ver weg worden kruinbollen, en het bladerdak van het hele eiland blijft zichtbaar als verre kruinen
+//   (stap 12); struiken, bloemen en gras staan alleen dichtbij;
 // - wat ver achter de camera staat, wordt niet getekend.
 import * as THREE from 'three';
 import { WERELD } from '../data/wereld.js';
@@ -14,6 +15,7 @@ import { maakBloemplant } from './maak/bloem.js';
 import { maakPalm } from './maak/palm.js';
 import { maakBoom } from './maak/boom.js';
 import { maakGras, maakRots, maakBosje } from './maak/klein.js';
+import { maakVerreKruin, maakVerrePalm } from './maak/kruinbol.js';
 
 /**
  * @param {THREE.Scene} scene
@@ -26,13 +28,15 @@ export function maakWereldbeeld(scene, sim, K) {
   const begroeiing = sim.wereld.begroeiing;
   const flora = begroeiing.flora;
   const d = K.detail;
-  // Zo ver tekenen we bomen: net voor het einde van de mist zijn ze al bijna onzichtbaar (en groeien ze daar weg).
+  // Tot zo ver staan echte bomen; verder alleen nog hun verre kruin, over het hele eiland.
   const verStraal = K.mist[1] - 10;
+  const G = vorm.eiland.grenzen;
+  const verZicht = Math.hypot(G.maxX - G.minX, G.maxZ - G.minZ);
 
   // --- Terrein ---
   const grondMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   const kleurOp = maakGrondkleur(vorm, WERELD.kleuren);
-  const grof = maakGrofTerrein(vorm, WERELD, kleurOp, grondMat);
+  const grof = maakGrofTerrein(vorm, K.grofStap, T, kleurOp, grondMat);
   grof.mesh.receiveShadow = K.schaduw;
   scene.add(grof.mesh);
 
@@ -45,7 +49,7 @@ export function maakWereldbeeld(scene, sim, K) {
   const kl = new THREE.Color();
 
   /**
-   * @typedef {{ geo: THREE.BufferGeometry, straal: number, mat: any, schaduw?: boolean,
+   * @typedef {{ geo: THREE.BufferGeometry, straal: number, mat: any, schaduw?: boolean, ver?: boolean,
    *             mesh?: THREE.InstancedMesh, cap?: number }} Band
    * @typedef {{ naam: string, bron: 'boom'|'palm'|'rots'|'struik'|'bloem'|'gras'|'bosje', laag: 'grote'|'kleine',
    *             filter: (p: any) => boolean, schaal: (p: any) => number, kleur: (p: any, c: THREE.Color) => void,
@@ -62,6 +66,7 @@ export function maakWereldbeeld(scene, sim, K) {
       { geo: maakBoom(FLORA.boom, flora.kruinKleuren, d, toeval(1)), straal: K.dichtbij, mat: gewoon, schaduw: true },
       { geo: maakBoom(FLORA.boom, flora.kruinKleuren, -1, toeval(1)), straal: K.middenStraal, mat: gewoon },
       { geo: maakBoom(FLORA.boom, flora.kruinKleuren, -2, toeval(1)), straal: verStraal, mat: gewoon },
+      { geo: maakVerreKruin(FLORA.boom, flora.kruinKleuren), straal: verZicht, mat: gewoon, ver: true },
     ],
   });
   soorten.push({
@@ -70,6 +75,7 @@ export function maakWereldbeeld(scene, sim, K) {
     banden: [
       { geo: maakPalm(FLORA.palm, d, toeval(2)), straal: K.dichtbij, mat: gewoon, schaduw: true },
       { geo: maakPalm(FLORA.palm, -1, toeval(2)), straal: verStraal, mat: gewoon },
+      { geo: maakVerrePalm(FLORA.palm), straal: verZicht, mat: gewoon, ver: true },
     ],
   });
   soorten.push({
@@ -157,10 +163,17 @@ export function maakWereldbeeld(scene, sim, K) {
   /** @type {Map<number, Tegel>} */
   const tegels = new Map();
   const sleutel = (tx, tz) => (tx + 4096) * 8192 + (tz + 4096);
-  const half = WERELD.verGebied;
-  const minT = Math.floor(-half / T);
-  const maxT = Math.floor((half - 1) / T);
+  // Alleen tegels op het eiland (en de strook zee errond).
+  const minTX = Math.floor(G.minX / T);
+  const maxTX = Math.floor(G.maxX / T);
+  const minTZ = Math.floor(G.minZ / T);
+  const maxTZ = Math.floor(G.maxZ / T);
 
+  // Verre kruinen: de bomen van alle tegels van het eiland worden één keer opgezocht, gespreid over de eerste
+  // beelden (de dichtste eerst). Een tegel komt pas in de verre band als zijn bomen er zijn.
+  const warm = new Set();
+  /** @type {number[][] | null} */
+  let warmrij = null;
   function tegel(tx, tz) {
     const k = sleutel(tx, tz);
     let t = tegels.get(k);
@@ -219,11 +232,12 @@ export function maakWereldbeeld(scene, sim, K) {
   let laatsteX = 1e9;
   let laatsteZ = 1e9;
   let moetHerbouwen = true;
+  let warmBeelden = 0;
   /** @type {Tegel[]} */
   let wachtrij = [];
   const metTerrein = new Set(); // tegels met fijn terrein (daar laat het grove vlak zijn cellen weg)
   const voor = new THREE.Vector3();
-  const stats = { tegels: 0, wachtrij: 0, instanties: 0 };
+  const stats = { tegels: 0, wachtrij: 0, instanties: 0, verWarm: -1 };
   const kleineSoorten = soorten.filter((s) => s.laag === 'kleine');
 
   /**
@@ -284,13 +298,13 @@ export function maakWereldbeeld(scene, sim, K) {
         const r = Math.ceil(b.straal / T) + 1;
         const cx = Math.floor(x / T);
         const cz = Math.floor(z / T);
-        for (let tz = cz - r; tz <= cz + r; tz++) {
-          for (let tx = cx - r; tx <= cx + r; tx++) {
-            if (tx < minT || tx > maxT || tz < minT || tz > maxT) continue;
+        for (let tz = Math.max(cz - r, minTZ); tz <= Math.min(cz + r, maxTZ); tz++) {
+          for (let tx = Math.max(cx - r, minTX); tx <= Math.min(cx + r, maxTX); tx++) {
             const a = afstand(tx, tz, x, z);
             // Tegel helemaal buiten deze band? (dichtste punt te ver, of verste punt nog te dichtbij)
             if (a >= b.straal || verste(tx, tz, x, z) < binnen) continue;
             if (s.laag === 'kleine' && !(tegels.get(sleutel(tx, tz))?.stap >= 3)) continue;
+            if (b.ver && !warm.has(sleutel(tx, tz))) continue;
             // Buiten beeld (naast of achter de camera): overslaan. Gemeten vanaf de camera zelf.
             if (a > 12) {
               const mx = (tx + 0.5) * T - camera.position.x;
@@ -345,6 +359,8 @@ export function maakWereldbeeld(scene, sim, K) {
   return {
     stats,
     soorten,
+    /** Het hoogteraster van het grove eilandvlak (ook voor de dieptekaart van de zee). */
+    grofRaster: grof.raster,
     /**
      * @param {number} x @param {number} z waar de speler is
      * @param {THREE.Camera} camera
@@ -363,9 +379,8 @@ export function maakWereldbeeld(scene, sim, K) {
         // Nieuwe tegels in de wachtrij, de dichtste eerst.
         const r = Math.ceil(K.tegelStraal / T) + 1;
         const nieuw = [];
-        for (let j = tz - r; j <= tz + r; j++) {
-          for (let i = tx - r; i <= tx + r; i++) {
-            if (i < minT || i > maxT || j < minT || j > maxT) continue;
+        for (let j = Math.max(tz - r, minTZ); j <= Math.min(tz + r, maxTZ); j++) {
+          for (let i = Math.max(tx - r, minTX); i <= Math.min(tx + r, maxTX); i++) {
             const a = afstand(i, j, x, z);
             if (a >= K.tegelStraal) continue;
             const t = tegel(i, j);
@@ -390,11 +405,23 @@ export function maakWereldbeeld(scene, sim, K) {
           plantenKlaar = true;
         }
       }
-      if (terreinVeranderd || alles) {
-        // Speling van 40 m: het grove vlak wordt pas bij een nieuwe tegel opnieuw bijgesneden.
-        grof.verberg((i, j) => metTerrein.has(sleutel(i, j)), x, z, K.mist[1] + 40);
-      }
+      if (terreinVeranderd || alles) grof.verberg((i, j) => metTerrein.has(sleutel(i, j)));
       if (plantenKlaar) moetHerbouwen = true;
+
+      // De bomen van verre tegels opzoeken, met wat over is van het tijdsbudget van dit beeld.
+      if (!warmrij) {
+        warmrij = [];
+        for (let j = minTZ; j <= maxTZ; j++) for (let i = minTX; i <= maxTX; i++) warmrij.push([afstand(i, j, x, z), i, j]);
+        warmrij.sort((p, q) => q[0] - p[0]); // de dichtste achteraan: pop() neemt ze eerst
+      }
+      let nieuwWarm = 0;
+      while (warmrij.length && performance.now() - begin < K.bouwBudget + 1) {
+        const [, i, j] = warmrij.pop();
+        begroeiing.grote(i, j);
+        warm.add(sleutel(i, j));
+        nieuwWarm++;
+      }
+      if (nieuwWarm && (warmrij.length === 0 || ++warmBeelden % 20 === 0)) moetHerbouwen = true;
       // Ook herbouwen als de camera ver genoeg gedraaid is.
       camera.getWorldDirection(voor);
       const hoek = Math.atan2(voor.x, voor.z);
@@ -412,6 +439,7 @@ export function maakWereldbeeld(scene, sim, K) {
       }
       stats.tegels = metTerrein.size;
       stats.wachtrij = wachtrij.length;
+      stats.verWarm = warmrij ? warmrij.length : -1;
     },
   };
 }

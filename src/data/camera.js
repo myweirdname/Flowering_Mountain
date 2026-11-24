@@ -17,4 +17,10 @@ export const CAMERA = {
   terugNaBoom: 3,        // hoe snel ze daarna terug naar achter schuift
   // Op de pony: wat verder weg en hoger, en de camera draait sneller mee (een pony loopt niet opzij).
   rijden: { afstand: 9.5, hoogteDoel: 1.7, meedraaien: 2.6 },
+
+  // Vogelvlucht (toets V of ?vogel=1): een vrije camera boven het eiland. Snelheden in m/s.
+  vogelvlucht: { snelheid: 18, snelFactor: 3, klimSnelheid: 16, bovenGrond: 2, maxHoogte: 450 },
+  // Prestatievlucht (?vlucht=1): de vaste ronde. laag = hoogte boven de grond zoals tijdens het spelen,
+  // boomHoog = boven de bomen; traag en snel in m/s; het rondje hoog rond het eiland (deel van een cirkel).
+  vlucht: { wacht: 2.5, laag: 3.5, boomHoog: 22, traag: 10, snel: 38, rondStraal: 330, rondHoogte: 150, rondje: 0.5 },
 };

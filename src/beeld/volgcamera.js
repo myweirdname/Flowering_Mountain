@@ -56,6 +56,9 @@ export function maakVolgcamera(camera, sleepvlak, grondOp, vrijeAfstand) {
     get hoek() {
       return hoek;
     },
+    get kanteling() {
+      return kanteling;
+    },
 
     /**
      * @param {THREE.Vector3} figuur getekende positie van de voeten

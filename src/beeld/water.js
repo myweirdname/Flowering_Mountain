@@ -1,5 +1,6 @@
 // De zee en de lagune (TP 5.7): één groot vlak met een eigen shader.
-// De shader kent de diepte uit een klein dieptekaartje: turkoois bij het strand, diepblauw verderop,
+// De shader kent de diepte uit twee dieptekaartjes: een fijn rond het kamp en een grof over het hele eiland
+// (uit het grove eilandvlak, stap 12). Turkoois bij het strand, diepblauw verderop,
 // schuimrandjes die aan de waterlijn op en neer gaan, zonneglinsters en kleine twinkelsterretjes.
 import * as THREE from 'three';
 
@@ -7,8 +8,10 @@ import * as THREE from 'three';
  * @param {(x:number, z:number) => number} hoogte
  * @param {typeof import('../data/scene.js').SCENE} S
  * @param {THREE.Vector3} zonRichting
+ * @param {boolean} eenvoudig
+ * @param {{ H: Float32Array, x0:number, z0:number, nx:number, nz:number, stap:number }} grof het grove hoogteraster van het eiland
  */
-export function maakZee(hoogte, S, zonRichting, eenvoudig = false) {
+export function maakZee(hoogte, S, zonRichting, eenvoudig, grof) {
   const W = S.water;
   const n = W.kaartResolutie;
   const half = W.kaartGebied;
@@ -24,12 +27,22 @@ export function maakZee(hoogte, S, zonRichting, eenvoudig = false) {
   kaart.magFilter = THREE.LinearFilter;
   kaart.needsUpdate = true;
 
+  const grofData = new Uint8Array(grof.nx * grof.nz);
+  for (let i = 0; i < grofData.length; i++) grofData[i] = Math.round(Math.min(1, Math.max(0, (grof.H[i] + 8) / 12)) * 255);
+  const grofKaart = new THREE.DataTexture(grofData, grof.nx, grof.nz, THREE.RedFormat, THREE.UnsignedByteType);
+  grofKaart.minFilter = THREE.LinearFilter;
+  grofKaart.magFilter = THREE.LinearFilter;
+  grofKaart.needsUpdate = true;
+
   const uniforms = THREE.UniformsUtils.merge([
     THREE.UniformsLib.fog,
     {
       uTijd: { value: 0 },
       uKaart: { value: null },
       uGebied: { value: new THREE.Vector3(-half, -half, 2 * half) },
+      uGrofKaart: { value: null },
+      uGrof: { value: new THREE.Vector4(grof.x0, grof.z0, grof.stap, 0) },
+      uGrofN: { value: new THREE.Vector2(grof.nx, grof.nz) },
       uOndiep: { value: new THREE.Color(W.ondiep) },
       uMidden: { value: new THREE.Color(W.midden) },
       uDiep: { value: new THREE.Color(W.diep) },
@@ -40,6 +53,7 @@ export function maakZee(hoogte, S, zonRichting, eenvoudig = false) {
     },
   ]);
   uniforms.uKaart.value = kaart;
+  uniforms.uGrofKaart.value = grofKaart;
 
   const materiaal = new THREE.ShaderMaterial({
     uniforms,
@@ -59,14 +73,18 @@ export function maakZee(hoogte, S, zonRichting, eenvoudig = false) {
     fragmentShader: `
       #include <fog_pars_fragment>
       uniform float uTijd;
-      uniform sampler2D uKaart;
+      uniform sampler2D uKaart, uGrofKaart;
+      uniform vec4 uGrof;
+      uniform vec2 uGrofN;
       uniform vec3 uGebied, uOndiep, uMidden, uDiep, uSchuim, uGlinster, uHemel, uZon;
       varying vec3 vWereld;
       void main() {
         vec2 p = vWereld.xz;
         vec2 uv = (p - uGebied.xy) / uGebied.z;
         float h = -8.0;
+        vec2 uvg = ((p - uGrof.xy) / uGrof.z + 0.5) / uGrofN;
         if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) h = texture2D(uKaart, uv).r * 12.0 - 8.0;
+        else if (uvg.x > 0.0 && uvg.x < 1.0 && uvg.y > 0.0 && uvg.y < 1.0) h = texture2D(uGrofKaart, uvg).r * 12.0 - 8.0;
         float d = max(-h, 0.0);
 
         vec3 c = mix(uOndiep, uMidden, smoothstep(0.0, 1.6, d));

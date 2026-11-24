@@ -19,7 +19,9 @@ export const KWALITEIT = {
     schaduw: false,
     lichtstralen: false,
     stuifmeel: 110,
-    mist: [26, 115],     // begin en einde van de mist
+    mist: [26, 115],     // begin en einde van de mist dichtbij (verbergt waar de fijne planten ophouden)
+    waas: [0.35, 1300],  // zo sterk wordt die mist (deel), en waar alles helemaal in de waas verdwijnt: zo zie je de berg liggen
+    grofStap: 8,         // rasterafstand van het grove eilandvlak in de verte (meter; moet 32 delen: 4, 8 of 16)
     bouwBudget: 3,       // ms per beeld voor nieuwe tegels (spreiden = geen haperingen)
     ingroeien: 8,        // planten groeien over zoveel meter uit de grond in plaats van plots te verschijnen
   },
@@ -42,6 +44,8 @@ export const KWALITEIT = {
     lichtstralen: true,
     stuifmeel: 250,
     mist: [34, 145],
+    waas: [0.35, 1350],
+    grofStap: 8,
     bouwBudget: 4,
     ingroeien: 10,
   },
@@ -64,6 +68,8 @@ export const KWALITEIT = {
     lichtstralen: true,
     stuifmeel: 420,
     mist: [40, 175],
+    waas: [0.35, 1400],
+    grofStap: 4,
     bouwBudget: 6,
     ingroeien: 12,
   },
