@@ -56,6 +56,9 @@ import { maakKlimbediening } from './ui/klimbediening.js';
 import { RIVIER, VLOT, ZWEMTIJGER } from './data/rivier.js';
 import { maakRivierbeeld } from './beeld/rivier.js';
 import { maakVlotbeeld, maakZwemvest, maakZwemtijgerbeeld } from './beeld/vlot.js';
+import { SPEELBOS } from './data/speelbos.js';
+import { maakSpeelbosbeeld } from './beeld/speelbos.js';
+import { maakBot } from './sim/doorgangen/bots.js';
 
 const K = KWALITEIT[INSTELLINGEN.kwaliteit];
 
@@ -129,6 +132,16 @@ function ondergrond(s) {
   if (s.modus === 'zwemmen') return 'water';
   const x = s.pos[0];
   const z = s.pos[2];
+  // Het speelbos: houten platforms en bruggen, zachte bladeren, natte lotus.
+  const op = sim.wereld.speelbos.waarOp(s);
+  if (op !== null) {
+    if (op === sim.wereld.speelbos.dekken.length - 1) return 'gras';
+    if (typeof op === 'string' && op.startsWith('m')) {
+      const soort = sim.wereld.speelbos.modules[+op.slice(1)].soort;
+      return soort === 'lotus' ? 'water' : soort === 'reuzenblad' || soort === 'springbloem' ? 'gras' : 'hout';
+    }
+    return 'hout';
+  }
   if (sim.wereld.rotsOp(x, z) > raster.hoogteOp(x, z) + 0.03) return 'rots';
   sim.wereld.vorm.bodem(x, z, bodem);
   if (bodem.h < 0.05 || sim.wereld.weide.water(x, z) > bodem.h || sim.wereld.waterOp(x, z) > bodem.h + 0.03) return 'water';
@@ -213,6 +226,13 @@ const vlotbeeld = maakVlotbeeld(VLOT, K);
 scene.add(vlotbeeld.groep);
 const zwemvest = maakZwemvest(ponyVorm);
 const zwemtijger = maakZwemtijgerbeeld(scene, ZWEMTIJGER, K, GEZEL.laag);
+// --- Het speelbos (stap 11) ---
+const speelbos = sim.wereld.speelbos;
+const speelbosbeeld = maakSpeelbosbeeld(speelbos, K);
+scene.add(speelbosbeeld.groep);
+figuur.rotation.order = 'YXZ'; // aan de liaan kantelt ze rond haar eigen dwarsas
+let zwaaiBeeld = 0;
+let zwaaiGeluid = 0;
 /** Op of van het vlot springen: { t, duur, van } (de avonturier) en hetzelfde voor de pony (met `ver`: ze verschijnt). */
 let vaarOvergang = null;
 let ponyHop = null;
@@ -269,13 +289,24 @@ function vrijeAfstand(van, naar) {
   const tz0 = Math.floor((Math.min(van.z, naar.z) - 7) / T);
   const tz1 = Math.floor((Math.max(van.z, naar.z) + 7) / T);
   for (let tz = tz0; tz <= tz1; tz++) for (let tx = tx0; tx <= tx1; tx++) bomen.push(...begroeiing.grote(tx, tz).boom);
-  if (!bomen.length) return lengte;
+  // De reuzenbomen van het speelbos (stap 11): stam en kruin.
+  const sb = sim.wereld.speelbos;
+  const sbTop = sb.vloer + SPEELBOS.boomHoogte;
+  const bosBomen = sb.stammen.filter((st) => Math.min(Math.hypot(st.x - van.x, st.z - van.z), Math.hypot(st.x - naar.x, st.z - naar.z)) < lengte + 4);
+  if (!bomen.length && !bosBomen.length) return lengte;
   const stap = 0.25;
   for (let d = 0.8; d <= lengte; d += stap) {
     const f = d / lengte;
     const x = van.x + dx * f;
     const y = van.y + dy * f;
     const z = van.z + dz * f;
+    for (const st of bosBomen) {
+      const ex = x - st.x;
+      const ez = z - st.z;
+      if (ex * ex + ez * ez < (st.r + 0.45) ** 2 && y < sbTop) return d - stap;
+      const ey = (y - (sbTop + 1.2)) / 2.6;
+      if ((ex * ex + ez * ez) / 3.6 ** 2 + ey * ey < 1) return d - stap;
+    }
     for (const b of bomen) {
       const ex = x - b.x;
       const ez = z - b.z;
@@ -881,11 +912,69 @@ function ponyGebeurtenis(g) {
   return false;
 }
 
+/** Gebeurtenissen van het speelbos (stap 11): lianen, springbloem, bladeren, voortgang. */
+function bosGebeurtenis(g) {
+  const s = sim.speler(LOKAAL);
+  switch (g.soort) {
+    case 'liaanGrijp':
+      geluid.liaanGrijp(g.snelheid);
+      deeltjes.blaadjes(g.pos[0], g.pos[1] + 1.6, g.pos[2], 5, [SPEELBOS.kleuren.liaanBlad, 0x9be86a], 0.4);
+      animatie.land(0.25);
+      return true;
+    case 'liaanLos':
+      geluid.zwaai(g.snelheid + 2);
+      return true;
+    case 'springbloemDruk':
+      geluid.indrukken();
+      return true;
+    case 'springbloem':
+      geluid.boing();
+      deeltjes.blaadjes(g.pos[0], g.pos[1] + 0.2, g.pos[2], 14, [SPEELBOS.kleuren.springbloem, 0xffffff, SPEELBOS.kleuren.springHart], 0.9);
+      return true;
+    case 'bosStart':
+      return true;
+    case 'bosDek':
+      if (g.schoon) {
+        geluid.bosDek(g.dek);
+        deeltjes.glinsters(g.pos[0], g.pos[1] + 1, g.pos[2], 0xfff3a0, 14);
+      }
+      return true;
+    case 'bosVal':
+      geluid.plof();
+      return true;
+    case 'bosKlaar': {
+      hud.rondeKlaar(g.tijd, g.sterren, g.record);
+      geluid.rondeKlaar(g.record);
+      geluid.top();
+      speelbosbeeld.luid();
+      deeltjes.bloemenregen(g.pos[0], g.pos[1] + 2.5, g.pos[2], 110);
+      deeltjes.hartjes(g.pos[0], g.pos[1] + 1.4, g.pos[2], 6);
+      return true;
+    }
+    case 'landing': {
+      // Op een blad of lotus: eigen geluidje (en de gewone landing erbij als het hard was).
+      const op = speelbos.waarOp(s);
+      if (typeof op === 'string' && op.startsWith('m')) {
+        const soort = speelbos.modules[+op.slice(1)].soort;
+        if (soort === 'reuzenblad') geluid.blad();
+        else if (soort === 'lotus') {
+          geluid.lotus();
+          deeltjes.spetters(s.pos[0], s.pos[2], 0.4, speelbos.peil);
+        }
+      }
+      return false;
+    }
+  }
+  return false;
+}
+
 // --- Spellus ---
 /** Testcamera: een functie die [plek, kijkpunt] geeft, of null (gewoon de volgcamera). */
 let testCamera = null;
 /** Intentie die window.spel kan opleggen (voor tests); anders null. */
 let opgelegd = null;
+/** De testbot van het speelbos die het parcours voordoet (spel.bosBot()): { bot, i, tot }. */
+let bosBot = null;
 let tijd = 0;
 let kringTijd = 0;
 let bosRond = 0;
@@ -901,6 +990,17 @@ const tekenpos = new THREE.Vector3();
 const lus = maakSpellus({
   stap(dt) {
     // Beide altijd lezen, zodat een korte tik op een touchknop nooit verloren gaat.
+    if (bosBot) {
+      const s = sim.speler(LOKAAL);
+      if (s.opGrond && speelbos.waarOp(s) === bosBot.i + 1) {
+        if (bosBot.i + 1 < bosBot.tot) bosBot = { ...bosBot, i: bosBot.i + 1, bot: maakBot(speelbos, bosBot.i + 1, sim.wereld) };
+        else {
+          bosBot = null;
+          opgelegd = null;
+        }
+      }
+      if (bosBot) opgelegd = { fluit: false, ...bosBot.bot(s, sim.tik) };
+    }
     const invoer = voegSamen(toetsenbord.lees(), touch.lees());
     const intentie = { ...(opgelegd ?? naarIntentie(invoer, volgcamera.hoek)) };
     if (aaiWacht) intentie.aai = true;
@@ -938,6 +1038,7 @@ const lus = maakSpellus({
       if (welpGebeurtenis(g)) continue;
       if (klimGebeurtenis(g)) continue;
       if (vaarGebeurtenis(g)) continue;
+      if (bosGebeurtenis(g)) continue;
       if (g.soort === 'landing') {
         animatie.land(g.snelheid / 12);
         if (g.snelheid > 2) geluid.landing(g.snelheid);
@@ -980,6 +1081,17 @@ const lus = maakSpellus({
     // Volledig rechtop zetten: na het rijden kan de draaiing van het zadel nog een kanteling rond x en z
     // bevatten (bv. x = z = π, wat samen een halve draai is). Alleen y zetten liet haar dan achterstevoren lopen.
     figuur.rotation.set(0, s.vorigeRichting + dr * overgang, 0);
+    // Aan de liaan: ze hangt in het verlengde van het touw (en komt na het loslaten zacht weer rechtop).
+    zwaaiBeeld += ((s.modus === 'slingeren' ? s.zwaai : 0) - zwaaiBeeld) * Math.min(1, dt * (s.modus === 'slingeren' ? 30 : 8));
+    if (Math.abs(zwaaiBeeld) > 1e-3) figuur.rotation.x = -zwaaiBeeld;
+    if (s.modus === 'slingeren') {
+      const v = Math.hypot(s.vel[0], s.vel[1], s.vel[2]);
+      zwaaiGeluid -= dt;
+      if (v > 2.5 && zwaaiGeluid <= 0) {
+        zwaaiGeluid = 0.9;
+        geluid.zwaai(v);
+      }
+    }
 
     // --- De pony ---
     const p = sim.pony(LOKAAL);
@@ -1206,6 +1318,7 @@ const lus = maakSpellus({
     WIND.uSpeler.value.copy(tekenpos);
     zee.werkBij(tijd, camera);
     rivierbeeld.werkBij(tijd, dt, camera);
+    speelbosbeeld.werkBij(dt, camera);
     stralen?.werkBij(tijd);
     grens.werkBij(tijd);
     stuifmeel.werkBij(tijd, camera, pixel);
@@ -1235,6 +1348,10 @@ const lus = maakSpellus({
         (s.klim
           ? `
 klimmen        ${KLIMMEN.routes[s.klim.route].graad} ${s.klim.toestand} · arm ${s.klim.armBelasting.toFixed(2)} · kracht ${Math.round(s.klim.hand.lh.pomp * 100)}/${Math.round(s.klim.hand.rh.pomp * 100)}%`
+          : '') +
+        (s.bos.dek >= 0
+          ? `
+speelbos       platform ${s.bos.dek}${s.bos.bezig ? ` · ${((sim.tik - s.bos.start) / 60).toFixed(1)} s · vallen ${s.bos.fouten.join('/')}` : ''}${s.modus === 'slingeren' ? ' · LIAAN ' + s.liaan.i : ''}`
           : '') +
         (s.modus === 'varen'
           ? `
@@ -1419,8 +1536,42 @@ window.spel = {
     s.richting = s.vorigeRichting = Math.atan2(k.ax, k.az);
     volgcamera.zet(Math.atan2(-k.ax, -k.az), CAMERA.kanteling);
   },
+  /** Het speelbos (stap 11): platforms en doorgangen. */
+  speelbos,
+  /** Meteen aan het begin van doorgang i (0 lianen, 1 touwbrug, 2 balanceerstam, 3 springbloem, 4 reuzenblad, 5 lotus). */
+  naarBos(i = 0) {
+    sim.naarBos(LOKAAL, i);
+    const m = speelbos.modules[i];
+    volgcamera.zet(Math.atan2(-m.a[0], -m.a[1]), CAMERA.kanteling);
+    const s = sim.speler(LOKAAL);
+    wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+  },
+  /**
+   * De testbot doet het speelbos voor, in het echte spel: doorgang i (of zonder getal: het hele parcours).
+   * spel.bosBot(null) stopt hem.
+   */
+  bosBot(i) {
+    if (i === null) {
+      bosBot = null;
+      opgelegd = null;
+      return;
+    }
+    const van = i ?? 0;
+    sim.naarBos(LOKAAL, van);
+    bosBot = { bot: maakBot(speelbos, van, sim.wereld), i: van, tot: i === undefined ? speelbos.modules.length : van + 1 };
+  },
+  /** Zet de speler aan de voet van de trap naar het speelbos. */
+  naarSpeelbos() {
+    const t = speelbos.trap;
+    const x = t.o[0] + t.a[0] * (t.len + 1.5);
+    const z = t.o[1] + t.a[1] * (t.len + 1.5);
+    this.zet(x, z);
+    const s = sim.speler(LOKAAL);
+    s.richting = s.vorigeRichting = Math.atan2(-t.a[0], -t.a[1]);
+    volgcamera.zet(Math.atan2(t.a[0], t.a[1]), CAMERA.kanteling);
+  },
   /** De afsteltabellen, live aan te passen vanuit de console (bv. spel.afstel.CAMERA.afstand = 3). */
-  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN, RIVIER, VLOT, ZWEMTIJGER },
+  afstel: { CAMERA, TESTFIGUUR, ANIMATIE, EFFECTEN, BLOESEMS, GELUID, LOPEN, SCENE, WERELD, FLORA, K, RIJDEN, WEIDE, GEZEL, WELPJES, KLIMMEN, RIVIER, VLOT, ZWEMTIJGER, SPEELBOS },
   kwaliteit: INSTELLINGEN.kwaliteit,
   wereld: wereldbeeld.stats,
   /** Per plantsoort en afstandsband: aantal planten en driehoeken (om prestaties te meten). */
@@ -1447,6 +1598,17 @@ if (INSTELLINGEN.plek === 'rivier') {
   window.spel.naarRivier();
   const s = sim.speler(LOKAAL);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}
+// ?plek=bos: aan de voet van de trap naar het speelbos; ?doorgang=liaan (of touwbrug, ...): meteen aan die doorgang (stap 11).
+{
+  const doorgang = new URLSearchParams(location.search).get('doorgang');
+  const i = speelbos.modules.findIndex((m) => m.soort === doorgang);
+  if (i >= 0) window.spel.naarBos(i);
+  else if (INSTELLINGEN.plek === 'bos') {
+    window.spel.naarSpeelbos();
+    const s = sim.speler(LOKAAL);
+    wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+  }
 }
 // ?plek=rots: meteen aan de voet van de oefenrots (stap 9).
 if (INSTELLINGEN.plek === 'rots') {

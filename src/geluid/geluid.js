@@ -216,6 +216,12 @@ export function maakGeluid() {
         ruisStoot(t, { soort: 'highpass', freq: 2500, piek: v * 0.35, verval: 0.03 });
         toon(t, { vorm: 'triangle', freq: 260, freqEind: 180, piek: v * 0.5, verval: 0.05 });
       } else if (ondergrond === 'water') ruisStoot(t, { freq: 1300, freqEind: 600, q: 1.5, piek: v * 1.1, aanslag: 0.01, verval: 0.15 });
+      else if (ondergrond === 'hout') {
+        // Houten plankjes: een holle tok, en soms een zacht gekraak.
+        toon(t, { vorm: 'triangle', freq: 210 + Math.random() * 40, freqEind: 150, piek: v * 0.9 * G.bos.hout, aanslag: 0.002, verval: 0.06 });
+        ruisStoot(t, { soort: 'bandpass', freq: 1500, q: 1.2, piek: v * 0.35, aanslag: 0.002, verval: 0.03 });
+        if (Math.random() < 0.15) ruisStoot(t + 0.03, { soort: 'bandpass', freq: 700, freqEind: 900, q: 6, piek: G.bos.kraak, aanslag: 0.05, verval: 0.18 });
+      }
       else ruisStoot(t, { freq: 3200, freqEind: 1800, q: 0.8, piek: v * 0.55, aanslag: 0.008, verval: 0.07 });
     },
 
@@ -363,6 +369,68 @@ export function maakGeluid() {
       const t = plek(0.4);
       if (t < 0) return;
       ruisStoot(t, { freq: 700, freqEind: 1300, q: 1.2, piek: G.zwemslag, aanslag: 0.12, verval: 0.25 });
+    },
+
+    // --- Het speelbos (stap 11) ---
+
+    /** Een liaan vastgrijpen: een rukje in het touw en een blij "hup". */
+    liaanGrijp(sterkte = 1) {
+      const t = plek(0.5);
+      if (t < 0) return;
+      const v = G.bos.grijp * Math.min(1, 0.5 + sterkte / 6);
+      ruisStoot(t, { soort: 'bandpass', freq: 600, freqEind: 300, q: 2, piek: v, aanslag: 0.004, verval: 0.12 });
+      toon(t, { vorm: 'triangle', freq: 140, freqEind: 95, piek: v * 0.6, aanslag: 0.004, verval: 0.2 });
+      toon(t + 0.05, { freq: G.toonladder[2], freqEind: G.toonladder[4], piek: v * 0.35, aanslag: 0.01, verval: 0.15 });
+    },
+    /** Door de lucht zwaaien: een zacht gezoef (luider als je snel gaat). */
+    zwaai(snelheid) {
+      const t = plek(0.7);
+      if (t < 0) return;
+      const v = G.bos.zwaai * Math.min(1, snelheid / 5);
+      ruisStoot(t, { soort: 'bandpass', freq: 400, freqEind: 1400, q: 1.4, piek: v, aanslag: 0.18, verval: 0.4 });
+    },
+    /** De springbloem zakt in: een zacht "squish". */
+    indrukken() {
+      const t = plek(0.3);
+      if (t < 0) return;
+      toon(t, { freq: 300, freqEind: 160, piek: G.bos.indrukken, aanslag: 0.01, verval: 0.15 });
+      ruisStoot(t, { soort: 'lowpass', freq: 900, freqEind: 300, piek: G.bos.indrukken * 0.5, aanslag: 0.01, verval: 0.12 });
+    },
+    /** Boiiing! De springbloem lanceert je. */
+    boing() {
+      const t = plek(0.9);
+      if (t < 0) return;
+      const v = G.bos.boing;
+      toon(t, { freq: 160, freqEind: 820, piek: v, aanslag: 0.005, verval: 0.45 });
+      toon(t, { vorm: 'triangle', freq: 320, freqEind: 1300, piek: v * 0.35, aanslag: 0.005, verval: 0.35 });
+      // Een trilling erin, zoals een veer.
+      for (let i = 0; i < 4; i++) toon(t + 0.08 + i * 0.07, { freq: 600 + i * 120, piek: v * 0.25 * (1 - i * 0.2), aanslag: 0.004, verval: 0.06 });
+    },
+    /** Landen op een reuzenblad: een dikke zachte "flap" en wat geritsel. */
+    blad() {
+      const t = plek(0.4);
+      if (t < 0) return;
+      const v = G.bos.blad;
+      ruisStoot(t, { soort: 'lowpass', freq: 1200, freqEind: 350, piek: v, aanslag: 0.003, verval: 0.12 });
+      toon(t, { freq: 180, freqEind: 120, piek: v * 0.5, aanslag: 0.003, verval: 0.14 });
+      for (let i = 0; i < 3; i++) ruisStoot(t + 0.05 + i * 0.05, { soort: 'bandpass', freq: 3000 + Math.random() * 1500, q: 1.5, piek: v * 0.25, aanslag: 0.01, verval: 0.05 });
+    },
+    /** Landen op een lotusblad: een nat "plop". */
+    lotus() {
+      const t = plek(0.4);
+      if (t < 0) return;
+      const v = G.bos.lotus;
+      toon(t, { freq: 420, freqEind: 900, piek: v * 0.6, aanslag: 0.004, verval: 0.08 });
+      ruisStoot(t, { soort: 'bandpass', freq: 1100, freqEind: 600, q: 1.4, piek: v * 0.6, aanslag: 0.005, verval: 0.12 });
+    },
+    /** Een doorgang gehaald zonder te vallen: een klokje, steeds een toontje hoger. */
+    bosDek(n = 0) {
+      const t = plek(0.6);
+      if (t < 0) return;
+      const L = G.toonladder;
+      const f = L[n % L.length] * (n >= L.length ? 2 : 1);
+      toon(t, { vorm: 'triangle', freq: f, piek: G.bos.dek, aanslag: 0.004, verval: 0.5 });
+      toon(t + 0.09, { vorm: 'triangle', freq: f * 1.5, piek: G.bos.dek * 0.6, aanslag: 0.004, verval: 0.5 });
     },
 
     /** Zachte plof bij mislukken, met een tinkeltje als je terug op veilige grond staat. */

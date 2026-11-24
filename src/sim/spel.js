@@ -31,6 +31,7 @@ import { beginKlimmen, stapKlimmen, stopKlimmen, bereikbaar, planVoor } from './
 import { VLOT, ZWEMTIJGER } from '../data/rivier.js';
 import { maakVlot, zetKlaar, stukPlek, pakStukken, bijSteiger, beginBouwen, stapIn, stapVaren, aanlegPlek, legAan, stapVlotVrij } from './modi/varen.js';
 import { maakZwemtijger, stapZwemtijger } from './modi/zwemtijger.js';
+import { legeBosToestand, bosActie, doeBosActie, bosInvoer, bosSlinger, bosNaStap, stapSpeelbos, bosLos } from './doorgangen/speelbos.js';
 
 /** @param {string|number} berg bergcode of zaadje */
 export function maakSim(berg) {
@@ -44,19 +45,38 @@ export function maakSim(berg) {
   const oefenrots = maakOefenrots(KLIMMEN, vorm.kamp, vorm.kamp.h + KLIMMEN.rots.voetBoven);
   // De benedenrivier (stap 10): rotsen en steigers om op te staan.
   const rivier = vorm.rivier;
-  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z), (x, z) => Math.max(oefenrots.blokOp(x, z), rivier.blokOp(x, z)));
+  // Het speelbos (stap 11): platforms, bruggen en bladeren om op te staan.
+  const speelbos = vorm.speelbos;
+  const grond = maakGrond(raster, begroeiing.rotsen, (x, z) => weide.hindernisOp(x, z), (x, z) => Math.max(oefenrots.blokOp(x, z), rivier.blokOp(x, z), speelbos.blokOp(x, z)));
+  // Botsen tegen de stammen: die van de jungle, en de reuzenbomen door de platforms van het speelbos.
+  const T = WERELD.tegelGrootte;
+  const bosStammen = new Map();
+  for (const st of speelbos.stammen) {
+    const k = `${Math.floor(st.x / T)},${Math.floor(st.z / T)}`;
+    if (!bosStammen.has(k)) bosStammen.set(k, []);
+    bosStammen.get(k).push(st);
+  }
+  const samen = new Map();
+  const stammen = (tx, tz) => {
+    const eigen = bosStammen.get(`${tx},${tz}`);
+    if (!eigen) return begroeiing.stammen(tx, tz);
+    const k = `${tx},${tz}`;
+    if (!samen.has(k)) samen.set(k, [...begroeiing.stammen(tx, tz), ...eigen]);
+    return samen.get(k);
+  };
   const wereld = {
     raster,       // hoogteOp / hellingOp over alle tegels
     vorm,         // de hoogtefunctie en wat er ligt (zand, gras, bos, lagune, weide)
     begroeiing,   // waar de planten staan
     grens: WERELD.speelGrens,
-    stammen: begroeiing.stammen,
+    stammen,
     grondOp: grond.grondOp,     // terrein met rotsen en hindernissen: waar je op staat
     terreinOp: grond.terreinOp, // zonder de hindernissen (de pony springt erover)
     rotsOp: grond.rotsOp,
     weide,        // de springweide: baan, hindernissen, water
     oefenrots,    // de klimwand met drie routes (stap 9)
     rivier,       // de benedenrivier met het vlot (stap 10)
+    speelbos,     // het speelbos met de eerste doorgangen (stap 11)
     waterOp: vorm.waterOp, // het waterpeil: 0 in zee en lagune, hoger in de rivier
   };
   // Waar de bouwstukken voor het vlot liggen (drie bundels bamboe en een liaan, rond de bron).
@@ -68,7 +88,7 @@ export function maakSim(berg) {
     const z = delen.reduce((a, d) => a + d.z, 0) / delen.length;
     return { x, z, y: weide.hoogte + BLOESEMS.bovenHindernis };
   });
-  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, [...boven, ...rivier.bloesems]);
+  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, [...boven, ...rivier.bloesems, ...speelbos.bloesems]);
   const wortels = maakWortels(weide);
   // De padvinder voor de tijger, en de slaapbloem die hij je komt tonen.
   const pad = maakPadvinder(wereld, GEZEL.pad);
@@ -133,6 +153,8 @@ export function maakSim(berg) {
     if (s.modus === 'klimmen') return 'uitschudden';
     if (s.modus === 'varen') return aanlegPlek(vlotVan(s), rivier, wereld, VLOT) ? 'aanleggen' : null;
     if (routeBij(s) >= 0) return 'klimmen';
+    const bosWat = bosActie(speelbos, s);
+    if (bosWat) return bosWat;
     // Aan de steiger bij de bron: het vlot bouwen (als je alle stukken hebt) of instappen.
     const v = vlotVan(s);
     if (v && s.modus === 'lopen' && s.opGrond && !s.klimt && v.bouwt <= 0 && bijSteiger(s, rivier, VLOT)) {
@@ -163,6 +185,7 @@ export function maakSim(berg) {
       const z = vorm.kamp.z + 3;
       const s = maakSpeler(id, x, grond.grondOp(x, z), z);
       s.ronde = maakRonde();
+      s.bos = legeBosToestand();
       spelers.push(s);
       // Elke speler krijgt een eigen pony; ze staat naast het kamp, aan de kant van de springweide.
       const px = vorm.kamp.x + weide.su * 3.6;
@@ -203,6 +226,7 @@ export function maakSim(berg) {
     terug(id) {
       const s = this.speler(id);
       if (s.modus === 'klimmen') stopKlimmen(s, oefenrots, KLIMMEN);
+      bosLos(speelbos, s);
       if (s.modus === 'varen') {
         const v = vlotVan(s);
         const p = ponyAanBoord(s, v);
@@ -306,6 +330,23 @@ export function maakSim(berg) {
       return bereikbaar(this.speler(id), oefenrots, KLIMMEN, lid);
     },
 
+    /** Meteen aan het begin van doorgang i van het speelbos (voor tests, ?doorgang=...). */
+    naarBos(id, i = 0) {
+      const s = this.speler(id);
+      if (s.modus === 'rijden') this.rijd(id, false);
+      if (s.modus !== 'lopen') this.terug(id);
+      const plek = speelbos.startPlek(i);
+      s.pos = [...plek.pos];
+      s.vorigePos = [...plek.pos];
+      s.vel = [0, 0, 0];
+      s.richting = s.vorigeRichting = plek.richting;
+      s.opGrond = true;
+      s.veilig = [...plek.pos];
+      Object.assign(s.bos, { dek: i, op: i, laatsteOp: i, valVan: plek.pos[1], bezig: i === 0, geldig: i === 0 });
+      // Op het eerste platform begint het parcours meteen (met de klok).
+      if (i === 0) Object.assign(s.bos, { start: tik, fouten: speelbos.modules.map(() => 0) });
+    },
+
     /** Het vlot van een speler (stap 10). */
     vlot(id) {
       return vlotVan(this.speler(id));
@@ -396,6 +437,7 @@ export function maakSim(berg) {
           else if (wat === 'afstappen') ponyOnder(s).stopt = true;
           else if (wat === 'klimmen') beginKlimmen(s, oefenrots, routeBij(s), KLIMMEN, meld, int.besturing);
           else if (wat === 'bouwen') beginBouwen(s, vlotVan(s), VLOT, meld);
+          else if (wat === 'slingeren') doeBosActie(speelbos, s, meld);
           else if (wat === 'varen') stapIn(s, vlotVan(s), p, rivier, VLOT, meld);
           else if (wat === 'aanleggen') {
             const v = vlotVan(s);
@@ -425,8 +467,9 @@ export function maakSim(berg) {
         else if (s.modus === 'varen') {
           const v = vlotVan(s);
           stapVaren(s, v, ponyAanBoord(s, v), int, rivier, wereld, VLOT, dt, meld);
-        } else if (s.modus === 'lopen') {
-          stapLopen(s, int, wereld, LOPEN, dt, meld, ZWEMMEN);
+        } else if (s.modus === 'slingeren') bosSlinger(speelbos, s, int, dt, meld);
+        else if (s.modus === 'lopen') {
+          stapLopen(s, bosInvoer(speelbos, s, int), wereld, LOPEN, dt, meld, ZWEMMEN);
           pakStukken(s, vlotVan(s), wereld.vlotStukken, VLOT, meld);
         }
         else if (s.modus === 'zwemmen') stapZwemmen(s, int, wereld, ZWEMMEN, dt, meld);
@@ -438,6 +481,15 @@ export function maakSim(berg) {
           if (q.stopt && q.opGrond && q.weigert <= 0 && Math.abs(q.snelheid) < RIJDEN.afstapSnelheid) {
             stapAf(s, q, wereld, meld);
             stopRonde(s.ronde, s.id, meld);
+          }
+        }
+        // Het speelbos: lianen grijpen, de springbloem, en terug naar het begin van een doorgang na een val.
+        if (s.modus === 'lopen' || s.modus === 'zwemmen' || s.modus === 'slingeren') {
+          const plek = bosNaStap(speelbos, s, dt, tik, meld);
+          if (plek) {
+            bosLos(speelbos, s);
+            naarVeiligeGrond(s, meld);
+            s.richting = s.vorigeRichting = plek.richting;
           }
         }
         const voor = s.bloesems;
@@ -452,6 +504,9 @@ export function maakSim(berg) {
           }
         }
       }
+
+      // De bewegende delen van het speelbos: lianen, brug, bladeren en lotus.
+      stapSpeelbos(speelbos, spelers, dt);
 
       // Het vlot als niemand erop zit, en de Sumatraanse tijger in de rivier.
       for (const v of vlotten) {

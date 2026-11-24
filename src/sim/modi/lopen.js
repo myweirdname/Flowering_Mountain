@@ -46,8 +46,14 @@ export function stapLopen(s, int, wereld, L, dt, meld, Z) {
   // --- Horizontaal versnellen naar het doel ---
   let versn = s.opGrond ? (kracht > 1e-3 ? L.versnellingGrond : L.remmenGrond) : L.versnellingLucht;
   if (glijdt) versn *= L.glijControle;
-  s.vel[0] = naderen(s.vel[0], bx * doel, versn * dt);
-  s.vel[2] = naderen(s.vel[2], bz * doel, versn * dt);
+  let doelV = doel;
+  // Gelanceerd (springbloem, liaan losgelaten): de lucht remt je niet af; bijsturen mag, maar niet trager maken.
+  if (!s.opGrond && s.vlucht > 0) {
+    if (kracht < 0.2) versn = 0;
+    doelV = Math.max(doel, Math.hypot(s.vel[0], s.vel[2]));
+  }
+  s.vel[0] = naderen(s.vel[0], bx * doelV, versn * dt);
+  s.vel[2] = naderen(s.vel[2], bz * doelV, versn * dt);
 
   if (glijdt) {
     // Bergaf duwen, in de richting waarin het terrein daalt.

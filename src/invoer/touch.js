@@ -37,6 +37,13 @@ export const ACTIE_ICONEN = {
           fill="#fff" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>
     <path d="M14 34 Q8 42 14 50 M86 34 Q92 42 86 50 M18 24 Q12 30 16 36 M82 24 Q88 30 84 36" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
   </svg>`,
+  // Slingeren (stap 11): een liaan die aan een tak hangt, met een handje eraan.
+  slingeren: `<svg viewBox="0 0 100 100" aria-hidden="true">
+    <path d="M10 16 C35 8 65 8 90 16" fill="none" stroke="#a8703f" stroke-width="9" stroke-linecap="round"/>
+    <path d="M50 14 C44 30 58 42 50 58" fill="none" stroke="#4f9e3a" stroke-width="6" stroke-linecap="round"/>
+    <path d="M40 30 l-8 -4 M58 40 l8 -3" stroke="#7ed957" stroke-width="5" stroke-linecap="round"/>
+    <path d="M38 76 C30 68 30 60 34 56 C37 53 41 55 42 59 V50 C42 45 49 45 49 50 V58 V48 C49 43 56 43 56 48 V58 V51 C56 46 63 46 63 51 V66 C63 76 56 84 48 84 Z" fill="#fff" stroke="#2f7d6d" stroke-width="4.5" stroke-linejoin="round"/>
+  </svg>`,
   // Het vlot (stap 10): bouwen (sterretje boven het vlot), varen (pijl), aanleggen (naar de steiger).
   bouwen: `<svg viewBox="0 0 100 100" aria-hidden="true">
     <path d="M12 66 H88 L82 80 H18 Z" fill="#cfe07a" stroke="#2f7d6d" stroke-width="5" stroke-linejoin="round"/>

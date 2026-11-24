@@ -52,6 +52,8 @@ const VAAR_TOETS = {
   aanleggen: `<svg viewBox="0 0 40 40"><rect x="22" y="8" width="14" height="5" fill="#d9a36a" stroke="#2f7d6d" stroke-width="1.6"/><path d="M25 13 V24 M33 13 V24" stroke="#a8703f" stroke-width="2.4"/>${VLOT_KLEIN.replace('M5 26 H35 L33 31 H7 Z', 'M3 26 H21 L19 31 H5 Z').replace('M12 26 V31 M20 26 V31 M28 26 V31', 'M9 26 V31 M15 26 V31')}<path d="M12 20 L12 6 M7 11 L12 6 L17 11" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
 };
 Object.assign(TOETS_ICONEN, VAAR_TOETS);
+// Het speelbos (stap 11): de actieknop aan de rand, bij de eerste liaan.
+TOETS_ICONEN.slingeren = `<svg viewBox="0 0 40 40"><path d="M4 7 C14 4 26 4 36 7" fill="none" stroke="#a8703f" stroke-width="3.6" stroke-linecap="round"/><path d="M20 6 C17 14 23 19 20 26" fill="none" stroke="#4f9e3a" stroke-width="2.6" stroke-linecap="round"/><circle cx="20" cy="30" r="5" fill="#fff" stroke="#2f7d6d" stroke-width="2"/></svg>`;
 
 const tijdTekst = (t) => {
   const m = Math.floor(t / 60);

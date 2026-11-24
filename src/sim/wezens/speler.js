@@ -47,5 +47,16 @@ export function maakSpeler(id, x, y, z) {
     klimVraag: null,      // een zet gevraagd van buitenaf (tests): { greep, lid }
     /** @type {string | null} */
     vlot: null,           // id van het vlot waar je op zit (stap 10)
+    // Het speelbos (stap 11)
+    /** @type {any} */
+    bos: null,            // voortgang op het parcours (sim/doorgangen/speelbos.js)
+    /** @type {any} */
+    liaan: null,          // aan een liaan: { m (doorgang), i (welke liaan), r (straal) }
+    /** @type {any} */
+    liaanLos: null,       // net losgelaten: { m, i, tijd } (even niet dezelfde opnieuw grijpen)
+    vlucht: 0,            // gelanceerd: zo lang remt de lucht je niet af
+    zwaai: 0,             // hoek van de liaan (voor het beeld)
+    wiebel: 0,            // op de balanceerstam: hoe hard ze balanceert (-1..1, voor het beeld)
+    bloemDruk: 0,         // op de springbloem: nog zo lang tot de lancering
   };
 }

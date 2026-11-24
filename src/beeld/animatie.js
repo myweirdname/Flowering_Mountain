@@ -43,6 +43,7 @@ export function maakAnimatie(delen, { onStap } = {}) {
       const klimt = !!s.klimt;
       const rijdt = s.modus === 'rijden' && !!rit;
       const vaartNu = s.modus === 'varen' && !!vaart;
+      const slingert = s.modus === 'slingeren';
 
       // Doelhoudingen.
       let beenX = [0, 0];
@@ -53,7 +54,16 @@ export function maakAnimatie(delen, { onStap } = {}) {
       let hoog = 0;
       let wieg = 0;
 
-      if (vaartNu) {
+      if (slingert) {
+        // Aan de liaan: handjes hoog boven het hoofd om het touw, beentjes samen; ze zwaaien wat na.
+        const zw = klem(Math.hypot(s.vel[0], s.vel[2]) * 0.08, 0, 0.5);
+        armX = [-2.95, -2.95];
+        armZ = [-0.12, 0.12];
+        beenX = [-0.35 - zw, -0.15 - zw];
+        beenZ = [-0.05, 0.05];
+        leun = 0;
+        wieg = Math.sin(tijd * 2.1) * 0.03;
+      } else if (vaartNu) {
         // Op het vlot: zittend, beentjes vooruit, de peddel in beide handjes; een slag links, een slag rechts.
         const k = vaart.slag;
         beenX = [-1.45, -1.45];
@@ -170,6 +180,14 @@ export function maakAnimatie(delen, { onStap } = {}) {
         wieg = Math.sin(tijd * 1.1) * 0.025;
       }
 
+      // Op de balanceerstam: armpjes wijd voor het evenwicht, en ze wiebelt mee.
+      if (s.modus === 'lopen' && s.opGrond && Math.abs(s.wiebel ?? 0) > 0.005) {
+        const w = s.wiebel;
+        armZ = [-1.45 - w * 0.5, 1.45 - w * 0.5];
+        armX = [armX[0] * 0.3, armX[1] * 0.3];
+        wieg = -w * 0.22;
+      }
+
       // Vloeiend naar de doelhouding.
       const t = 1 - Math.exp(-A.soepel * dt);
       for (let i = 0; i < 2; i++) {
@@ -186,7 +204,7 @@ export function maakAnimatie(delen, { onStap } = {}) {
 
       // Pletten bij een landing, uitrekken tijdens het stijgen.
       pletten = Math.max(0, pletten - dt * 6);
-      const rek = s.opGrond || zwemt || klimt || rijdt || vaartNu ? 0 : klem(s.vel[1] / 8, -0.5, 1) * A.rekken;
+      const rek = s.opGrond || zwemt || klimt || rijdt || vaartNu || slingert ? 0 : klem(s.vel[1] / 8, -0.5, 1) * A.rekken;
       const adem = (s.opGrond && v < A.stilDrempel) || (rijdt && rit.gang === 'stil') ? Math.sin(tijd * 2.2) * 0.012 : 0;
       const sy = 1 + rek + adem - pletten * A.pletten;
       lijf.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy)).multiplyScalar(basisSchaal);
