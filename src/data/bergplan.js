@@ -17,13 +17,20 @@ export const BERGPLAN = {
     touwbrug: { richting: 'oversteek', terug: true, vereiste: null, moeilijkheid: 1, pictogram: 'brug' },
     balanceerstam: { richting: 'oversteek', terug: true, vereiste: null, moeilijkheid: 1, pictogram: 'stam' },
     liaan: { richting: 'oversteek', terug: false, vereiste: null, moeilijkheid: 2, pictogram: 'liaan' }, // slingeren gaat maar één kant op
+    // Met het vlot de rivier af (stap 14b, regel 5): van een steiger tot in de lagune. De moeilijkheid volgt de klasse.
+    rivier: { richting: 'omlaag', terug: false, vereiste: null, moeilijkheid: 1, pictogram: 'vlot' },
   },
+  // Pootjes per klasse wildwater (I tot IV) op de wegwijzer bij een steiger.
+  klassePootjes: [1, 1, 2, 3],
   // Geen doorgang maar gewoon lopen: van een plek de bergtop op (de kegel is overal beloopbaar, stap 12).
   helling: { terug: true, vereiste: null, moeilijkheid: 1 },
 
   // Welke doorgangen elke scheiding krijgt (regel 3: minstens twee van een verschillende soort).
   rotsrand: ['ponypad', 'klimwand'],          // elke plek: een ponypad en een klimwand (regel 4)
   ravijn: { aantal: 2, keuze: ['touwbrug', 'balanceerstam', 'liaan'] }, // twee verschillende oversteken
+  // De rivier over de etage is ook een scheiding (stap 14b): ze deelt de plek achter het kamp in twee, met twee
+  // verschillende oversteken ertussen.
+  rivier: { aantal: 2, keuze: ['touwbrug', 'liaan', 'balanceerstam'] },
 
   // --- Plaatsing langs de rotsrand (afstanden gemeten langs de rotsrand) ---
   plaats: {
@@ -73,6 +80,21 @@ export const BERGPLAN = {
     liaan: { eerste: 150, laatste: 200, maxTussen: 315 }, // cm; het aantal lianen volgt uit de breedte
   },
 
+  // --- Oversteek over de rivier (stap 14b): zoals over een ravijn, maar hoger, zodat het vlot (met de pony erop)
+  // eronderdoor vaart. Een trapje gaat van het land naar elk platform. Wie in het water valt, plooft terug op het
+  // platform waar hij vandaan kwam (zoals in de vijver van het speelbos). ---
+  rivierOversteek: {
+    afstanden: [0.3, 0.84, 0.18, 0.46, 0.92, 0.1, 0.74, 0.38, 0.6, 0.66, 0.24, 0.54, 0.05], // waar op de etage (0 = de kom aan de voet van de bergtop, 1 = de rotsrand)
+    boven: 3.0,           // de platforms liggen zoveel boven het water
+    vanSteiger: 9,        // zo ver van de steiger op de etage
+    vanRand: 7,           // en van de grote waterval (over de kolk of het eilandje van de splitsing mag wel)
+    tussen: 10,           // twee oversteken over de rivier liggen minstens zo ver uit elkaar
+    trapHelling: 0.5,     // het trapje stijgt zoveel per meter
+    trapBreedte: 1.3,
+    bandMarge: 14,        // zo ver (meter langs de rotsrand) blijven ponypaden en klimwanden van de rivier
+  },
+
   // --- Wegwijzers (GD 2): een paaltje met het pictogram van de doorgang en 1 tot 3 pootjes ---
-  wegwijzer: { opzij: 2.6, voor: 2.2, hoogte: 1.5 },
+  // Bij een steiger: aan de landkant, zoveel opzij van de steiger.
+  wegwijzer: { opzij: 2.6, voor: 2.2, hoogte: 1.5, steigerOpzij: 2.4, steigerLand: 1.2 },
 };

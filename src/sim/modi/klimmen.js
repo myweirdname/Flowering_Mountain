@@ -632,7 +632,10 @@ function zoekVoeten(k, rots, K, doel) {
       }
     }
   }
-  if (!beste) return doel ? null : [];
+  // Lukt het niet in één keer (de voeten staan te laag voor een hoge greep, en één voet kan niet zo ver omhoog
+  // terwijl de andere beneden blijft), dan in een paar kleine stapjes: voet voor voet omhoog, telkens in balans.
+  if (!beste && doel) return voetenInStappen(k, kand, pt, L, doel, nu, zelfde, minVoet);
+  if (!beste) return [];
   if (!beste.ma && !beste.mb) return [];
   // Zonder doel verzetten de voeten zich alleen als het echt beter is (anders schuifelen ze de hele tijd).
   if (!doel && besteScore < nuScore + K.zet.voetBeter) return [];
@@ -644,6 +647,47 @@ function zoekVoeten(k, rots, K, doel) {
     if (lid === 'rv' && beste.mb) stappen.push(zet('rv', beste.b));
   }
   return stappen;
+}
+
+/**
+ * De voeten in stapjes hoger (zoekVoeten, als het in één keer niet lukt): zoekt de kortste reeks voetzetten
+ * (hoogstens 4), voet voor voet, waarbij het lichaam na elke zet in balans blijft, tot de hand `doel` erbij kan.
+ * Geeft de voetzetten terug, of null.
+ */
+function voetenInStappen(k, kand, pt, L, doel, nu, zelfde, minVoet) {
+  if (!nu.lv || !nu.rv) return null;
+  // Alleen voetplekken die hoger liggen dan de laagste voet nu (omlaag stappen helpt niet om hoger te reiken).
+  const laagste = Math.min(nu.lv.v, nu.rv.v);
+  const kies = kand.filter((c) => c.v > laagste - 0.05);
+  const sleutel = (s) => `${s.lv.greep}:${s.lv.u.toFixed(2)}|${s.rv.greep}:${s.rv.u.toFixed(2)}`;
+  let rij = [{ lv: nu.lv, rv: nu.rv, stappen: [] }];
+  const gezien = new Set([sleutel(rij[0])]);
+  const Q = [0, 0];
+  for (let diepte = 0; diepte < 4 && rij.length; diepte++) {
+    const volgende = [];
+    for (const st of rij) {
+      for (const lid of ['lv', 'rv']) {
+        for (const c of kies) {
+          if (zelfde(c, st[lid])) continue;
+          const n = { ...st, [lid]: c };
+          if (n.lv.u > n.rv.u + 0.08 || (n.lv.greep >= 0 && n.lv.greep === n.rv.greep)) continue;
+          if (n.lv.greep < 0 && n.rv.greep < 0 && n.rv.u - n.lv.u < 0.12) continue;
+          const s = sleutel(n);
+          if (gezien.has(s)) continue;
+          gezien.add(s);
+          const proef = { ...pt, lv: [n.lv.u, n.lv.v], rv: [n.rv.u, n.rv.v] };
+          Q[0] = k.P[0];
+          Q[1] = k.P[1];
+          if (schik(L, Q, proef, undefined, 30) > 0.006) continue;
+          const stappen = [...st.stappen, { lid, naar: { greep: c.greep, u: c.u, v: c.v } }];
+          if (Math.max(n.lv.v, n.rv.v) >= minVoet && kanNaar(L, Q, { ...proef, [doel.lid]: null }, doel.lid, doel.T, doel.kr)) return stappen;
+          volgende.push({ lv: n.lv, rv: n.rv, stappen });
+        }
+      }
+    }
+    rij = volgende;
+  }
+  return null;
 }
 
 /** Welke grepen kan de klimster nu bereiken (eventueel met de voeten eerst hoger)? Voor het oplichten in het beeld. */

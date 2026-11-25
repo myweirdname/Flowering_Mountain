@@ -173,7 +173,9 @@
   <p>Per bergcode wordt het netwerk van plekken en doorgangen gemaakt en op het eiland gezet. De controle is een zoektocht door het
      netwerk per soort speler (TP 5.1): <b>0</b> alles geplaatst, <b>1</b> een basisroute naar de top (moeilijkheid 1, hoogstens de pony),
      <b>2</b> elke plek bereikbaar en weer thuis, <b>3</b> twee soorten doorgangen per scheiding, <b>4</b> een klimwand op elke rotsrand,
-     <b>6</b> extra's nooit de enige weg, <b>A</b> de top met de pony, <b>B</b> de top al klimmend. (Regel 5, de rivier, komt in stap 14.)
+     <b>5</b> de rivier naar het kamp (op elke etage een steiger die je vanaf elke plek van die etage bereikt), <b>6</b> extra's nooit
+     de enige weg, <b>A</b> de top met de pony, <b>B</b> de top al klimmend. Sinds stap 14b is de rivier ook een scheiding op de etage
+     (met twee oversteken), en heeft elk eiland een bruggetje over de rivier in het laagland.
      <code>?bergplannen=300</code> kiest het aantal codes.</p>
   <table>
     <thead><tr><th>regel</th><th>in orde</th><th></th><th>fout bij</th></tr></thead>
@@ -184,9 +186,12 @@
   <h2>De doorgangen op het eiland (stap 13)</h2>
   <p>Voor een paar bergcodes: van elk eindpunt van een doorgang kom je te voet op zijn plek (onderaan: het kamp; bovenaan: de top),
      op een raster van 2 m met de loopregels (TP 5.3). De testbots spelen elke oversteek uit, en de klimbot klimt elke route van elke
-     klimwand tot hij bovenaan uitstapt. <code>?doorgangen=8</code> kiest het aantal codes (de klimbot neemt er de helft van).</p>
+     klimwand tot hij bovenaan uitstapt. Ook elke steiger moet te voet bereikbaar zijn, en elke oversteek over de rivier (hoog, met
+     trapjes) wordt door zijn testbot gehaald. Voor de eerste helft van de codes: het bruggetje in het laagland, te voet, met de pony
+     (ook even opzij tegen de leuning duwen) en de padzoeker van de tijger.
+     <code>?doorgangen=8</code> kiest het aantal codes (de klimbot neemt er de helft van).</p>
   <table>
-    <thead><tr><th>bergcode</th><th>plekken</th><th>eindpunten</th><th>oversteken</th><th>klimroutes</th><th>wandhoogtes</th><th>tijd</th></tr></thead>
+    <thead><tr><th>bergcode</th><th>plekken</th><th>eindpunten</th><th>oversteken</th><th>klimroutes</th><th>bruggetje</th><th>wandhoogtes</th><th>tijd</th></tr></thead>
     <tbody id="doorRijen"></tbody>
   </table>
   <div id="doorKlaar">Bezig ...</div>
@@ -200,6 +205,9 @@
     import { speelDoorgang } from './src/sim/doorgangen/bots.js';
     import { maakSim } from './src/sim/spel.js';
     import { klimProef } from './src/sim/klimmen/proefbot.js';
+    import { brugProef } from './src/sim/modi/brugbot.js';
+    import { maakPadvinder } from './src/sim/wereld/pad.js';
+    import { GEZEL } from './src/data/tijger.js';
 
     const zoek = new URLSearchParams(location.search);
     const ja = (b, tekst = b ? 'ja' : 'nee') => `<td class="${b ? 'ok' : 'fout'}">${tekst}</td>`;
@@ -209,7 +217,7 @@
     const N = +(zoek.get('bergplannen') ?? 300);
     const codes = ['bloei', ...Array.from({ length: N - 1 }, (_, i) => `berg${i + 1}`)];
     const per = new Map();
-    const telling = { plekken: 0, ponypad: 0, klimwand: 0, touwbrug: 0, balanceerstam: 0, liaan: 0 };
+    const telling = { plekken: 0, ponypad: 0, klimwand: 0, touwbrug: 0, balanceerstam: 0, liaan: 0, overRivier: 0, brug: 0 };
     const t0 = performance.now();
     const rijen = document.getElementById('planRijen');
     for (let i = 0; i < codes.length; i++) {
@@ -225,6 +233,9 @@
       }
       telling.plekken += plan.plekken.length;
       for (const v of plan.verbindingen) if (v.geplaatst && telling[v.soort] !== undefined) telling[v.soort]++;
+      for (const v of plan.verbindingen) if (v.geplaatst && v.overRivier) telling.overRivier++;
+      if (vorm.bergrivier.brug) telling.brug++;
+      else per.has('brug') ? per.get('brug').fout.push(codes[i]) : per.set('brug', { naam: 'bruggetje in het laagland', ok: 0, nvt: 0, fout: [codes[i]] });
       if (i % 20 === 19) {
         document.getElementById('planKlaar').textContent = `Bezig ... ${i + 1} / ${N}`;
         await pauze();
@@ -243,7 +254,8 @@
     const gem = (k) => (telling[k] / N).toFixed(1);
     document.getElementById('planKlaar').innerHTML = (allesGoed ? '<span class="ok">Geen enkel eiland met een onbereikbare plek of een gebroken regel.</span>' : '<span class="fout">Niet alle regels kloppen.</span>') +
       ` ${N} bergcodes in ${((performance.now() - t0) / 1000).toFixed(1)} s. Gemiddeld per eiland: ${gem('plekken')} plekken, ${gem('ponypad')} ponypaden, ${gem('klimwand')} klimwanden, ` +
-      `${gem('touwbrug')} touwbruggen, ${gem('balanceerstam')} balanceerstammen, ${gem('liaan')} lianen.`;
+      `${gem('touwbrug')} touwbruggen, ${gem('balanceerstam')} balanceerstammen, ${gem('liaan')} lianen (waarvan ${gem('overRivier')} over de rivier); ` +
+      `${telling.brug} / ${N} eilanden met een bruggetje in het laagland.`;
     window.planUitslag = { goed: allesGoed, per: Object.fromEntries(per) };
     window.planKlaar = true;
 
@@ -285,6 +297,8 @@
       let kr = 0;
       let krGoed = 0;
       let krTekst = '-';
+      let brGoed = true;
+      let brTekst = null;
       if (i < Math.ceil(M / 2)) {
         await pauze();
         const sim = maakSim(code);
@@ -298,13 +312,29 @@
           }
         }
         krTekst = `${krGoed} / ${kr}`;
+        // Het bruggetje: te voet heen, met de pony terug, en de tijger vindt een weg erover (niet eromheen).
+        const br = sim.wereld.bergrivier.brug;
+        const voet = brugProef(sim, { kant: 0 });
+        const pony = brugProef(sim, { kant: 1, pony: true });
+        const weg = br && maakPadvinder(sim.wereld, GEZEL.pad).zoek(...br.ingangen[0], ...br.ingangen[1]);
+        let lengte = 0;
+        if (weg) {
+          let [px, pz] = br.ingangen[0];
+          for (const [x, z] of weg) {
+            lengte += Math.hypot(x - px, z - pz);
+            [px, pz] = [x, z];
+          }
+        }
+        const tijgerGoed = !!weg && lengte < 2 * br.halfL + 6;
+        brGoed = voet.uitkomst === 'over' && pony.uitkomst === 'over' && tijgerGoed;
+        brTekst = `${voet.uitkomst === 'over' ? voet.tijd.toFixed(1) + ' s' : voet.uitkomst} / pony ${pony.uitkomst === 'over' ? pony.tijd.toFixed(1) + ' s' : pony.uitkomst} / tijger ${tijgerGoed ? lengte.toFixed(0) + ' m' : 'nee'}`;
       }
-      const goed = epGoed === ep && ovGoed === ov && krGoed === kr;
+      const goed = epGoed === ep && ovGoed === ov && krGoed === kr && brGoed;
       if (!goed) dfouten.push(code);
       const tr = document.createElement('tr');
       tr.innerHTML = `<td>${code}</td><td>${vorm.bergplan.plekken.length}</td>` +
         `${ja(epGoed === ep, `${epGoed} / ${ep}${epFout.length ? ' — ' + epFout.slice(0, 3).join(', ') : ''}`)}${ja(ovGoed === ov, `${ovGoed} / ${ov}`)}` +
-        `${kr ? ja(krGoed === kr, krTekst) : '<td>-</td>'}<td>${vorm.bergwanden.map((w) => w.hoogte.toFixed(0) + ' m').join(', ')}</td><td>${((performance.now() - tb) / 1000).toFixed(1)} s</td>`;
+        `${kr ? ja(krGoed === kr, krTekst) : '<td>-</td>'}${brTekst ? ja(brGoed, brTekst) : '<td>-</td>'}<td>${vorm.bergwanden.map((w) => w.hoogte.toFixed(0) + ' m').join(', ')}</td><td>${((performance.now() - tb) / 1000).toFixed(1)} s</td>`;
       drijen.appendChild(tr);
       await pauze();
     }

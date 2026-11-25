@@ -193,14 +193,19 @@ export function maakWereldvorm(zaadje, W, waarom) {
   }
 
   const zonder = /** @type {Bodem} */ ({});
-  bergrivier = maakBergrivier(BERGRIVIER, { eiland, beneden: rivier, kant, grond: (x, z) => bodem(x, z, zonder).h, kamp: W.kamp });
+  const sbBezet = { h: 0, vlak: 0, vijver: 0 };
+  bergrivier = maakBergrivier(BERGRIVIER, {
+    eiland, beneden: rivier, kant, grond: (x, z) => bodem(x, z, zonder).h, kamp: W.kamp,
+    // Het speelbos (de bosvloer en de vijver): daar komt het bruggetje niet (stap 14b).
+    bezet: (x, z) => speelbos.peilOp(x, z) > -Infinity || speelbos.stempel(x, z, 0, sbBezet).vlak > 0.3,
+  });
 
   // Het bergplan (stap 13): het netwerk van plekken en doorgangen, en de doorgangen op het eiland gezet
   // (ponypaden, klimwanden, oversteken). Een eigen deelzaadje.
-  const bergplan = maakBergplan(eiland, BERGPLAN, (zaadje ^ 0xb3e9a1) >>> 0);
+  const bergplan = maakBergplan(eiland, BERGPLAN, (zaadje ^ 0xb3e9a1) >>> 0, { berg: bergrivier, beneden: rivier });
   const geplaatst = plaatsBergplan({
     eiland, plan: bergplan, bodem, laagland: ruw, D: BERGPLAN, HB: EILAND.hellingbaan, K: KLIMMEN, SB: SPEELBOS,
-    zaadje: (zaadje ^ 0x9a7c1) >>> 0, waarom,
+    zaadje: (zaadje ^ 0x9a7c1) >>> 0, waarom, rivieren: { berg: bergrivier, beneden: rivier },
   });
 
   const tijdelijk = /** @type {Bodem} */ ({});

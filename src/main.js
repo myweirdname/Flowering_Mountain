@@ -1688,7 +1688,11 @@ window.spel = {
    */
   naarDoorgang(vi = 'klimwand', boven = false) {
     const lijst = sim.wereld.bergplan.verbindingen;
-    const v = lijst.find((q) => q.id === vi) ?? lijst.find((q) => q.soort === vi && q.geplaatst);
+    // 'rivieroversteek': een oversteek over de rivier (stap 14b); 'steiger': de steiger op de etage.
+    const v = lijst.find((q) => q.id === vi) ??
+      (vi === 'rivieroversteek' ? lijst.find((q) => q.overRivier && q.geplaatst) : null) ??
+      (vi === 'steiger' ? lijst.find((q) => q.soort === 'rivier' && q.steiger === 'etage' && q.geplaatst) : null) ??
+      lijst.find((q) => q.soort === vi && q.geplaatst);
     if (!v || !sim.naarVerbinding(LOKAAL, v.id, boven)) return null;
     const s = sim.speler(LOKAAL);
     volgcamera.zet(s.richting + Math.PI, CAMERA.kanteling);
@@ -1731,6 +1735,31 @@ window.spel = {
     const s = sim.speler(LOKAAL);
     s.richting = s.vorigeRichting = Math.atan2(k.ax, k.az);
     volgcamera.zet(Math.atan2(-k.ax, -k.az), CAMERA.kanteling);
+  },
+  /** Het bruggetje over de rivier in het laagland (stap 14b): zet de speler ervoor, met de neus naar de brug. */
+  naarBrug(kant = 0) {
+    const br = bergrivier.brug;
+    if (!br) return null;
+    const [x, z] = br.ingangen[kant];
+    const [ox, oz] = br.ingangen[1 - kant];
+    const lx = x + (x - ox) * (3 / (2 * br.halfL));
+    const lz = z + (z - oz) * (3 / (2 * br.halfL));
+    this.zet(lx, lz);
+    const s = sim.speler(LOKAAL);
+    s.richting = s.vorigeRichting = Math.atan2(ox - x, oz - z);
+    volgcamera.zet(s.richting + Math.PI, CAMERA.kanteling);
+    return br;
+  },
+  /** Laat de avonturier (of de pony, als je erop zit) met de gewone regels over het bruggetje lopen. */
+  brugBot(kant = 0) {
+    const br = bergrivier.brug;
+    if (!br) return null;
+    const [ax, az] = br.ingangen[kant];
+    const [bx, bz] = br.ingangen[1 - kant];
+    const dx = (bx - ax) / (2 * br.halfL);
+    const dz = (bz - az) / (2 * br.halfL);
+    bergBot = [[ax, az], [br.x, br.z], [bx + dx * 3, bz + dz * 3]];
+    return bergBot;
   },
   /** Zet de speler op de steiger aan de bron van de rivier. */
   naarRivier() {
@@ -1841,12 +1870,18 @@ if (INSTELLINGEN.plek?.startsWith('bergrivier')) {
   const s = sim.speler(LOKAAL);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
 }
+// ?plek=brug: voor het bruggetje over de rivier in het laagland (stap 14b).
+if (INSTELLINGEN.plek === 'brug') {
+  window.spel.naarBrug();
+  const s = sim.speler(LOKAAL);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}
 // ?plek=bos: aan de voet van de trap naar het speelbos; ?doorgang=liaan (of touwbrug, ...): meteen aan die doorgang (stap 11).
 // ?doorgang=v3 of ?doorgang=klimwand (ponypad, ...; met -boven: bovenaan): meteen bij een doorgang van de berg (stap 13).
 {
   const doorgang = new URLSearchParams(location.search).get('doorgang');
   const i = speelbos.modules.findIndex((m) => m.soort === doorgang);
-  const berg = doorgang && (/^v\d+/.test(doorgang) || ['klimwand', 'ponypad'].includes(doorgang.replace(/-boven$/, '')) || doorgang.startsWith('ravijn-'));
+  const berg = doorgang && (/^v\d+/.test(doorgang) || ['klimwand', 'ponypad', 'rivieroversteek', 'steiger'].includes(doorgang.replace(/-boven$/, '')) || doorgang.startsWith('ravijn-'));
   if (berg) {
     const naam = doorgang.replace(/-boven$/, '').replace(/^ravijn-/, '');
     window.spel.naarDoorgang(naam, doorgang.endsWith('-boven'));

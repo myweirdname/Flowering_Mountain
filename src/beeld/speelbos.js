@@ -81,6 +81,8 @@ export function maakSpeelbosbeeld(bos, K) {
   });
   if (bos.trap) openingen[0].push(Math.atan2(bos.trap.a[1], bos.trap.a[0]));
   if (bos.uitgang) openingen[openingen.length - 1].push(Math.atan2(bos.uitgang.a[1], bos.uitgang.a[0]));
+  // De trapjes van een oversteek over de rivier (stap 14b), één per platform.
+  (bos.trappen ?? []).forEach((p, i) => p && openingen[i].push(Math.atan2(p.a[1], p.a[0])));
   // Waar de boom tegen het platform staat: geen leuning.
   bos.dekken.forEach((d, i) => d.boom && openingen[i].push(Math.atan2(d.boomRichting[1], d.boomRichting[0])));
 
@@ -220,6 +222,7 @@ export function maakSpeelbosbeeld(bos, K) {
   }
   if (bos.trap) plank(bos.trap, true, true);
   if (bos.uitgang) plank(bos.uitgang, false, true);
+  for (const p of bos.trappen ?? []) if (p) plank(p, true, true);
 
   // --- De doorgangen: wat vastligt ---
   for (const m of bos.modules) {

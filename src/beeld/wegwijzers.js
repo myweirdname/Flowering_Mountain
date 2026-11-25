@@ -1,6 +1,6 @@
 // De wegwijzers (stap 13, GD 2: de weg vinden zonder te lezen): bij elke doorgang een houten paaltje met een
 // bordje. Op het bordje staat een pictogram van het soort uitdaging (pony, klimmen, touwbrug, boomstam,
-// lianen) en 1 tot 3 pootjes voor de moeilijkheid. Alles door code getekend, samen twee tekenopdrachten.
+// lianen, en bij de steigers een vlotje: stap 14b) en 1 tot 3 pootjes voor de moeilijkheid. Alles door code getekend, samen twee tekenopdrachten.
 // Een nieuwe soort doorgang krijgt hier een pictogram in TEKEN (en anders een vraagteken).
 import * as THREE from 'three';
 import { Bouwer, maakBol, matrix } from './maak/vorm.js';
@@ -77,6 +77,36 @@ const TEKEN = {
     g.beginPath(); g.ellipse(88, 44, 4, 6, 0, 0, Math.PI * 2); g.fill();
     g.fillStyle = '#ff6f6f';
     g.beginPath(); g.arc(40, 36, 4, Math.PI, 0); g.fill();
+  },
+  vlot(g) {
+    // Een bamboevlot op golfjes, met een peddel en een vlaggetje (stap 14b: bij de steigers).
+    g.fillStyle = '#41b8ff';
+    g.beginPath();
+    g.moveTo(0, 56);
+    for (let x = 0; x <= 100; x += 10) g.quadraticCurveTo(x + 5, 50, x + 10, 56);
+    g.lineTo(100, 70); g.lineTo(0, 70); g.closePath(); g.fill();
+    g.fillStyle = '#d9a36a';
+    for (let i = 0; i < 5; i++) {
+      g.beginPath(); g.roundRect(14 + i * 15, 38, 13, 16, 6); g.fill();
+    }
+    g.fillStyle = '#a8703f';
+    g.fillRect(14, 43, 73, 3);
+    // De peddel, schuin in het water.
+    g.strokeStyle = '#a8703f';
+    g.lineWidth = 3;
+    g.beginPath(); g.moveTo(70, 14); g.lineTo(88, 58); g.stroke();
+    g.fillStyle = '#7ed957';
+    g.beginPath(); g.ellipse(89, 60, 4, 7, -0.4, 0, Math.PI * 2); g.fill();
+    // Een vlaggetje.
+    g.strokeStyle = '#fff4e6';
+    g.beginPath(); g.moveTo(26, 38); g.lineTo(26, 8); g.stroke();
+    g.fillStyle = '#ff4f8b';
+    g.beginPath(); g.moveTo(27, 9); g.lineTo(46, 15); g.lineTo(27, 22); g.closePath(); g.fill();
+    // Wit schuim tegen het vlot.
+    g.fillStyle = '#ffffff';
+    for (const [x, y] of [[10, 55], [90, 54], [52, 57]]) {
+      g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fill();
+    }
   },
   liaan(g) {
     // Twee lianen aan een tak, met blaadjes.

@@ -62,7 +62,8 @@ function middenlijn(P) {
  * @param {typeof import('../../data/bergrivier.js').BERGRIVIER} B
  * @param {{ eiland: ReturnType<typeof import('./eiland.js').maakEiland>,
  *           beneden: ReturnType<typeof import('./rivier.js').maakRivier>, kant: number,
- *           grond: (x:number, z:number) => number, kamp: { x:number, z:number } }} c
+ *           grond: (x:number, z:number) => number, kamp: { x:number, z:number },
+ *           bezet?: (x:number, z:number) => boolean }} c
  *   grond: de hoogte van het landschap zonder deze rivier; kant: de kant van de lagune (-1 of 1)
  */
 export function maakBergrivier(B, c) {
@@ -536,6 +537,106 @@ export function maakBergrivier(B, c) {
     steigers.push({ naam, s, zijde, klasse, dek, ligplaats: { s, d: zijde * (b - ST.overWater - 1.1) } });
   }
   const dekken = steigers.map((k) => k.dek);
+
+  // --- Het bruggetje in het laagland (stap 14b): een houten boogbrug over de rivier, zodat je (en de pony)
+  // droog naar de overkant loopt. Hoog genoeg in het midden om met het vlot onderdoor te varen. ---
+  const BR = B.brug;
+  /** @type {{ s:number, x:number, z:number, ax:number, az:number, halfL:number, halfB:number, yA:number, yB:number, boog:number, ingangen:[number,number][] } | null} */
+  let brug = null;
+  /** Kiest de plaats van het bruggetje (pas als de bedding en de oevers bekend zijn, zie onderaan). */
+  function kiesBrug() {
+    const tmpBrug = { h: 0, water: 0, oever: 0, gras: 0, vlak: 0, wand: 0, dicht: 0, eiland: 0 };
+    const stLaag = steigers.find((k) => k.naam === 'laag');
+    const q0 = { s: 0, d: 0 };
+    // Elke meter van het laagland, het dichtst bij het liefste plekje eerst.
+    const lief = zoneS('laag', BR.liefst);
+    const kandidaten = [];
+    for (let s = Math.ceil(laag.van); s <= laag.tot - BR.vanEinde; s++) kandidaten.push(s);
+    kandidaten.sort((p, q) => Math.abs(p - lief) - Math.abs(q - lief));
+    for (const s of kandidaten) {
+      if (stLaag && Math.abs(s - stLaag.s) < BR.vanSteiger) continue;
+      const [mx, mz] = puntOp(s, 0);
+      const [px, pz] = puntOp(s, 1);
+      const ax = px - mx;
+      const az = pz - mz;
+      // Zo lang dat elk uiteinde op vlak genoeg land ligt (voorbij de steile wand van de oever).
+      const H = (l) => stempel(mx + ax * l, mz + az * l, c.grond(mx + ax * l, mz + az * l), tmpBrug).h;
+      const vlakAan = (l, k2) => Math.abs(H(l + k2 * 1) - H(l)) <= BR.maxEindHelling && Math.abs(H(l) - H(l - k2 * 0.5)) <= BR.maxEindHelling * 0.5;
+      let halfL = breedte(s) + B.oever.breed + BR.opLand;
+      for (let ext = 0; ext < 4 && !(vlakAan(-halfL, -1) && vlakAan(halfL, 1)); ext++) halfL += 1;
+      const A = [mx - ax * halfL, mz - az * halfL];
+      const Bp = [mx + ax * halfL, mz + az * halfL];
+      // Beide uiteinden op droog land, niet in de benedenrivier, en de rivier recht genoeg: het dichtste stuk
+      // rivier bij elk uiteinde is dit stuk (niet een ander stuk in een bocht, dat de oever daar dieper uitgraaft).
+      const droog = ([x, z]) => c.grond(x, z) > 0.4 && beneden.peilOp(x, z) === 0 && !c.bezet?.(x, z);
+      if (!droog(A) || !droog(Bp)) continue;
+      const recht = ([x, z]) => {
+        for (const f2 of [0.6, 0.85, 1]) {
+          const px2 = mx + (x - mx) * f2;
+          const pz2 = mz + (z - mz) * f2;
+          if (!naar(px2, pz2, q0) || Math.abs(q0.s - s) > BR.recht) return false;
+        }
+        return true;
+      };
+      if (!recht(A) || !recht(Bp)) continue;
+      // Voorbij elk uiteinde droog land om af te stappen (niet meteen weer een ander stuk rivier in een bocht).
+      const verder = (P, k2) => [1.5, 3.5].every((e2) => {
+        const x = P[0] + ax * k2 * e2;
+        const z = P[1] + az * k2 * e2;
+        return droog([x, z]) && peilOp(x, z) === 0;
+      });
+      if (!verder(A, -1) || !verder(Bp, 1)) continue;
+      // De hoogte van de uitgegraven oever aan elk uiteinde (zoals het landschap er straks echt ligt).
+      const yA = stempel(A[0], A[1], c.grond(A[0], A[1]), tmpBrug).h + 0.03;
+      const yB = stempel(Bp[0], Bp[1], c.grond(Bp[0], Bp[1]), tmpBrug).h + 0.03;
+      if (Math.abs(yA - yB) > BR.maxVerschil) continue;
+      const boog = Math.max(BR.minBoog, peil(s) + BR.vrij - (yA + yB) / 2);
+      if ((Math.abs(yB - yA) + Math.PI * boog) / (2 * halfL) > BR.maxHelling) continue;
+      brug = { s, x: mx, z: mz, ax, az, halfL, halfB: BR.breedte / 2, yA, yB, boog, ingangen: [A, Bp] };
+      break;
+    }
+  }
+  /** De hoogte van de brug op (x, z), of -Infinity. marge: zoveel van de zijkant af (voor de padzoeker). */
+  function brugOp(x, z, marge = 0) {
+    if (!brug) return -Infinity;
+    const dx = x - brug.x;
+    const dz = z - brug.z;
+    const l = dx * brug.ax + dz * brug.az;
+    const b = -dx * brug.az + dz * brug.ax;
+    if (Math.abs(b) > brug.halfB - marge) return -Infinity;
+    // Voorbij elk uiteinde een drempeltje dat in de grond wegzakt (geen trede tussen brug en gras).
+    const voorbij = Math.abs(l) - brug.halfL;
+    if (voorbij > 0) return voorbij > 0.7 ? -Infinity : (l < 0 ? brug.yA : brug.yB) - voorbij * 0.8;
+    const f = (l + brug.halfL) / (2 * brug.halfL);
+    return brug.yA + (brug.yB - brug.yA) * f + brug.boog * Math.sin(Math.PI * f);
+  }
+  /**
+   * De leuningen van de brug: wie op de brug loopt (of er net boven springt), blijft erop. Duwt pos terug
+   * naar binnen en haalt de vaart naar buiten weg. zij: hoe breed wie erop loopt (half).
+   */
+  function brugLeuning(pos, vel, zij = 0.3) {
+    if (!brug) return false;
+    const dx = pos[0] - brug.x;
+    const dz = pos[2] - brug.z;
+    const l = dx * brug.ax + dz * brug.az;
+    if (Math.abs(l) > brug.halfL - BR.leuningVanEind) return false;
+    const b = -dx * brug.az + dz * brug.ax;
+    const max = brug.halfB - BR.leuning - zij;
+    if (Math.abs(b) > brug.halfB + 0.4) return false;
+    const f = (l + brug.halfL) / (2 * brug.halfL);
+    const y = brug.yA + (brug.yB - brug.yA) * f + brug.boog * Math.sin(Math.PI * f);
+    if (pos[1] < y - 0.6 || pos[1] > y + 2.5 || Math.abs(b) <= max) return false;
+    const terug = b - Math.sign(b) * max;
+    pos[0] += brug.az * terug;
+    pos[2] -= brug.ax * terug;
+    const v = -vel[0] * brug.az + vel[2] * brug.ax;
+    if (v * b > 0) {
+      vel[0] += brug.az * v;
+      vel[2] -= brug.ax * v;
+    }
+    return true;
+  }
+
   function dekOp(x, z, marge = 0) {
     let best = -Infinity;
     for (const k of dekken) {
@@ -549,7 +650,7 @@ export function maakBergrivier(B, c) {
   }
   function blokOp(x, z) {
     if (x < minX || x > maxX || z < minZ || z > maxZ) return -Infinity;
-    let best = dekOp(x, z);
+    let best = Math.max(dekOp(x, z), brugOp(x, z));
     for (const r of rotsen) {
       const dx = x - r.x;
       const dz = z - r.z;
@@ -643,6 +744,12 @@ export function maakBergrivier(B, c) {
       if (voorbij > 0.3 && hn - (Wo + rand) > 0.7 && wand > 1) uit.wand = 1 - buiten;
       if (inSprong(s)?.groot || (Wo - peil(s) > 2 && voorbij < 3)) uit.wand = 1;
     }
+    // Bij het bruggetje: vlak gras aan beide uiteinden (geen bultjes onder het begin van de brug).
+    if (brug && Math.abs(s - brug.s) < brug.halfB + BR.opLand + 2) {
+      const k = (1 - glad((Math.abs(s - brug.s) - brug.halfB - 1) / (BR.opLand + 1))) * (1 - glad((Math.abs(eb - (brug.halfL - b)) - 1.5) / 2));
+      uit.vlak = Math.max(uit.vlak, k);
+      uit.gras = Math.max(uit.gras, k * (1 - uit.water));
+    }
     uit.h = h + (hn - h) * meng;
     uit.dicht = (1 - glad((eb - 3) / 6)) * meng;
     return uit;
@@ -698,6 +805,8 @@ export function maakBergrivier(B, c) {
     return { x, z, y: peil(s) + B.bloesemHoogte };
   });
 
+  kiesBrug();
+
   return {
     naam: 'berg',
     R: B,
@@ -739,6 +848,10 @@ export function maakBergrivier(B, c) {
     inValOp,
     blokOp,
     dekOp,
+    /** Het bruggetje in het laagland (stap 14b), of null. */
+    brug,
+    brugOp,
+    brugLeuning,
     dichtbij: (x, z) => x >= minX && x <= maxX && z >= minZ && z <= maxZ,
     /** Stroomafwaarts gaat de bergrivier over in de benedenrivier, op deze s. */
     volgende: { tak: beneden, s: AANSLUIT, sHier: sEinde },

@@ -154,8 +154,9 @@ function verplaats(p, stuur, wereld, R, dt, meld) {
     const g = ter(vx, vz);
     const peil = Math.max(wereld.weide.water(vx, vz), 0);
     if (g - p.pos[1] > R.stapHoogte || peil - g > R.maxDiepte) return false;
-    // Te steil omhoog (een rotswand): daar kan ze niet op, ook niet stapje voor stapje.
-    if (g > p.pos[1] + 0.01) {
+    // Te steil omhoog (een rotswand): daar kan ze niet op, ook niet stapje voor stapje. Op een brug of steiger
+    // telt de helling van het terrein eronder niet (stap 14b: het bruggetje over de rivier).
+    if (g > p.pos[1] + 0.01 && g <= wereld.raster.hoogteOp(vx, vz) + 0.05) {
       const [gx, gz] = wereld.raster.hellingOp(vx, vz);
       if (gx * gx + gz * gz > steil * steil) return false;
     }

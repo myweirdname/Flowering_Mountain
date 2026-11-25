@@ -70,6 +70,24 @@ export const BERGRIVIER = {
 
   // --- Steigers: op de oever aan de kant van het kamp. Hier ligt het vlot klaar. ---
   steiger: { lengte: 3.2, breedte: 2.0, overWater: 0.7, hoogte: 0.5, terras: 7, terrasLengte: 11 },
+  // --- Het bruggetje in het laagland (stap 14b): een houten boogbrug, ook voor de pony ---
+  brug: {
+    liefst: 0.5,         // waar langs het laagland het liefst (0 = de poel, 1 = de benedenrivier); anders zo dicht mogelijk
+    vanSteiger: 10,      // zo ver van de steiger onder de waterval
+    vanEinde: 11,        // en van het einde (de kleine waterval naar de benedenrivier)
+    recht: 2.5,          // aan beide uiteinden ligt het dichtste stuk rivier hoogstens zoveel meter verder of terug
+    breedte: 3.0,
+    opLand: 2.4,         // zo ver loopt de brug voorbij de oever het land op
+    vrij: 2.6,           // in het midden zoveel boven het water (het vlot met de pony vaart eronder door)
+    minBoog: 0.6,
+    maxHelling: 0.62,    // nooit steiler dan dit (de pony kan tot ±40°)
+    maxEindHelling: 0.6, // het land aan elk uiteinde (per meter): anders loopt de brug wat verder het land op
+    maxVerschil: 2.0,    // de twee oevers mogen zoveel in hoogte verschillen
+    leuning: 0.25,       // de leuning staat zoveel binnen de rand
+    leuningVanEind: 0.5, // de laatste halve meter aan elk eind heeft geen leuning (daar stap je op en af)
+    kleur: 0xd9a36a, kleurDonker: 0xa8703f, leuningKleur: 0xfff4e6, knop: 0xff7fb0,
+  },
+
   // Een vlag per steiger in de kleur van de klasse (van ver te zien), I tot IV.
   vlag: { hoogte: 4.5, kleuren: [0x7fd96a, 0x41b8ff, 0xffa53d, 0xff4f8b], knop: 0xffd84d },
 

@@ -97,7 +97,9 @@ export function maakSim(berg) {
     bergplan: vorm.bergplan, // het netwerk van plekken en doorgangen (stap 13)
     waterOp: vorm.waterOp, // het waterpeil: 0 in zee en lagune, hoger in de rivier
     stroomOp: vorm.stroomOp, // de stroming van de rivieren (in het water voert ze je mee)
+    brugOp: bergrivier.brugOp, // het bruggetje over de rivier in het laagland (stap 14b)
   };
+  const geenVaart = [0, 0, 0];
   // Waar de bouwstukken voor het vlot liggen (drie bundels bamboe en een liaan, rond de bron).
   wereld.vlotStukken = VLOT.stukken.map((_, i) => stukPlek(rivier, VLOT, i, grond.grondOp));
   // Boven elke hindernis zweeft een bloesem: wie er met de pony over springt, pakt hem.
@@ -436,6 +438,10 @@ export function maakSim(berg) {
         const plek = vorm.oversteken[v.plaats.parcours].startPlek(boven ? 1 : 0);
         [x, , z] = plek.pos;
         richting = plek.richting;
+      } else if (v.soort === 'rivier') {
+        // Op de oever bij de steiger, met je neus naar het water.
+        [x, z] = v.plaats.land.voor;
+        richting = Math.atan2(-v.plaats.land.uit[0], -v.plaats.land.uit[1]);
       } else {
         const p = vorm.bergplan.plekken.find((q) => q.id === v.van);
         [x, z] = vorm.eiland.punt(p.midden, (vorm.eiland.randStraal(p.midden) + vorm.eiland.voetStraal(p.midden)) / 2);
@@ -586,6 +592,7 @@ export function maakSim(berg) {
         } else if (s.modus === 'slingeren') bosSlinger(parcoursVan(s), s, int, dt, meld);
         else if (s.modus === 'lopen') {
           stapLopen(s, bosInvoer(parcoursVan(s), s, int), wereld, LOPEN, dt, meld, ZWEMMEN);
+          bergrivier.brugLeuning(s.pos, s.vel, 0.3); // het bruggetje in het laagland (stap 14b)
           pakStukken(s, vlotVan(s), wereld.vlotStukken, VLOT, meld);
         }
         else if (s.modus === 'zwemmen') stapZwemmen(s, int, wereld, ZWEMMEN, dt, meld);
@@ -593,6 +600,10 @@ export function maakSim(berg) {
           const q = ponyOnder(s);
           bewaarVorige(q);
           stapRijden(s, q, int, wereld, RIJDEN, dt, meld);
+          if (bergrivier.brugLeuning(q.pos, geenVaart, 0.55)) {
+            s.pos[0] = q.pos[0];
+            s.pos[2] = q.pos[2];
+          }
           werkRondeBij(s.ronde, q, weide, tik * dt, s.id, meld);
           if (q.stopt && q.opGrond && q.weigert <= 0 && Math.abs(q.snelheid) < RIJDEN.afstapSnelheid) {
             stapAf(s, q, wereld, meld);
@@ -665,6 +676,7 @@ export function maakSim(berg) {
         if (p.ruiter || p.modus === 'vlot') continue;
         bewaarVorige(p);
         stapPonyVrij(p, spelers.find((s) => s.id === p.eigenaar), wereld, RIJDEN, dt, meld);
+        bergrivier.brugLeuning(p.pos, geenVaart, 0.55);
         // Begroet de tijger haar? Dan draait ze haar hoofd naar hem toe.
         const t = p.begroetDoor && tijgers.find((q) => q.id === p.begroetDoor);
         if (t && t.modus === 'begroet' && p.modus === 'staat') {

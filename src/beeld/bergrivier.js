@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { maakRots } from './maak/klein.js';
 import { FLORA } from '../data/flora.js';
 import { bouwSteiger, maakVlag } from './rivier.js';
+import { Bouwer, maakBol, matrix } from './maak/vorm.js';
 
 const KAART_DS = 0.25; // schuimkaart: zoveel meter per rij
 const KAART_B = 32;    // en zoveel kolommen dwars
@@ -320,6 +321,9 @@ export function maakBergrivierbeeld(rivier, K, zonRichting, hemelKleur) {
     vlaggen.push(vlag);
   }
 
+  // --- Het bruggetje in het laagland (stap 14b): een houten boogbrug met witte leuningen ---
+  if (rivier.brug) groep.add(bouwBrug(rivier.brug, B.brug, K));
+
   // --- De grote waterval: nevel die opstijgt, en een regenboog ---
   const val = rivier.groteVal;
   const valOnder = new THREE.Vector3();
@@ -411,4 +415,81 @@ export function maakBergrivierbeeld(rivier, K, zonRichting, hemelKleur) {
       }
     },
   };
+}
+
+/**
+ * Het bruggetje in het laagland (stap 14b): een boogbrug van planken op twee balken, met witte leuningen en
+ * roze knopjes, en palen in de oever. Dezelfde boog als in de simulatie (brugOp). Eén tekenopdracht.
+ * @param {NonNullable<ReturnType<typeof import('../sim/wereld/bergrivier.js').maakBergrivier>['brug']>} brug
+ * @param {typeof import('../data/bergrivier.js').BERGRIVIER.brug} BR
+ */
+function bouwBrug(brug, BR, K) {
+  const b = new Bouwer();
+  const fijn = K.detail > 0;
+  const L = brug.halfL * 2;
+  const yOp = (l) => {
+    const f = (l + brug.halfL) / L;
+    return brug.yA + (brug.yB - brug.yA) * f + brug.boog * Math.sin(Math.PI * f);
+  };
+  const helling = (l) => (yOp(l + 0.05) - yOp(l - 0.05)) / 0.1;
+  /** Brug (l langs, w opzij) naar de wereld. */
+  const op = (l, w) => [brug.x + brug.ax * l - brug.az * w, brug.z + brug.az * l + brug.ax * w];
+  const ry = Math.atan2(brug.ax, brug.az);
+  const donker = new THREE.Color(BR.kleur).lerp(new THREE.Color(BR.kleurDonker), 0.35).getHex();
+
+  // De planken, dwars over de brug, elk volgens de boog gekanteld.
+  const n = Math.ceil(L / 0.3);
+  for (let i = 0; i < n; i++) {
+    const l = -brug.halfL + (i + 0.5) * (L / n);
+    const [x, z] = op(l, 0);
+    const rx = -Math.atan(helling(l));
+    b.voegToe(new THREE.BoxGeometry(brug.halfB * 2, 0.09, (L / n) / Math.cos(rx) - 0.03), {
+      matrix: matrix(x, yOp(l) - 0.045, z, rx, ry, (i % 3 - 1) * 0.01),
+      kleur: i % 2 ? BR.kleur : donker,
+    });
+  }
+  // Twee balken eronder, en palen in de oevers.
+  const m = Math.ceil(L / 0.5);
+  for (const w of [-brug.halfB + 0.18, brug.halfB - 0.18]) {
+    for (let i = 0; i < m; i++) {
+      const l = -brug.halfL + (i + 0.5) * (L / m);
+      const [x, z] = op(l, w);
+      const rx = -Math.atan(helling(l));
+      b.voegToe(new THREE.BoxGeometry(0.16, 0.24, (L / m) / Math.cos(rx) + 0.02), { matrix: matrix(x, yOp(l) - 0.2, z, rx, ry), kleur: BR.kleurDonker });
+    }
+    for (const l of [-(brug.halfL - BR.opLand + 0.2), brug.halfL - BR.opLand + 0.2]) {
+      const [x, z] = op(l, w);
+      const y = yOp(l);
+      b.voegToe(new THREE.CylinderGeometry(0.11, 0.13, 3, fijn ? 8 : 5), { matrix: matrix(x, y - 1.6, z), kleur: BR.kleurDonker });
+    }
+  }
+  // De leuningen: paaltjes met een witte bovenbalk, roze knopjes op de eerste en laatste paal.
+  const van = -brug.halfL + BR.leuningVanEind;
+  const tot = brug.halfL - BR.leuningVanEind;
+  const palen = Math.max(4, Math.round((tot - van) / 1.1));
+  for (const w of [-brug.halfB + 0.1, brug.halfB - 0.1]) {
+    let vorige = null;
+    for (let i = 0; i <= palen; i++) {
+      const l = van + ((tot - van) * i) / palen;
+      const [x, z] = op(l, w);
+      const y = yOp(l);
+      b.voegToe(new THREE.CylinderGeometry(0.055, 0.065, 0.95, fijn ? 8 : 5), { matrix: matrix(x, y + 0.45, z), kleur: BR.leuningKleur });
+      const eind = i === 0 || i === palen;
+      b.voegToe(maakBol(eind ? 0.11 : 0.07, fijn ? 1 : 0), { matrix: matrix(x, y + 0.95, z), kleur: eind ? BR.knop : BR.leuningKleur });
+      const top = new THREE.Vector3(x, y + 0.9, z);
+      if (vorige) {
+        for (const [hoog, dik] of [[0, 0.07], [-0.42, 0.045]]) {
+          const p = vorige.clone().add(top).multiplyScalar(0.5);
+          const lengte = vorige.distanceTo(top);
+          const rx = -Math.atan2(top.y - vorige.y, Math.hypot(top.x - vorige.x, top.z - vorige.z));
+          b.voegToe(new THREE.BoxGeometry(dik, dik, lengte + 0.04), { matrix: matrix(p.x, p.y + hoog, p.z, rx, ry), kleur: BR.leuningKleur });
+        }
+      }
+      vorige = top;
+    }
+  }
+  const mesh = new THREE.Mesh(b.maak(), new THREE.MeshLambertMaterial({ vertexColors: true }));
+  mesh.castShadow = K.schaduw;
+  mesh.receiveShadow = K.schaduw;
+  return mesh;
 }

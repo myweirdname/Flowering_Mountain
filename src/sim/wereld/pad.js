@@ -19,6 +19,8 @@ export function maakPadvinder(wereld, P) {
   /** Mag een tijger op dit punt staan? */
   function vrij(x, z, marge = 0.55) {
     if (x < x0 || z < z0 || x > gr.maxX - 1 || z > gr.maxZ - 1) return false;
+    // Op het bruggetje over de rivier (stap 14b): loopbaar, ook al is er water en een steile oever onder.
+    if (wereld.brugOp && wereld.brugOp(x, z, marge) > -Infinity) return true;
     const g = wereld.raster.hoogteOp(x, z);
     if (g < 0.15) return false; // zee of lagune
     if (wereld.waterOp(x, z) > g + 0.25) return false; // de rivier
