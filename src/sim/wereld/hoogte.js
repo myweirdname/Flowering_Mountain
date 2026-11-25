@@ -16,13 +16,16 @@ import { maakEiland, zachtMin } from './eiland.js';
 import { BERGPLAN } from '../../data/bergplan.js';
 import { maakBergplan } from './bergplan.js';
 import { plaatsBergplan } from './plaatsing.js';
+import { BERGRIVIER } from '../../data/bergrivier.js';
+import { maakBergrivier } from './bergrivier.js';
 
 const glad = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 
 /**
  * @typedef {{ h:number, zand:number, kamp:number, pad:number, bos:number, lagune:number, d:number,
  *             weide:number, baan:number, nat:number, rivier:number, oever:number, speelbos:number, vijver:number,
- *             wand:number, voet:number, berg:number, top:number, ravijn:number }} Bodem
+ *             wand:number, voet:number, berg:number, top:number, ravijn:number, bergrivier:number }} Bodem
+ *   bergrivier: hoe dicht bij de rivier over de berg (stap 14; 1 = erin of vlak ernaast)
  */
 
 /**
@@ -103,6 +106,10 @@ export function maakWereldvorm(zaadje, W, waarom) {
   const padBegin = weide.naarWereld(0, weide.R + weide.B + 3);
   eiland.bouw(ruw, padBegin);
   const bg = /** @type {import('./eiland.js').BergUit} */ ({});
+  // De rivier over de berg (stap 14): pas te bouwen als de berg er staat (ze volgt het landschap).
+  /** @type {ReturnType<typeof maakBergrivier> | null} */
+  let bergrivier = null;
+  const br = { h: 0, water: 0, oever: 0, gras: 0, vlak: 0, wand: 0, dicht: 0, eiland: 0 };
 
   /**
    * Vult `uit` met de hoogte en de soort ondergrond op (x, z).
@@ -153,15 +160,22 @@ export function maakWereldvorm(zaadje, W, waarom) {
     h = eiland.berg(x, z, h, bg);
     pw = Math.max(pw, bg.pad);
 
-    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw) * (1 - st.weide) * (1 - rv.vlak) * (1 - sb.vlak) * (1 - bg.vlak);
+    // De rivier over de berg: haar bedding, oevers en de terrasjes bij de steigers.
+    if (bergrivier) {
+      bergrivier.stempel(x, z, h, br);
+      h = br.h;
+    } else br.water = br.oever = br.gras = br.vlak = br.wand = br.dicht = 0;
+
+    uit.h = h + fijn * (1 - kw) * (1 - pw) * (1 - lw) * (1 - st.weide) * (1 - rv.vlak) * (1 - sb.vlak) * (1 - bg.vlak) * (1 - br.vlak);
     let zand = 1 - glad((d - S.breedte * 0.75) / 5);
-    zand = Math.max(zand, 1 - glad((dl - 1.08) / 0.3), gw, st.nat, rv.oever, sb.vijver);
+    zand = Math.max(zand, 1 - glad((dl - 1.08) / 0.3), gw, st.nat, rv.oever, sb.vijver, br.oever);
     if (uit.h < 0.3) zand = 1;
     uit.zand = zand;
-    uit.kamp = Math.max(kw, rv.gras, sb.vlak, bg.open) * (1 - zand);
+    uit.kamp = Math.max(kw, rv.gras, sb.vlak, bg.open, br.gras) * (1 - zand);
     uit.speelbos = sb.vlak;
     uit.vijver = sb.vijver;
-    uit.rivier = rv.water;
+    uit.rivier = Math.max(rv.water, br.water);
+    uit.bergrivier = br.dicht;
     uit.oever = rv.oever;
     uit.weide = st.weide * (1 - zand) * (1 - kw);
     uit.baan = st.baan * (1 - zand);
@@ -170,13 +184,16 @@ export function maakWereldvorm(zaadje, W, waarom) {
     uit.lagune = lw;
     uit.bos = Math.max(0, 1 - zand - uit.kamp - uit.pad - uit.weide);
     uit.d = d;
-    uit.wand = bg.wand;
-    uit.voet = bg.voet * (1 - zand);
+    uit.wand = Math.max(bg.wand * (1 - br.vlak), br.wand);
+    uit.voet = bg.voet * (1 - zand) * (1 - br.dicht);
     uit.berg = bg.berg;
     uit.top = bg.top;
     uit.ravijn = bg.ravijn;
     return uit;
   }
+
+  const zonder = /** @type {Bodem} */ ({});
+  bergrivier = maakBergrivier(BERGRIVIER, { eiland, beneden: rivier, kant, grond: (x, z) => bodem(x, z, zonder).h, kamp: W.kamp });
 
   // Het bergplan (stap 13): het netwerk van plekken en doorgangen, en de doorgangen op het eiland gezet
   // (ponypaden, klimwanden, oversteken). Een eigen deelzaadje.
@@ -199,9 +216,18 @@ export function maakWereldvorm(zaadje, W, waarom) {
     lagune: { x: lagX, z: lagZ, straal: lagR },
     weide,
     rivier,
+    bergrivier,
+    /** Alle rivieren: de benedenrivier (0) en de rivier over de berg (1), die erin uitkomt. */
+    rivieren: [rivier, bergrivier],
     speelbos,
-    /** Het waterpeil op (x, z): 0 in zee en lagune, hoger in de rivier en in de vijver van het speelbos. */
-    waterOp: (x, z) => Math.max(rivier.peilOp(x, z), speelbos.peilOp(x, z)),
+    /** Het waterpeil op (x, z): 0 in zee en lagune, hoger in de rivieren en in de vijver van het speelbos. */
+    waterOp: (x, z) => Math.max(rivier.peilOp(x, z), bergrivier.peilOp(x, z), speelbos.peilOp(x, z)),
+    /** De stroming van de rivieren op (x, z) als snelheid [x, z]. */
+    stroomOp(x, z, uit = [0, 0]) {
+      bergrivier.stroomOp(x, z, uit);
+      if (uit[0] === 0 && uit[1] === 0) rivier.stroomOp(x, z, uit);
+      return uit;
+    },
     kamp: { x: W.kamp.x, z: W.kamp.z, straal: W.kamp.straal, h: kampH },
   };
 }

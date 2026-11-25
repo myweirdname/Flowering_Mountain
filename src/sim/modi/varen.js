@@ -3,16 +3,26 @@
 // Botsen tegen een rots of de oever kost alleen vaart. Over de kleine sprong vlieg je even in slow motion.
 // In de lagune peddel je vrij rond in stil water en leg je aan bij de steiger of aan de oever.
 // Ook: de bouwstukken verzamelen en het vlot bouwen. Geen Three.js, alleen gegevens.
+//
+// Sinds stap 14 vaart het vlot over een net van rivieren (`rivieren`): de benedenrivier (0) en de rivier over de
+// berg (1), die in de bron van de benedenrivier uitkomt. `v.tak` zegt op welke het vlot ligt. Het vlot ligt klaar
+// aan elke steiger: loop je weg, dan ligt het weer klaar aan de steiger het dichtst bij jou. Nieuw op de berg:
+// meerdere watervallen (de grote over de rotsrand in diepe slow motion), golftreinen waarop het vlot danst,
+// keerwater (daar ligt het stil), een kolk die je ronddraait en een splitsing rond een eilandje.
 
 /** @typedef {ReturnType<typeof maakVlot>} Vlot */
-export function maakVlot(id, eigenaar, rivier, V) {
+export function maakVlot(id, eigenaar, rivieren, V) {
   const v = {
     id,
     eigenaar,
     gebouwd: false,
     bouwt: 0,           // seconden die het bouwen nog duurt
     stukken: V.stukken.map(() => false),
-    plek: 'boven',      // 'boven' (klaar aan de bron), 'vaart' (op de rivier), 'lagune' (vrij in stil water)
+    plek: 'boven',      // 'boven' (klaar aan een steiger), 'vaart' (op de rivier), 'lagune' (vrij in stil water)
+    tak: 0,             // op welke rivier (0 = de benedenrivier, 1 = de rivier over de berg)
+    steiger: 'bron',    // aan welke steiger het klaarligt
+    sprong: null,       // de waterval waarover het nu vliegt
+    golf: 0, kantel: 0, // dansen op de golftrein (hoogte en kanteling, voor het beeld)
     ruiter: null,       // id van de speler die erop zit
     pony: null,         // id van de pony die meevaart
     s: 0, d: 0, vs: 0, vd: 0,
@@ -22,19 +32,29 @@ export function maakVlot(id, eigenaar, rivier, V) {
     richting: 0, vorigeRichting: 0,
     botsWacht: 0,
   };
-  zetKlaar(v, rivier);
+  zetKlaar(v, rivieren);
   v.vorigePos = [...v.pos];
   v.vorigeRichting = v.richting;
   return v;
 }
 
-/** Het vlot ligt (weer) klaar naast de steiger bij de bron. */
-export function zetKlaar(v, rivier) {
-  Object.assign(v, { plek: 'boven', s: rivier.ligplaats.s, d: rivier.ligplaats.d, vs: 0, vd: 0, vy: 0, lucht: false, draai: 0, draaiV: 0, schommel: 0, slowmo: 1 });
+/** Alle steigers van alle rivieren: { tak, steiger }. */
+export function alleSteigers(rivieren) {
+  return rivieren.flatMap((r, tak) => r.steigers.map((steiger) => ({ tak, steiger })));
+}
+
+/** Het vlot ligt (weer) klaar naast een steiger (standaard die bij de bron van de benedenrivier). */
+export function zetKlaar(v, rivieren, tak = 0, naam = rivieren[0].steigers[0].naam) {
+  const rivier = rivieren[tak];
+  const st = rivier.steigers.find((k) => k.naam === naam) ?? rivier.steigers[0];
+  Object.assign(v, { plek: 'boven', tak, steiger: st.naam, s: st.ligplaats.s, d: st.ligplaats.d, vs: 0, vd: 0, vy: 0, lucht: false, sprong: null, draai: 0, draaiV: 0, schommel: 0, slowmo: 1, golf: 0, kantel: 0 });
   v.y = rivier.peil(v.s);
   naarWereld(v, rivier);
   v.vel = [0, 0, 0];
 }
+
+/** Kan je dit vlot gebruiken? Op de berg ligt er altijd een klaar; bij de bron bouw je het eerst zelf. */
+export const vlotKlaar = (v) => v.gebouwd || v.tak !== 0;
 
 const pt = [0, 0];
 const rl = [0, 0];
@@ -75,10 +95,13 @@ export function pakStukken(s, v, plekken, V, meld) {
   }
 }
 
-/** Staat de speler bij de steiger aan de bron? */
-export function bijSteiger(s, rivier, V) {
-  const k = rivier.bovenDek;
-  return Math.hypot(s.pos[0] - k.x, s.pos[2] - k.z) < V.bouwAfstand && Math.abs(s.pos[1] - k.y) < 1.4;
+/** Bij welke steiger staat de speler? Geeft { tak, steiger } of null. */
+export function bijSteiger(s, rivieren, V) {
+  for (const st of alleSteigers(rivieren)) {
+    const k = st.steiger.dek;
+    if (Math.hypot(s.pos[0] - k.x, s.pos[2] - k.z) < V.bouwAfstand && Math.abs(s.pos[1] - k.y) < 1.4) return st;
+  }
+  return null;
 }
 
 export function beginBouwen(s, v, V, meld) {
@@ -87,7 +110,7 @@ export function beginBouwen(s, v, V, meld) {
 }
 
 /** Instappen: de avonturier springt op het vlot, de pony (met zwemvest) springt mee. */
-export function stapIn(s, v, p, rivier, V, meld) {
+export function stapIn(s, v, p, V, meld) {
   v.ruiter = s.id;
   v.plek = 'vaart';
   v.vs = 0;
@@ -134,10 +157,11 @@ function volg(s, v, p, V) {
 /**
  * Eén tijdstap varen.
  * @param {any} s speler @param {Vlot} v @param {any} p pony (of null) @param {any} int intentie (int.peddel = joystick [x, y])
- * @param {ReturnType<typeof import('../wereld/rivier.js').maakRivier>} rivier @param {any} wereld
+ * @param {any[]} rivieren alle rivieren (zie bovenaan) @param {any} wereld
  * @param {typeof import('../../data/rivier.js').VLOT} V
  */
-export function stapVaren(s, v, p, int, rivier, wereld, V, dt, meld) {
+export function stapVaren(s, v, p, int, rivieren, wereld, V, dt, meld) {
+  const rivier = rivieren[v.tak];
   const [px, py] = int.peddel ?? [0, 0];
   v.botsWacht = Math.max(0, v.botsWacht - dt);
   // Een hupje op het vlot (springknop): alleen voor de pret.
@@ -149,49 +173,94 @@ export function stapVaren(s, v, p, int, rivier, wereld, V, dt, meld) {
   }
   v.hop = Math.max(0, v.hop - dt);
   if (v.plek === 'lagune') stapLagune(s, v, px, py, rivier, wereld, V, dt, meld);
-  else stapRivier(s, v, px, py, rivier, V, dt, meld);
+  else stapRivier(s, v, px, py, rivieren, V, dt, meld);
   volg(s, v, p, V);
 }
 
-function stapRivier(s, v, px, py, rivier, V, dt, meld) {
+function stapRivier(s, v, px, py, rivieren, V, dt, meld) {
+  let rivier = rivieren[v.tak];
   // --- Sturen en peddelen ---
   const u = rivier.stroom(v.s, v.d);
   v.vd += px * V.stuur * dt;
   v.vd -= v.vd * Math.min(1, V.zijDemping * dt);
   v.vd = Math.max(-V.maxZij, Math.min(V.maxZij, v.vd));
-  const doel = u + (py > 0 ? py * V.versnel : py * V.rem);
+  let doel = u + (py > 0 ? py * V.versnel : py * V.rem);
+  // De kolk: het water draait je rond en gooit je er na een rondje weer uit.
+  for (const ko of rivier.kolken) {
+    const ds = v.s - ko.s;
+    const dd = v.d - ko.d;
+    const a = Math.hypot(ds, dd);
+    if (a >= ko.r || v.lucht) continue;
+    const k = 1 - a / ko.r;
+    const n = Math.max(a, 0.3);
+    doel += (-dd / n) * ko.draai * a * k;
+    v.vd += ((ds / n) * ko.draai * a * k * 2.2 + (dd / n) * ko.wegDuw * k * 2) * dt;
+    v.draaiV += ko.draai * k * dt * 2.5;
+    if (!v.inKolk) meld({ soort: 'vlotKolk', speler: s.id, pos: [...v.pos] });
+    v.inKolk = 1.5;
+  }
+  v.inKolk = Math.max(0, (v.inKolk ?? 0) - dt);
   v.vs += (doel - v.vs) * (1 - Math.exp(-V.volgStroom * dt));
 
   // --- Bewegen (in de lucht trager: slow motion) ---
-  const SP = rivier.R.sprong;
   const voor = v.s;
-  if (!v.lucht && voor < SP.s && voor + v.vs * dt >= SP.s) {
-    v.lucht = true;
-    v.vy = V.sprongOp;
-    v.y = rivier.peil(SP.s - 0.01);
-    meld({ soort: 'vlotSprong', speler: s.id, pos: [...v.pos] });
+  if (!v.lucht) {
+    for (const sp of rivier.sprongen) {
+      if (!(voor < sp.s && voor + v.vs * dt >= sp.s)) continue;
+      v.lucht = true;
+      v.sprong = sp;
+      // De grote waterval: altijd recht en met vaart erover, zodat je mooi van de rots wegvliegt.
+      if (sp.groot) {
+        v.vs = Math.max(v.vs, V.groteVal.minVaart);
+        v.vd *= 0.3;
+        v.vy = V.groteVal.op;
+      } else v.vy = V.sprongOp;
+      v.y = sp.top;
+      meld({ soort: 'vlotSprong', speler: s.id, pos: [...v.pos], groot: !!sp.groot, hoogte: sp.hoogte, tak: v.tak });
+      break;
+    }
   }
   if (v.lucht) {
-    v.slowmo += (V.slowmo - v.slowmo) * Math.min(1, dt * 10);
+    const sp = v.sprong;
+    const doelSlow = sp?.groot ? V.groteVal.slowmo : sp && sp.hoogte > 2 ? V.slowmoKlein : V.slowmo;
+    v.slowmo += (doelSlow - v.slowmo) * Math.min(1, dt * 10);
     const k = v.slowmo;
     v.vy -= V.zwaartekracht * dt * k;
     v.y += v.vy * dt * k;
     v.s += v.vs * dt * k;
     v.d += v.vd * dt * k;
     const w = rivier.peil(v.s);
-    if (v.y <= w && v.vy < 0) {
-      meld({ soort: 'vlotLanding', speler: s.id, pos: [v.pos[0], w, v.pos[2]], snelheid: -v.vy });
-      v.schommel = Math.min(1, v.schommel + 0.8);
+    // Landen kan pas voorbij het vallende water (niet halverwege op het gordijn).
+    const voorbij = !sp || v.s >= sp.s + sp.lengte;
+    if (v.y <= w && v.vy < 0 && voorbij) {
+      meld({ soort: 'vlotLanding', speler: s.id, pos: [v.pos[0], w, v.pos[2]], snelheid: -v.vy, groot: !!sp?.groot, tak: v.tak });
+      v.schommel = Math.min(1, v.schommel + (sp?.groot ? 1 : 0.8));
       v.y = w;
       v.vy = 0;
       v.lucht = false;
-      v.vs *= 0.8;
+      v.sprong = null;
+      v.vs *= sp?.groot ? 0.55 : 0.8;
     }
   } else {
     v.slowmo += (1 - v.slowmo) * Math.min(1, dt * 3);
     v.s += v.vs * dt;
     v.d += v.vd * dt;
-    v.y = rivier.peil(v.s);
+    // De golftrein: het vlot danst op de staande golven.
+    const g = rivier.golfOp(v.s, v.d);
+    const g2 = rivier.golfOp(v.s + 0.6, v.d);
+    v.golf = g;
+    v.kantel = Math.atan2(g2 - g, 0.6) * 1.4;
+    if (Math.abs(g) > 0.12) v.schommel = Math.max(v.schommel, Math.abs(g) * 0.9);
+    v.y = rivier.peil(v.s) + g;
+  }
+
+  // --- Van de bergrivier in de benedenrivier ---
+  const vg = rivier.volgende;
+  if (vg && v.s >= vg.sHier) {
+    v.tak = rivieren.indexOf(vg.tak);
+    v.s = vg.s + (v.s - vg.sHier);
+    rivier = vg.tak;
+    meld({ soort: 'vlotTak', speler: s.id, tak: v.tak });
   }
 
   // --- De oevers ---
@@ -211,10 +280,26 @@ function stapRivier(s, v, px, py, rivier, V, dt, meld) {
       v.vs *= 1 - Math.min(1, 0.25 * dt);
     }
   }
-  // Stroomopwaarts kan niet voorbij de bron.
+  // Stroomopwaarts kan niet voorbij de bron. (Op de benedenrivier: niet terug de bergrivier op.)
   if (v.s < rivier.sBegin + 1.5) {
     v.s = rivier.sBegin + 1.5;
     v.vs = Math.max(0, v.vs);
+  }
+
+  // --- Het eilandje van de splitsing: kies links (rustig) of rechts (wild) ---
+  if (rivier.split) {
+    const eil = rivier.eilandOp(v.s);
+    const sp = rivier.split;
+    const zij = v.d !== 0 ? Math.sign(v.d) : sp.wilde;
+    if (v.s > sp.van - 3 && v.s < sp.van + 1 && Math.abs(v.d) < 1.4) v.vd += zij * V.kussen * 0.8 * dt;
+    const min = eil + V.straal * 0.85;
+    if (eil > 0 && Math.abs(v.d) < min) {
+      v.d = zij * min;
+      if (v.vd * zij < -0.35) {
+        v.vd = -v.vd * V.stuit;
+        bots(s, v, 0.4, V.oeverRem, -zij, meld, false);
+      } else if (v.vd * zij < 0) v.vd = 0;
+    }
   }
 
   // --- Rotsen ---
@@ -274,7 +359,7 @@ function stapRivier(s, v, px, py, rivier, V, dt, meld) {
   v.vel[2] = rl[1] * v.vs + rl[0] * v.vd;
 
   // Voorbij de monding: vrij in de lagune.
-  if (v.s > rivier.sMond + V.mondVrij) {
+  if (rivier.sMond !== Infinity && v.s > rivier.sMond + V.mondVrij) {
     v.plek = 'lagune';
     v.y = 0;
     v.pos[1] = 0;
@@ -337,11 +422,15 @@ function stapLagune(s, v, px, py, rivier, wereld, V, dt, meld) {
   v.y = 0;
 }
 
-/** Waar je kan aanleggen: de steiger in de lagune, een droge oever vlakbij, of terug aan de steiger bij de bron. */
-export function aanlegPlek(v, rivier, wereld, V) {
+/** Waar je kan aanleggen: de steiger in de lagune, een droge oever vlakbij, of aan een steiger langs de rivier. */
+export function aanlegPlek(v, rivieren, wereld, V) {
+  const rivier = rivieren[v.tak];
   if (v.plek === 'vaart') {
-    const k = rivier.bovenDek;
-    if (Math.abs(v.vs) < 2.5 && Math.hypot(v.pos[0] - k.x, v.pos[2] - k.z) < V.aanlegAfstand + 0.8) return { steiger: true, pos: dekPunt(k, 0.5), dek: k };
+    if (v.lucht || Math.abs(v.vs) >= 2.5) return null;
+    for (const st of rivier.steigers) {
+      const k = st.dek;
+      if (Math.hypot(v.pos[0] - k.x, v.pos[2] - k.z) < V.aanlegAfstand + 0.8) return { steiger: true, pos: dekPunt(k, 0.5), dek: k, naam: st.naam };
+    }
     return null;
   }
   if (v.plek !== 'lagune') return null;
@@ -383,7 +472,10 @@ export function legAan(s, v, p, plek, wereld, meld) {
   v.ruiter = null;
   v.vs = 0;
   v.vd = 0;
-  if (v.plek === 'vaart') v.plek = 'boven';
+  if (v.plek === 'vaart') {
+    v.plek = 'boven';
+    if (plek.naam) v.steiger = plek.naam;
+  }
   if (p && v.pony === p.id) {
     const van = [...p.pos];
     // Naast de avonturier, op droge grond (of op de steiger, een stapje verder).
@@ -419,8 +511,8 @@ export function legAan(s, v, p, plek, wereld, meld) {
   }
 }
 
-/** Het vlot als niemand erop zit: bouwen, dobberen, en weer klaarleggen aan de bron als je ver weg bent. */
-export function stapVlotVrij(v, s, rivier, V, dt, meld) {
+/** Het vlot als niemand erop zit: bouwen, dobberen, en weer klaarleggen aan de steiger het dichtst bij jou. */
+export function stapVlotVrij(v, s, rivieren, V, dt, meld) {
   if (v.bouwt > 0) {
     v.bouwt -= dt;
     if (v.bouwt <= 0) {
@@ -431,10 +523,22 @@ export function stapVlotVrij(v, s, rivier, V, dt, meld) {
   }
   v.vel[0] = v.vel[2] = 0;
   v.schommel = Math.max(0, v.schommel - dt);
-  if (v.plek !== 'boven' && s && Math.hypot(s.pos[0] - v.pos[0], s.pos[2] - v.pos[2]) > V.terugNa) {
-    zetKlaar(v, rivier);
-    v.vorigePos = [...v.pos];
-    v.vorigeRichting = v.richting;
-    meld({ soort: 'vlotTerug', speler: v.eigenaar });
+  if (!s || v.bouwt > 0 || Math.hypot(s.pos[0] - v.pos[0], s.pos[2] - v.pos[2]) <= V.terugNa) return;
+  // De steiger het dichtst bij de speler (een onaf vlot blijft bij de bron, waar je het bouwt).
+  let beste = null;
+  let bd = Infinity;
+  for (const st of alleSteigers(rivieren)) {
+    if (!v.gebouwd && st.tak === 0 && st.steiger.naam !== 'bron') continue;
+    const k = st.steiger.dek;
+    const d = Math.hypot(s.pos[0] - k.x, s.pos[2] - k.z) + Math.abs(s.pos[1] - k.y) * 2;
+    if (d < bd) {
+      bd = d;
+      beste = st;
+    }
   }
+  if (!beste || (v.plek === 'boven' && beste.tak === v.tak && beste.steiger.naam === v.steiger)) return;
+  zetKlaar(v, rivieren, beste.tak, beste.steiger.naam);
+  v.vorigePos = [...v.pos];
+  v.vorigeRichting = v.richting;
+  meld({ soort: 'vlotTerug', speler: v.eigenaar, tak: v.tak, steiger: v.steiger });
 }

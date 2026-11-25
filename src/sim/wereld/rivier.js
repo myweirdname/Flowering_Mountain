@@ -121,8 +121,8 @@ export function maakRivier(R, lagune, kant, ruw, kamp) {
   const breedte = (s) => {
     const m = mondMeng(s);
     const a = tabel(R.breedte, s);
-    // Achter de bron sluit de kom zich: daar is geen water meer.
-    const dicht = s < -3.4 ? -(-3.4 - s) * 1.5 : 0;
+    // Voor het begin is er geen water meer (daar neemt de rivier over de berg het over).
+    const dicht = s < R.sBegin ? -(R.sBegin - s) * 1.5 : 0;
     return (m >= 1 ? tabel(R.mondBreedte, s - sMond) : a + (tabel(R.mondBreedte, s - sMond) - a) * m) + dicht;
   };
   const basisSnelheid = (s) => {
@@ -347,7 +347,7 @@ export function maakRivier(R, lagune, kant, ruw, kamp) {
     const padKant = Math.sign(q.d) === padZijde;
     let oever = padKant ? O.pad : O.ander;
     if (padKant) oever = Math.max(oever, R.bronPlek.breedte * (1 - glad((s - R.bronPlek.tot + 3) / 3)));
-    if (s < -3) oever = Math.max(oever, 2.5); // rond de bron
+    if (s < -3 && s > R.sBegin + 0.5) oever = Math.max(oever, 2.5); // rond de bron
     if (e < 0) {
       // De bedding: diep in het midden, ondiep aan de oever.
       const f = 1 - (ad / b) ** 2;
@@ -404,11 +404,29 @@ export function maakRivier(R, lagune, kant, ruw, kamp) {
     return { x, z, y: peil(s) + R.bloesemHoogte };
   });
 
+  const sprongen = [{ s: SP.s, hoogte: SP.hoogte, lengte: SP.lengte, groot: false, top: peil(SP.s - 0.01) }];
+  const inSprong = (s) => (s >= SP.s && s < SP.s + SP.lengte ? sprongen[0] : null);
+  const steigers = [{ naam: 'bron', s: S.s, zijde: padZijde, klasse: 1, dek: bovenDek, ligplaats }];
+  const tongen = [{ van: T.van, tot: T.tot, breedte: T.breedte, extra: T.extra }];
+
   return {
+    naam: 'beneden',
     R,
     lengte,
     sMond,
-    sBegin: -3.4,
+    sBegin: R.sBegin,
+    sprongen,
+    inSprong,
+    steigers,
+    tongen,
+    treinen: [{ van: T.tot, tot: T.tot + 7, hoogte: 0.07, golf: 2.4 }],
+    kolken: [],
+    keerwater: [],
+    volgende: null,
+    klasseOp: () => 1,
+    golfOp: () => 0,
+    keerOp: () => 0,
+    eilandOp: () => 0,
     sEinde,
     bronPeil,
     padZijde,

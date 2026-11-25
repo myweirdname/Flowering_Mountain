@@ -56,6 +56,8 @@ import { maakKlimmerbeeld } from './beeld/klimmer.js';
 import { maakKlimbediening } from './ui/klimbediening.js';
 import { RIVIER, VLOT, ZWEMTIJGER } from './data/rivier.js';
 import { maakRivierbeeld } from './beeld/rivier.js';
+import { maakBergrivierbeeld } from './beeld/bergrivier.js';
+import { vaarProef } from './sim/modi/vaarbot.js';
 import { maakVlotbeeld, maakZwemvest, maakZwemtijgerbeeld } from './beeld/vlot.js';
 import { SPEELBOS } from './data/speelbos.js';
 import { maakSpeelbosbeeld } from './beeld/speelbos.js';
@@ -251,6 +253,10 @@ function kiesWand(wi) {
 const rivier = sim.wereld.rivier;
 const rivierbeeld = maakRivierbeeld(rivier, VLOT, sim.wereld.vlotStukken, K, zonRichting, SCENE.hemel.horizon);
 scene.add(rivierbeeld.groep);
+// --- De rivier over de berg (stap 14): van de bergtop over de grote waterval tot in de bron ---
+const bergrivier = sim.wereld.bergrivier;
+const bergrivierbeeld = maakBergrivierbeeld(bergrivier, K, zonRichting, SCENE.hemel.horizon);
+scene.add(bergrivierbeeld.groep);
 const vlotbeeld = maakVlotbeeld(VLOT, K);
 scene.add(vlotbeeld.groep);
 const zwemvest = maakZwemvest(ponyVorm);
@@ -280,12 +286,18 @@ let ponyLeun = 0;
 const ZIT_ZAK = 0.17; // zittend op het vlot zakt het figuurtje tot op haar billetjes
 const hopDoel = new THREE.Vector3();
 const rivierPunt = { s: 0, d: 0 };
-const [valX, valZ] = rivier.puntOp(RIVIER.sprong.s + 1, 0);
-const valY = rivier.peil(RIVIER.sprong.s + 1);
+// Alle watervallen (om ze te horen razen): de kleine sprong van de benedenrivier en die van de bergrivier.
+const watervallen = [rivier, bergrivier].flatMap((r) => r.sprongen.map((sp) => {
+  const [x, z] = r.puntOp(sp.s + sp.lengte * 0.6, 0);
+  return { x, y: r.peil(sp.s + sp.lengte * 0.6), z, bereik: sp.groot ? 90 : 18 + sp.hoogte * 4, sterkte: sp.groot ? 1 : Math.min(0.8, 0.45 + sp.hoogte * 0.1) };
+}));
 
 // Op- en afstappen: een sprongetje van de grond naar het zadel (of terug).
 let rijOvergang = null;
 let juichTijd = 0;
+// De filmcamera bij de grote waterval (stap 14).
+let valMix = 0;
+const valCam = { pos: new THREE.Vector3(), doel: new THREE.Vector3(), klaar: false, sp: null, tak: 0 };
 let aaiTijd = 0;
 const zadelPos = new THREE.Vector3();
 const zadelDraai = new THREE.Quaternion();
@@ -830,17 +842,37 @@ function vaarGebeurtenis(g) {
       geluid.zoef();
       setTimeout(() => geluid.hinnik(true), 120);
       ponyAnim.blij();
+      if (g.groot) {
+        // De grote waterval over de rotsrand: nog een zoef, een juichkreetje en klokjes.
+        setTimeout(() => geluid.zoef(), 700);
+        setTimeout(() => geluid.hinnik(true), 1300);
+        setTimeout(() => geluid.top(), 400);
+        juichTijd = 4;
+      }
       return true;
     case 'vlotLanding': {
       const [x, y, z] = g.pos;
       deeltjes.spetters(x, z, 2.2, y);
       deeltjes.spetters(x + 0.8, z - 0.5, 1.2, y);
+      if (g.groot) {
+        // Een diepe plons: een fontein van spetters, kringen en een bloemenregen.
+        deeltjes.spetters(x - 0.9, z + 0.6, 2.6, y);
+        deeltjes.spetters(x, z, 3.2, y);
+        deeltjes.kring(x, z, 5, 1.8, y + 0.02);
+        deeltjes.bloemenregen(x, y + 3, z, 40);
+        setTimeout(() => geluid.plons(8), 90);
+      }
       geluid.plons(6);
       animatie.land(0.5);
       ponyAnim.land(0.6);
       juichTijd = 0.9;
       return true;
     }
+    case 'vlotKolk':
+      // De kolk draait je rond: een zoef en een vrolijke hinnik.
+      geluid.zoef();
+      setTimeout(() => geluid.hinnik(true), 400);
+      return true;
     case 'vlotBots': {
       const [x, y, z] = g.pos;
       deeltjes.spetters(x, z, 0.4 + g.sterkte * 0.8, y);
@@ -1346,13 +1378,20 @@ const lus = maakSpellus({
     {
       let nabij = 0;
       let snel = 0;
-      if (rivier.naar(tekenpos.x, tekenpos.z, rivierPunt)) {
-        const e = Math.abs(rivierPunt.d) - rivier.breedte(rivierPunt.s);
-        nabij = THREE.MathUtils.clamp(1 - Math.max(0, e) / 22, 0, 1) * (rivierPunt.s < rivier.sMond + 4 ? 1 : 0.3);
-        snel = vaart ? Math.min(1, Math.hypot(v.vel[0], v.vel[2]) / 3.4) : Math.min(1, rivier.stroom(rivierPunt.s, 0) / 4);
+      for (const r of [rivier, bergrivier]) {
+        if (!r.naar(tekenpos.x, tekenpos.z, rivierPunt) || rivierPunt.s < r.sBegin - 3 || rivierPunt.s > r.sEinde + 2) continue;
+        const e = Math.abs(rivierPunt.d) - r.breedte(rivierPunt.s);
+        const n = THREE.MathUtils.clamp(1 - Math.max(0, e) / 22, 0, 1) * (rivierPunt.s < r.sMond + 4 ? 1 : 0.3);
+        if (n <= nabij) continue;
+        nabij = n;
+        snel = vaart ? Math.min(1, Math.hypot(v.vel[0], v.vel[2]) / 4.2) : Math.min(1, Math.abs(r.stroom(rivierPunt.s, 0)) / 4.5);
       }
-      const val = THREE.MathUtils.clamp(1 - Math.hypot(tekenpos.x - valX, tekenpos.y - valY, tekenpos.z - valZ) / 26, 0, 1);
-      geluid.rivier(nabij, snel, val * val);
+      let val = 0;
+      for (const wv of watervallen) {
+        const f = THREE.MathUtils.clamp(1 - Math.hypot(tekenpos.x - wv.x, tekenpos.y - wv.y, tekenpos.z - wv.z) / wv.bereik, 0, 1);
+        val = Math.max(val, f * f * wv.sterkte);
+      }
+      geluid.rivier(nabij, snel, val);
     }
     bloesems.werkBij(tijd, dt, camera, beeldSchaal);
     schaduw.position.set(tekenpos.x, grond + 0.03, tekenpos.z);
@@ -1381,6 +1420,43 @@ const lus = maakSpellus({
       camera.position.lerpVectors(camPos, klimCam.pos, m);
       camera.quaternion.slerpQuaternions(camDraai, kijker.quaternion, m);
     }
+    // De grote waterval (stap 14): een filmcamera opzij van de poel, halverwege de val, die het vlot volgt.
+    // Ze blijft tot het vlot uit de poel vaart; daarna neemt de volgcamera het weer over (meteen op de goede plek,
+    // anders hangt die nog boven op de rotsrand).
+    if (vaart && v.lucht && v.sprong?.groot && !valCam.sp) {
+      valCam.sp = v.sprong;
+      valCam.tak = v.tak;
+    }
+    const opVal = !!valCam.sp && vaart && v.tak === valCam.tak && v.s < valCam.sp.s + valCam.sp.lengte + 11;
+    if (valCam.sp && !opVal) {
+      valCam.sp = null;
+      volgcamera.herstel();
+    }
+    valMix = THREE.MathUtils.clamp(valMix + (opVal ? dt / 0.35 : -dt / 1.4), 0, 1);
+    if (opVal && !valCam.klaar) {
+      const r = sim.wereld.rivieren[v.tak];
+      const sp = valCam.sp;
+      const sCam = sp.s + sp.lengte + 9;
+      let beste = null;
+      for (const zij of [1, -1]) {
+        const [x, z] = r.puntOp(sCam, zij * (r.breedte(sCam) + 5));
+        const g = sim.wereld.grondOp(x, z);
+        if (!beste || g < beste[1]) beste = [x, g, z];
+      }
+      valCam.pos.set(beste[0], Math.max(beste[1] + 2, r.peil(sCam) + sp.hoogte * 0.45), beste[2]);
+      valCam.doel.copy(tekenpos);
+      valCam.klaar = true;
+    } else if (!opVal && valMix <= 0) valCam.klaar = false;
+    if (valMix > 0 && valCam.klaar) {
+      valCam.doel.lerp(tekenpos, 1 - Math.exp(-6 * dt));
+      const m = valMix * valMix * (3 - 2 * valMix);
+      camPos.copy(camera.position);
+      camDraai.copy(camera.quaternion);
+      kijker.position.copy(valCam.pos);
+      kijker.lookAt(valCam.doel);
+      camera.position.lerpVectors(camPos, valCam.pos, m);
+      camera.quaternion.slerpQuaternions(camDraai, kijker.quaternion, m);
+    }
     // Een vaste testcamera (alleen vanuit de console, om iets van dichtbij te bekijken).
     if (testCamera) {
       const [v, d] = testCamera();
@@ -1406,6 +1482,7 @@ const lus = maakSpellus({
     WIND.uSpeler.value.copy(focus);
     zee.werkBij(tijd, camera);
     rivierbeeld.werkBij(tijd, dt, camera);
+    bergrivierbeeld.werkBij(tijd, dt, camera);
     speelbosbeeld.werkBij(dt, camera);
     for (const b of oversteekbeelden) b.werkBij(dt, camera);
     stralen?.werkBij(tijd);
@@ -1632,9 +1709,28 @@ window.spel = {
   get zwemtijger() {
     return sim.zwemtijger(LOKAAL);
   },
-  /** Meteen op het vlot aan de bron (het vlot is dan gebouwd), met de pony. */
-  vaar() {
-    sim.vaar(LOKAAL);
+  /** De rivier over de berg (stap 14). */
+  bergrivier,
+  /** Meteen op het vlot (het vlot is dan gebouwd), met de pony: aan de bron, of aan 'top', 'etage' of 'laag'. */
+  vaar(steiger = 'bron') {
+    sim.vaar(LOKAAL, steiger);
+  },
+  /** De vaarbot: vaart met de spelregels van een steiger tot in de lagune (in de achtergrond, zonder beeld). */
+  vaarBot(steiger = 'top', arm) {
+    const proef = maakSim(INSTELLINGEN.berg);
+    proef.voegSpelerToe('bot');
+    const r = vaarProef(proef, steiger, { id: 'bot', arm });
+    console.log(r);
+    return r;
+  },
+  /** Zet de speler bij een steiger van de bergrivier ('top', 'etage' of 'laag'). */
+  naarBergrivier(naam = 'etage') {
+    const st = bergrivier.steigers.find((k) => k.naam === naam) ?? bergrivier.steigers[0];
+    const k = st.dek;
+    this.zet(k.x - k.az * st.zijde * 2.6, k.z + k.ax * st.zijde * 2.6);
+    const s = sim.speler(LOKAAL);
+    s.richting = s.vorigeRichting = Math.atan2(k.ax, k.az);
+    volgcamera.zet(Math.atan2(-k.ax, -k.az), CAMERA.kanteling);
   },
   /** Zet de speler op de steiger aan de bron van de rivier. */
   naarRivier() {
@@ -1736,6 +1832,12 @@ if (INSTELLINGEN.plek === 'weide') {
 // ?plek=rivier: meteen aan de bron van de rivier, bij de steiger (stap 10).
 if (INSTELLINGEN.plek === 'rivier') {
   window.spel.naarRivier();
+  const s = sim.speler(LOKAAL);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}
+// ?plek=bergrivier (of ?plek=bergrivier-top, -etage, -laag): bij een steiger van de rivier over de berg (stap 14).
+if (INSTELLINGEN.plek?.startsWith('bergrivier')) {
+  window.spel.naarBergrivier(INSTELLINGEN.plek.split('-')[1] ?? 'etage');
   const s = sim.speler(LOKAAL);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
 }

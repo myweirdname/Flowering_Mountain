@@ -53,6 +53,11 @@ export function maakVolgcamera(camera, sleepvlak, grondOp, vrijeAfstand) {
       kanteling = THREE.MathUtils.clamp(k, C.minKanteling, C.maxKanteling);
       sindsSlepen = 0;
     },
+    /** Springt bij de volgende `volg` meteen naar het figuurtje (zonder na te ijlen), bv. na de grote waterval. */
+    herstel() {
+      eersteKeer = true;
+      afstand = C.afstand;
+    },
     get hoek() {
       return hoek;
     },

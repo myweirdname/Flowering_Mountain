@@ -24,7 +24,7 @@ export function maakRivierbeeld(rivier, V, stukPlekken, K, zonRichting, hemelKle
 
   // --- Het water: een lint van de bron tot in de lagune ---
   const SP = R.sprong;
-  const sBegin = rivier.sBegin - 0.25;
+  const sBegin = rivier.sBegin + 0.5; // daarvoor ligt het water van de bergrivier (stap 14)
   const sEind = Math.min(rivier.sEinde - 0.5, rivier.sMond + 9);
   const rijen = [];
   for (let s = sBegin; s < sEind; ) {
@@ -226,6 +226,8 @@ export function maakRivierbeeld(rivier, V, stukPlekken, K, zonRichting, hemelKle
           // In de lagune gaat het lint op in het water van de lagune.
           alfa *= 1.0 - smoothstep(uMond.x + 0.5, uMond.y, s);
           alfa *= smoothstep(1.2, 1.0, q);
+          // Aan het begin gaat het lint op in dat van de bergrivier.
+          alfa *= smoothstep(${sBegin.toFixed(2)}, ${(sBegin + 1.2).toFixed(2)}, s);
           gl_FragColor = vec4(c, alfa);
           #include <colorspace_fragment>
           #include <fog_fragment>
@@ -253,73 +255,15 @@ export function maakRivierbeeld(rivier, V, stukPlekken, K, zonRichting, hemelKle
     groep.add(m);
   });
 
-  // --- Steigers: planken op paaltjes ---
-  const hout = new THREE.MeshLambertMaterial({ color: KL.hout });
-  const houtDonker = new THREE.MeshLambertMaterial({ color: KL.houtDonker });
-  const plankGeo = new THREE.BoxGeometry(1, 1, 1);
-  const paalGeo = new THREE.CylinderGeometry(0.09, 0.1, 1, 8);
-  for (const dek of rivier.dekken) {
-    const sg = new THREE.Group();
-    sg.position.set(dek.x, dek.y, dek.z);
-    sg.rotation.y = Math.atan2(dek.ax, dek.az);
-    const planken = Math.round((dek.halfL * 2) / 0.32);
-    for (let i = 0; i < planken; i++) {
-      const p = new THREE.Mesh(plankGeo, i % 2 ? hout : houtDonker);
-      p.scale.set(dek.halfB * 2, 0.08, 0.28);
-      p.position.set(0, -0.04, -dek.halfL + (i + 0.5) * ((dek.halfL * 2) / planken));
-      p.rotation.y = (i % 3 - 1) * 0.015;
-      p.castShadow = K.schaduw;
-      p.receiveShadow = K.schaduw;
-      sg.add(p);
-    }
-    for (const lz of [-dek.halfL + 0.15, 0, dek.halfL - 0.15]) {
-      for (const lx of [-dek.halfB + 0.12, dek.halfB - 0.12]) {
-        const p = new THREE.Mesh(paalGeo, houtDonker);
-        p.scale.set(1, 1.6, 1);
-        p.position.set(lx, -0.75, lz);
-        sg.add(p);
-      }
-    }
-    // Twee paaltjes die boven het dek uitsteken, om het vlot aan vast te maken.
-    for (const lx of [-dek.halfB + 0.12, dek.halfB - 0.12]) {
-      const p = new THREE.Mesh(paalGeo, houtDonker);
-      p.scale.set(1, 0.55, 1);
-      p.position.set(lx, 0.2, dek.halfL - 0.15);
-      sg.add(p);
-    }
-    groep.add(sg);
-  }
-
-  // --- De vlag aan de bron: van ver te zien boven de jungle ---
+  // --- Steigers en de vlag aan de bron (van ver te zien boven de jungle) ---
+  for (const dek of rivier.dekken) groep.add(bouwSteiger(dek, KL, K));
   const VL = R.vlag;
   const bd = rivier.bovenDek;
-  const vlag = new THREE.Group();
   // Op de hoek van het dek aan de landkant (de dwarsas van het dek wijst naar de rechteroever).
   const land = rivier.padZijde * (bd.halfB - 0.12);
-  vlag.position.set(bd.x - bd.ax * (bd.halfL - 0.15) - bd.az * land, bd.y, bd.z - bd.az * (bd.halfL - 0.15) + bd.ax * land);
-  const stok = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, VL.hoogte, 8), new THREE.MeshLambertMaterial({ color: 0xfff4e6 }));
-  stok.position.y = VL.hoogte / 2;
-  vlag.add(stok);
-  const knop = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshLambertMaterial({ color: VL.kleur2, emissive: VL.kleur2, emissiveIntensity: 0.3 }));
-  knop.position.y = VL.hoogte + 0.08;
-  vlag.add(knop);
-  // Een wapperende driehoek: zijn punten bewegen in werkBij.
-  const doekGeo = new THREE.PlaneGeometry(1.4, 0.8, 8, 3);
-  doekGeo.translate(0.7, 0, 0);
-  const doekRust = Float32Array.from(doekGeo.attributes.position.array);
-  const doekKleur = new Float32Array(doekGeo.attributes.position.count * 3);
-  const c1 = new THREE.Color(VL.kleur);
-  const c2 = new THREE.Color(VL.kleur2);
-  for (let i = 0; i < doekGeo.attributes.position.count; i++) {
-    const y = doekRust[i * 3 + 1];
-    const c = Math.abs(y) < 0.12 ? c2 : c1;
-    doekKleur.set([c.r, c.g, c.b], i * 3);
-  }
-  doekGeo.setAttribute('color', new THREE.BufferAttribute(doekKleur, 3));
-  const doek = new THREE.Mesh(doekGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x401020 }));
-  doek.position.y = VL.hoogte - 0.45;
-  vlag.add(doek);
-  groep.add(vlag);
+  const vlag = maakVlag(VL.hoogte, VL.kleur, VL.kleur2);
+  vlag.groep.position.set(bd.x - bd.ax * (bd.halfL - 0.15) - bd.az * land, bd.y, bd.z - bd.az * (bd.halfL - 0.15) + bd.ax * land);
+  groep.add(vlag.groep);
 
   // --- De bouwstukken: bundels bamboe en een opgerolde liaan, met een lichtkringetje eronder ---
   const stukken = stukPlekken.map((p, i) => {
@@ -349,15 +293,7 @@ export function maakRivierbeeld(rivier, V, stukPlekken, K, zonRichting, hemelKle
     /** Elk beeld. */
     werkBij(tijd, dt, camera) {
       uniforms.uTijd.value = tijd;
-      // De vlag wappert.
-      const a = doekGeo.attributes.position;
-      for (let i = 0; i < a.count; i++) {
-        const x = doekRust[i * 3];
-        const y = doekRust[i * 3 + 1];
-        a.setXYZ(i, x, y * (1 - x * 0.35), Math.sin(tijd * 6 - x * 3.2) * 0.14 * x);
-      }
-      a.needsUpdate = true;
-      doek.rotation.y = 0.6 + Math.sin(tijd * 0.7) * 0.3;
+      vlag.wapper(tijd);
       for (const k of stukken) {
         if (!k.g.visible) continue;
         if (k.gepakt) {
@@ -377,6 +313,88 @@ export function maakRivierbeeld(rivier, V, stukPlekken, K, zonRichting, hemelKle
     },
     /** De plekken van de bouwstukken (om te laten glinsteren). */
     stukken,
+  };
+}
+
+/** Een steiger: planken op paaltjes, met twee paaltjes om het vlot aan vast te maken. */
+export function bouwSteiger(dek, KL, K) {
+  const hout = new THREE.MeshLambertMaterial({ color: KL.hout });
+  const houtDonker = new THREE.MeshLambertMaterial({ color: KL.houtDonker });
+  const plankGeo = new THREE.BoxGeometry(1, 1, 1);
+  const paalGeo = new THREE.CylinderGeometry(0.09, 0.1, 1, 8);
+  const sg = new THREE.Group();
+  sg.position.set(dek.x, dek.y, dek.z);
+  sg.rotation.y = Math.atan2(dek.ax, dek.az);
+  const planken = Math.round((dek.halfL * 2) / 0.32);
+  for (let i = 0; i < planken; i++) {
+    const p = new THREE.Mesh(plankGeo, i % 2 ? hout : houtDonker);
+    p.scale.set(dek.halfB * 2, 0.08, 0.28);
+    p.position.set(0, -0.04, -dek.halfL + (i + 0.5) * ((dek.halfL * 2) / planken));
+    p.rotation.y = (i % 3 - 1) * 0.015;
+    p.castShadow = K.schaduw;
+    p.receiveShadow = K.schaduw;
+    sg.add(p);
+  }
+  for (const lz of [-dek.halfL + 0.15, 0, dek.halfL - 0.15]) {
+    for (const lx of [-dek.halfB + 0.12, dek.halfB - 0.12]) {
+      const p = new THREE.Mesh(paalGeo, houtDonker);
+      p.scale.set(1, 1.6, 1);
+      p.position.set(lx, -0.75, lz);
+      sg.add(p);
+    }
+  }
+  for (const lx of [-dek.halfB + 0.12, dek.halfB - 0.12]) {
+    const p = new THREE.Mesh(paalGeo, houtDonker);
+    p.scale.set(1, 0.55, 1);
+    p.position.set(lx, 0.2, dek.halfL - 0.15);
+    sg.add(p);
+  }
+  return sg;
+}
+
+/**
+ * Een vlag op een stok met een wapperend doek (driehoekig, met een middenband in kleur2 en `strepen` witte strepen).
+ * @returns {{ groep: THREE.Group, wapper: (tijd: number) => void }}
+ */
+export function maakVlag(hoogte, kleur, kleur2, strepen = 0) {
+  const vlag = new THREE.Group();
+  const stok = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, hoogte, 8), new THREE.MeshLambertMaterial({ color: 0xfff4e6 }));
+  stok.position.y = hoogte / 2;
+  vlag.add(stok);
+  const knop = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 8), new THREE.MeshLambertMaterial({ color: kleur2, emissive: kleur2, emissiveIntensity: 0.3 }));
+  knop.position.y = hoogte + 0.08;
+  vlag.add(knop);
+  const doekGeo = new THREE.PlaneGeometry(1.4, 0.8, 8, 3 + strepen * 2);
+  doekGeo.translate(0.7, 0, 0);
+  const doekRust = Float32Array.from(doekGeo.attributes.position.array);
+  const doekKleur = new Float32Array(doekGeo.attributes.position.count * 3);
+  const c1 = new THREE.Color(kleur);
+  const c2 = new THREE.Color(kleur2);
+  const wit = new THREE.Color(0xffffff);
+  for (let i = 0; i < doekGeo.attributes.position.count; i++) {
+    const x = doekRust[i * 3];
+    const y = doekRust[i * 3 + 1];
+    let c = Math.abs(y) < 0.12 ? c2 : c1;
+    // Strepen (de klasse van de rivier): smalle witte bandjes dwars over het doek.
+    if (strepen && Math.abs(y) < 0.3) for (let k = 0; k < strepen; k++) if (Math.abs(x - 0.35 - k * 0.24) < 0.06) c = wit;
+    doekKleur.set([c.r, c.g, c.b], i * 3);
+  }
+  doekGeo.setAttribute('color', new THREE.BufferAttribute(doekKleur, 3));
+  const doek = new THREE.Mesh(doekGeo, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, emissive: 0x401020 }));
+  doek.position.y = hoogte - 0.45;
+  vlag.add(doek);
+  return {
+    groep: vlag,
+    wapper(tijd) {
+      const a = doekGeo.attributes.position;
+      for (let i = 0; i < a.count; i++) {
+        const x = doekRust[i * 3];
+        const y = doekRust[i * 3 + 1];
+        a.setXYZ(i, x, y * (1 - x * 0.35), Math.sin(tijd * 6 - x * 3.2) * 0.14 * x);
+      }
+      a.needsUpdate = true;
+      doek.rotation.y = 0.6 + Math.sin(tijd * 0.7) * 0.3;
+    },
   };
 }
 

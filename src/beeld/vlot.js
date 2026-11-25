@@ -126,7 +126,8 @@ export function maakVlotbeeld(V, K) {
      * @param {(t:number) => void} [opBouwstuk] elke keer dat er een stuk op zijn plaats valt
      */
     werkBij(v, overgang, dt, tijd, opBouwstuk) {
-      if (!v.gebouwd && bouwT < 0) {
+      // Bij de bron bouw je het vlot zelf; op de berg ligt er altijd een klaar (stap 14).
+      if (!v.gebouwd && v.tak === 0 && bouwT < 0) {
         groep.visible = false;
         return;
       }
@@ -143,7 +144,7 @@ export function maakVlotbeeld(V, K) {
       const sch = v.schommel;
       kantel.position.y = Math.sin(tijd * 2.1) * 0.025 + Math.sin(tijd * 3.3 + 1) * 0.012 * (v.plek === 'boven' ? 0.5 : 1);
       kantel.rotation.z = Math.sin(tijd * 1.7) * 0.025 + Math.sin(tijd * 9) * 0.12 * sch;
-      kantel.rotation.x = Math.sin(tijd * 1.3 + 0.5) * 0.02 + Math.sin(tijd * 7 + 1) * 0.08 * sch + (v.lucht ? klem(-v.vy * 0.06, -0.25, 0.25) : 0);
+      kantel.rotation.x = Math.sin(tijd * 1.3 + 0.5) * 0.02 + Math.sin(tijd * 7 + 1) * 0.08 * sch + (v.lucht ? klem(-v.vy * 0.06, -0.25, 0.25) : 0) - klem(v.kantel ?? 0, -0.35, 0.35);
       if (bouwT >= 0) {
         bouwT += dt;
         for (const d of delen) {

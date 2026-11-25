@@ -45,6 +45,9 @@ export function maakSim(berg) {
   const oefenrots = maakOefenrots(KLIMMEN, vorm.kamp, vorm.kamp.h + KLIMMEN.rots.voetBoven);
   // De benedenrivier (stap 10): rotsen en steigers om op te staan.
   const rivier = vorm.rivier;
+  // De rivier over de berg (stap 14): komt uit in de bron van de benedenrivier. Het vlot vaart over allebei.
+  const bergrivier = vorm.bergrivier;
+  const rivieren = vorm.rivieren;
   // Het speelbos (stap 11): platforms, bruggen en bladeren om op te staan.
   const speelbos = vorm.speelbos;
   // De berg (stap 13): klimwanden op de rotsrand en oversteken over de ravijnen.
@@ -52,7 +55,7 @@ export function maakSim(berg) {
   const wanden = [oefenrots, ...vorm.bergwanden];
   const parcours = [speelbos, ...vorm.oversteken];
   const blokOp = (x, z) => {
-    let h = Math.max(rivier.blokOp(x, z), speelbos.blokOp(x, z));
+    let h = Math.max(rivier.blokOp(x, z), bergrivier.blokOp(x, z), speelbos.blokOp(x, z));
     for (const w of wanden) h = Math.max(h, w.blokOp(x, z));
     for (let i = 1; i < parcours.length; i++) h = Math.max(h, parcours[i].blokOp(x, z));
     return h;
@@ -86,11 +89,14 @@ export function maakSim(berg) {
     weide,        // de springweide: baan, hindernissen, water
     oefenrots,    // de klimwand met drie routes (stap 9)
     rivier,       // de benedenrivier met het vlot (stap 10)
+    bergrivier,   // de rivier over de berg (stap 14)
+    rivieren,     // allebei: het vlot vaart van de berg tot in de lagune
     speelbos,     // het speelbos met de eerste doorgangen (stap 11)
     wanden,       // alle klimwanden: de oefenrots (0) en de klimwanden van de berg (stap 13)
     parcours,     // alle parcours: het speelbos (0) en de oversteken over de ravijnen (stap 13)
     bergplan: vorm.bergplan, // het netwerk van plekken en doorgangen (stap 13)
     waterOp: vorm.waterOp, // het waterpeil: 0 in zee en lagune, hoger in de rivier
+    stroomOp: vorm.stroomOp, // de stroming van de rivieren (in het water voert ze je mee)
   };
   // Waar de bouwstukken voor het vlot liggen (drie bundels bamboe en een liaan, rond de bron).
   wereld.vlotStukken = VLOT.stukken.map((_, i) => stukPlek(rivier, VLOT, i, grond.grondOp));
@@ -101,7 +107,7 @@ export function maakSim(berg) {
     const z = delen.reduce((a, d) => a + d.z, 0) / delen.length;
     return { x, z, y: weide.hoogte + BLOESEMS.bovenHindernis };
   });
-  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, [...boven, ...rivier.bloesems, ...parcours.flatMap((p) => p.bloesems)]);
+  wereld.bloesems = maakBloesems(vorm, { grondOp: grond.grondOp, rotsen: begroeiing.rotsen, tegelGrootte: WERELD.tegelGrootte }, zaadje, BLOESEMS, [...boven, ...rivier.bloesems, ...bergrivier.bloesems, ...parcours.flatMap((p) => p.bloesems)]);
   const wortels = maakWortels(weide);
   // De padvinder voor de tijger, en de slaapbloem die hij je komt tonen.
   const pad = maakPadvinder(wereld, GEZEL.pad);
@@ -195,15 +201,17 @@ export function maakSim(berg) {
   function actieVoor(s) {
     if (s.modus === 'rijden') return 'afstappen';
     if (s.modus === 'klimmen') return 'uitschudden';
-    if (s.modus === 'varen') return aanlegPlek(vlotVan(s), rivier, wereld, VLOT) ? 'aanleggen' : null;
+    if (s.modus === 'varen') return aanlegPlek(vlotVan(s), rivieren, wereld, VLOT) ? 'aanleggen' : null;
     if (wandBij(s)) return 'klimmen';
     const bosWat = bosActie(parcoursVan(s), s);
     if (bosWat) return bosWat;
-    // Aan de steiger bij de bron: het vlot bouwen (als je alle stukken hebt) of instappen.
+    // Aan een steiger: het vlot bouwen (bij de bron, als je alle stukken hebt) of instappen. Op de berg ligt er
+    // altijd een vlot klaar (stap 14).
     const v = vlotVan(s);
-    if (v && s.modus === 'lopen' && s.opGrond && !s.klimt && v.bouwt <= 0 && bijSteiger(s, rivier, VLOT)) {
-      if (!v.gebouwd) return v.stukken.every(Boolean) ? 'bouwen' : null;
-      if (v.plek === 'boven') return 'varen';
+    const st = v && s.modus === 'lopen' && s.opGrond && !s.klimt && v.bouwt <= 0 ? bijSteiger(s, rivieren, VLOT) : null;
+    if (st) {
+      if (st.tak === 0 && !v.gebouwd) return v.stukken.every(Boolean) ? 'bouwen' : null;
+      if (v.plek === 'boven' && v.tak === st.tak && v.steiger === st.steiger.naam) return 'varen';
     }
     const p = ponyVan(s);
     if (!p || p.ruiter || s.modus !== 'lopen' || !s.opGrond || s.klimt || !p.opGrond || p.weigert > 0) return null;
@@ -262,7 +270,7 @@ export function maakSim(berg) {
       s.brulMeter = GEZEL.meterStart;
       s.meterVolGemeld = false;
       // Het vlot (nog te bouwen) aan de bron, en de Sumatraanse tijger die daar zwemt (stap 10).
-      vlotten.push(maakVlot('vlot-' + id, id, rivier, VLOT));
+      vlotten.push(maakVlot('vlot-' + id, id, rivieren, VLOT));
       zwemmers.push(maakZwemtijger('zwemtijger-' + id, id, rivier, ZWEMTIJGER));
       return s;
     },
@@ -454,19 +462,24 @@ export function maakSim(berg) {
       return zwemmers.find((t) => t.eigenaar === id);
     },
 
-    /** Meteen op het vlot aan de bron (voor tests): het vlot is dan al gebouwd. */
-    vaar(id) {
+    /**
+     * Meteen op het vlot (voor tests): aan de bron, of aan een steiger van de bergrivier ('top', 'etage', 'laag').
+     * Het vlot is dan al gebouwd.
+     */
+    vaar(id, steiger = 'bron') {
       const s = this.speler(id);
       if (s.modus === 'rijden') this.rijd(id, false);
       if (s.modus === 'varen') this.terug(id);
       const v = vlotVan(s);
       v.gebouwd = true;
       v.stukken.fill(true);
-      zetKlaar(v, rivier);
-      const k = rivier.bovenDek;
+      const tak = steiger === 'bron' ? 0 : 1;
+      zetKlaar(v, rivieren, tak, steiger);
+      const k = rivieren[tak].steigers.find((q) => q.naam === v.steiger).dek;
       s.pos = [k.x, k.y, k.z];
+      s.veilig = [k.x, k.y, k.z];
       s.modus = 'lopen';
-      stapIn(s, v, ponyVan(s), rivier, VLOT, meld);
+      stapIn(s, v, ponyVan(s), VLOT, meld);
     },
 
     /** Zet de pony van een speler op (x, z) (voor tests). */
@@ -538,10 +551,10 @@ export function maakSim(berg) {
           }
           else if (wat === 'bouwen') beginBouwen(s, vlotVan(s), VLOT, meld);
           else if (wat === 'slingeren') doeBosActie(parcoursVan(s), s, meld);
-          else if (wat === 'varen') stapIn(s, vlotVan(s), p, rivier, VLOT, meld);
+          else if (wat === 'varen') stapIn(s, vlotVan(s), p, VLOT, meld);
           else if (wat === 'aanleggen') {
             const v = vlotVan(s);
-            legAan(s, v, ponyAanBoord(s, v), aanlegPlek(v, rivier, wereld, VLOT), wereld, meld);
+            legAan(s, v, ponyAanBoord(s, v), aanlegPlek(v, rivieren, wereld, VLOT), wereld, meld);
           }
         }
 
@@ -569,7 +582,7 @@ export function maakSim(berg) {
         }
         else if (s.modus === 'varen') {
           const v = vlotVan(s);
-          stapVaren(s, v, ponyAanBoord(s, v), int, rivier, wereld, VLOT, dt, meld);
+          stapVaren(s, v, ponyAanBoord(s, v), int, rivieren, wereld, VLOT, dt, meld);
         } else if (s.modus === 'slingeren') bosSlinger(parcoursVan(s), s, int, dt, meld);
         else if (s.modus === 'lopen') {
           stapLopen(s, bosInvoer(parcoursVan(s), s, int), wereld, LOPEN, dt, meld, ZWEMMEN);
@@ -616,12 +629,14 @@ export function maakSim(berg) {
       // Het vlot als niemand erop zit, en de Sumatraanse tijger in de rivier.
       for (const v of vlotten) {
         if (v.ruiter) continue;
-        stapVlotVrij(v, spelers.find((q) => q.id === v.eigenaar), rivier, VLOT, dt, meld);
+        stapVlotVrij(v, spelers.find((q) => q.id === v.eigenaar), rivieren, VLOT, dt, meld);
       }
       for (const z of zwemmers) {
         bewaarVorige(z);
         const s = spelers.find((q) => q.id === z.eigenaar);
-        stapZwemtijger(z, s, s && vlotVan(s), rivier, ZWEMTIJGER, VLOT, dt, meld);
+        // De Sumatraanse tijger zwemt alleen in de benedenrivier; is het vlot op de berg, dan wacht hij.
+        const zv = s && vlotVan(s);
+        stapZwemtijger(z, s, zv && zv.tak === 0 ? zv : null, rivier, ZWEMTIJGER, VLOT, dt, meld);
       }
 
       // De tijgers, na de spelers (ze reageren op waar je nu bent).

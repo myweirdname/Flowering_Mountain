@@ -52,4 +52,6 @@ export const ZWEMMEN = {
   golfDuw: 6,
   zeeGrens: 3.6,            // nog dieper: plof, terug naar veilige grond
   rivierMee: 0.8,           // in de rivier voert de stroming je zoveel mee (1 = even snel als het water)
+  aanspoel: 0.9,            // in rustig rivierwater drijf je zo snel (m/s) naar de dichtste oever (stap 14)
+  aanspoelStroom: 1.6,      // rustig = trager dan dit
 };

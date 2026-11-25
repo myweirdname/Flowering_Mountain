@@ -15,12 +15,14 @@ export const RIVIER = {
   bronPeil: [2.2, 5.0],
 
   // Halve breedte van het water. [s, halve breedte]; "mond" telt vanaf waar de rivier in de lagune komt.
-  breedte: [[-3.4, 0.5], [-2.2, 1.8], [0, 2.7], [8, 3.0], [19, 3.0], [23, 2.35], [29, 2.8], [37, 3.0], [41, 2.75], [44, 3.3], [52, 3.1]],
+  // Stroomopwaarts van de bron komt sinds stap 14 de rivier over de berg erin (op s = -5): daar is ze even breed.
+  sBegin: -6.5,
+  breedte: [[-6.5, 2.0], [-2.2, 1.8], [0, 2.7], [8, 3.0], [19, 3.0], [23, 2.35], [29, 2.8], [37, 3.0], [41, 2.75], [44, 3.3], [52, 3.1]],
   mondBreedte: [[-8, 3.3], [0, 4.6], [8, 7]],
   diepte: 1.15,          // in het midden (aan de oever 0)
 
   // Hoe snel het water stroomt (in het midden; aan de oevers trager).
-  snelheid: [[-3, 0.3], [0, 1.6], [6, 2.1], [19, 2.3], [23, 3.1], [30, 2.7], [38, 2.5], [41.5, 3.0], [44.5, 1.7], [50, 2.2]],
+  snelheid: [[-6.5, 2.0], [-3, 1.2], [0, 1.6], [6, 2.1], [19, 2.3], [23, 3.1], [30, 2.7], [38, 2.5], [41.5, 3.0], [44.5, 1.7], [50, 2.2]],
   mondSnelheid: [[-8, 2.0], [0, 1.4], [8, 0.6]],
   oeverTraag: 0.4,       // aan de oever stroomt het zoveel trager (0 = even snel, 1 = stil)
 
@@ -31,7 +33,7 @@ export const RIVIER = {
 
   // Rotsen in het water: s, d, straal, hoogte boven het water.
   rotsen: [
-    { s: -4.4, d: 0, r: 1.5, h: 1.1 },      // de bron: een rots waar het water onderuit komt
+    // De bron: twee rotsen waartussen het water van de berg binnenkomt (tot stap 14 kwam het onder één rots uit).
     { s: -3.2, d: 1.9, r: 0.9, h: 0.6 },
     { s: -3.0, d: -2.0, r: 0.8, h: 0.5 },
     { s: 11.5, d: 1.0, r: 0.6, h: 0.35 },
@@ -107,6 +109,9 @@ export const VLOT = {
   sprongOp: 1.2,
   zwaartekracht: 16,
   slowmo: 0.5,
+  slowmoKlein: 0.72,     // de watervalletjes op de bergtop (stap 14): wat minder traag, het zijn er vier
+  // De grote waterval over de rotsrand (stap 14): diep in slow motion, en altijd met vaart van de rots weg.
+  groteVal: { slowmo: 0.45, op: 1.6, minVaart: 4.2 },
 
   // In de lagune: vrij peddelen in stil water.
   mondVrij: 3,           // zo ver na de monding wordt het vrij peddelen

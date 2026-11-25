@@ -313,5 +313,52 @@
     window.doorUitslag = { fouten: dfouten, n: M };
     window.doorKlaar = true;
   </script>
+
+  <h2>De rivier over de berg (stap 14)</h2>
+  <p>Voor een paar bergcodes vaart de vaarbot met de echte spelregels van elke steiger tot in de lagune: van de bovenste steiger op
+     de bergtop (klasse IV, met watervalletjes), van de steiger op de etage (III, met de kolk en de splitsing: één keer door de wilde en
+     één keer door de rustige arm) en van de steiger onder de grote waterval (II), telkens verder over de benedenrivier (I).
+     <code>?rivieren=6</code> kiest het aantal codes.</p>
+  <table>
+    <thead><tr><th>bergcode</th><th>lengte</th><th>grote waterval</th><th>top (wild / rustig)</th><th>etage (wild / rustig)</th><th>laagland</th><th>tijd</th></tr></thead>
+    <tbody id="rivierRijen"></tbody>
+  </table>
+  <div id="rivierKlaar">Bezig ...</div>
+  <script type="module">
+    import { maakSim } from './src/sim/spel.js';
+    import { vaarProef } from './src/sim/modi/vaarbot.js';
+    const ja = (b, tekst = b ? 'ja' : 'nee') => `<td class="${b ? 'ok' : 'fout'}">${tekst}</td>`;
+    const pauze = () => new Promise((r) => setTimeout(r, 0));
+    // Wacht tot de andere proeven klaar zijn (die gebruiken dezelfde rekentijd).
+    while (!window.doorKlaar) await new Promise((r) => setTimeout(r, 200));
+    const R = +(new URLSearchParams(location.search).get('rivieren') ?? 6);
+    const codes = ['bloei', ...Array.from({ length: R - 1 }, (_, i) => `berg${i + 1}`)];
+    const rijen = document.getElementById('rivierRijen');
+    const fouten = [];
+    const t0 = performance.now();
+    for (const code of codes) {
+      const tb = performance.now();
+      const sim = maakSim(code);
+      sim.voegSpelerToe('bot');
+      const br = sim.wereld.bergrivier;
+      const vaar = (st, arm) => {
+        const r = vaarProef(sim, st, { id: 'bot', arm });
+        const goed = r.uitkomst === 'lagune' && r.groteSprong === (st === 'laag' ? 0 : 1);
+        return { goed, tekst: goed ? `${r.tijd.toFixed(0)} s` : r.uitkomst };
+      };
+      const uit = [vaar('top', 1), vaar('top', -1), vaar('etage', 1), vaar('etage', -1), vaar('laag')];
+      const goed = uit.every((u) => u.goed);
+      if (!goed) fouten.push(code);
+      const cel = (a, b) => ja(a.goed && (!b || b.goed), b ? `${a.tekst} / ${b.tekst}` : a.tekst);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${code}</td><td>${br.sEinde.toFixed(0)} m</td><td>${br.groteVal.hoogte.toFixed(1)} m</td>${cel(uit[0], uit[1])}${cel(uit[2], uit[3])}${cel(uit[4])}<td>${((performance.now() - tb) / 1000).toFixed(1)} s</td>`;
+      rijen.appendChild(tr);
+      await pauze();
+    }
+    document.getElementById('rivierKlaar').innerHTML = (fouten.length ? `<span class="fout">Fout bij: ${fouten.join(', ')}.</span>` : '<span class="ok">Vanaf elke steiger tot in de lagune.</span>') +
+      ` ${R} bergcodes in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
+    window.rivierUitslag = { fouten, n: R };
+    window.rivierKlaar = true;
+  </script>
 </body>
 </html>
