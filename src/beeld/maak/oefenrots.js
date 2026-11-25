@@ -2,7 +2,8 @@
 // gekleurde grepen per route (zoals in een klimhal), een bordje met de graad aan de voet, een ankerring en een
 // topbloem boven elke route. Alles in wandcoördinaten: x = u (naar rechts), y = v (omhoog), z = uit de wand.
 // Dezelfde maker tekent ook de klimwanden van de berg (stap 13): elke wand geeft zijn eigen maten (`rots.maat`)
-// en routes mee.
+// en routes mee. Stap 15a: een wand met een profiel (de dakvleugel: plaat, overhang, dak, dakrand, kopwand) krijgt
+// een rots die langs dat profiel gevouwen is, met een richel, een knieklem en grepen die met de wand mee kantelen.
 import * as THREE from 'three';
 import { Bouwer, maakBol, matrix } from './vorm.js';
 import { waardenruis } from '../../sim/wereld/ruis.js';
@@ -119,6 +120,149 @@ function maakBlok(R, detail) {
   return g;
 }
 
+/**
+ * Een rots langs een profiel (stap 15a): de doorsnede (z naar voor, y omhoog) loopt van de wandvoet langs het
+ * profiel omhoog (exact, daar zitten de grepen), dan over een bolle kop naar achter en langs de achterkant weer
+ * naar beneden. Die doorsnede wordt over de breedte uitgetrokken, met afgeronde uiteinden. Bultig, behalve op de
+ * klimwand zelf. Vertexkleuren zoals maakBlok.
+ * @param {any} M maten en kleuren @param {ReturnType<typeof import('../../sim/klimmen/profiel.js').maakProfiel>} P
+ */
+function maakProfielBlok(M, P, detail) {
+  const B = M.breedte;
+  const D = M.diepte;
+  const L = P.lengte;
+  const stap = detail ? 0.18 : 0.3;
+  /** @type {{ z: number, y: number, wand: boolean }[]} */
+  const rand = [{ z: 0, y: -0.8, wand: false }];
+  const n = Math.ceil(L / stap);
+  for (let i = 0; i <= n; i++) {
+    const v = (i / n) * L;
+    rand.push({ z: P.z(v), y: P.y(v), wand: true });
+  }
+  // De kop: van de bovenrand van de kopwand bol over naar achter, dan de achterkant naar beneden (zacht afgerond).
+  const zt = P.z(L);
+  const yt = P.y(L);
+  let kop = [
+    [zt, yt], [zt + 0.02, yt + 0.25], [zt - 0.25, yt + 0.55], [zt - 1.0, yt + M.bovenaan], [(zt - D) / 2, yt + M.bovenaan + 0.15],
+    [-D + 0.9, yt + M.bovenaan * 0.8], [-D + 0.1, yt + 0.1], [-D - 0.15, yt * 0.55], [-D, 0.2], [-D, -0.8],
+  ];
+  for (let r = 0; r < 3; r++) {
+    const nw = [kop[0]];
+    for (let i = 0; i < kop.length - 1; i++) {
+      const [a0, a1] = kop[i];
+      const [b0, b1] = kop[i + 1];
+      nw.push([a0 * 0.75 + b0 * 0.25, a1 * 0.75 + b1 * 0.25], [a0 * 0.25 + b0 * 0.75, a1 * 0.25 + b1 * 0.75]);
+    }
+    nw.push(kop[kop.length - 1]);
+    kop = nw;
+  }
+  for (let i = 1; i < kop.length; i++) rand.push({ z: kop[i][0], y: kop[i][1], wand: false });
+  // De doorsnede gelijkmatig verdelen (behalve langs de wand: die staat al op maat).
+  const omtrek = [];
+  for (let i = 0; i < rand.length; i++) {
+    const a = rand[i];
+    const b = rand[(i + 1) % rand.length];
+    omtrek.push(a);
+    if (a.wand && b.wand) continue;
+    const m = Math.floor(Math.hypot(b.z - a.z, b.y - a.y) / stap);
+    for (let j = 1; j < m; j++) omtrek.push({ z: a.z + ((b.z - a.z) * j) / m, y: a.y + ((b.y - a.y) * j) / m, wand: false });
+  }
+  const np = omtrek.length;
+  // Per punt de richting naar binnen (de doorsnede loopt tegen de klok in: z naar rechts, y omhoog).
+  const binnen = omtrek.map((p, i) => {
+    const a = omtrek[(i - 1 + np) % np];
+    const b = omtrek[(i + 1) % np];
+    const tz = b.z - a.z;
+    const ty = b.y - a.y;
+    const l = Math.hypot(tz, ty) || 1;
+    return [-ty / l, tz / l];
+  });
+  const x0 = -M.rand;
+  const x1 = B + M.rand;
+  const ra = 0.7; // straal van de afgeronde uiteinden
+  const nx = Math.max(6, Math.round((x1 - x0) / stap));
+  const ringen = [];
+  const pos = [];
+  const wandW = [];
+  for (let ix = 0; ix <= nx; ix++) {
+    const x = x0 + ((x1 - x0) * ix) / nx;
+    const dEind = Math.min(x - x0, x1 - x);
+    const inset = dEind < ra ? ra - Math.sqrt(Math.max(0, ra * ra - (ra - dEind) ** 2)) : 0;
+    const ring = [];
+    for (let i = 0; i < np; i++) {
+      const p = omtrek[i];
+      const [iz, iy] = binnen[i];
+      let z = p.z + iz * inset;
+      let y = p.y + iy * inset;
+      const inWand = p.wand ? glad(-0.3, 0.3, x) * glad(B + 0.3, B - 0.3, x) : 0;
+      // Bulten (niet op de klimwand), en een fijn reliëf op de klimwand.
+      const ruis =
+        (waardenruis(x * 0.45 + z * 0.3, y * 0.45 - z * 0.2, 31) - 0.5) * 1.0 +
+        (waardenruis(x * 1.4 - z, y * 1.4 + z * 0.5, 37) - 0.5) * 0.4;
+      const fijn = (waardenruis(x * 2.2, y * 2.2 + z, 43) - 0.5) * 0.05 + (waardenruis(x * 0.7, y * 0.9 - z, 47) - 0.5) * 0.04;
+      const d = ruis * 0.45 * (1 - inWand) + fijn * inWand;
+      z -= iz * d;
+      y -= iy * d;
+      if (y < -0.8) y = -0.8;
+      ring.push(pos.length / 3);
+      pos.push(x, y, z);
+      wandW.push(inWand);
+    }
+    ringen.push(ring);
+  }
+  const index = [];
+  for (let ix = 0; ix < nx; ix++) {
+    for (let i = 0; i < np; i++) {
+      const a = ringen[ix][i];
+      const b = ringen[ix][(i + 1) % np];
+      const c = ringen[ix + 1][i];
+      const d = ringen[ix + 1][(i + 1) % np];
+      index.push(a, c, b, b, c, d);
+    }
+  }
+  // De uiteinden dichtmaken.
+  for (const [ix, links] of [[0, true], [nx, false]]) {
+    const ring = ringen[ix];
+    const vorm = ring.map((vi) => new THREE.Vector2(pos[vi * 3 + 2], pos[vi * 3 + 1]));
+    for (const [a, b, c] of THREE.ShapeUtils.triangulateShape(vorm, [])) {
+      // Welke kant wijst deze driehoek uit? Links moet ze naar -x kijken, rechts naar +x.
+      const za = vorm[a].x, ya = vorm[a].y;
+      const nxDrie = (vorm[b].y - ya) * (vorm[c].x - za) - (vorm[b].x - za) * (vorm[c].y - ya);
+      if (nxDrie < 0 === links) index.push(ring[a], ring[b], ring[c]);
+      else index.push(ring[a], ring[c], ring[b]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setIndex(index);
+  g.computeVertexNormals();
+  // Kleuren: lila met lichte banden, donkere holtes, mos waar de rots naar boven kijkt (de kop, niet het dak).
+  const nm = g.attributes.normal;
+  const basis = new THREE.Color(M.kleur);
+  const donker = new THREE.Color(M.kleurDonker);
+  const laag = new THREE.Color(M.kleurLaag);
+  const mos = new THREE.Color(M.mos);
+  const c = new THREE.Color();
+  const kleur = [];
+  for (let i = 0; i < pos.length / 3; i++) {
+    const x = pos[i * 3];
+    const y = pos[i * 3 + 1];
+    const z = pos[i * 3 + 2];
+    const band = Math.sin(y * 2.4 + waardenruis(x * 0.35, y * 0.3 + z * 0.2, 41) * 4) * 0.5 + 0.5;
+    const spikkel = waardenruis(x * 6 + z * 3, y * 6, 59);
+    const hol = waardenruis(x * 0.45 + z * 0.3, y * 0.45 - z * 0.2, 31) - 0.5;
+    c.copy(basis)
+      .lerp(laag, glad(0.55, 0.95, band) * 0.75)
+      .lerp(donker, klem(-hol * 1.4, 0, 1) * 0.7 + glad(0.78, 0.95, spikkel) * 0.35);
+    if (wandW[i] > 0.5) c.lerp(laag, 0.1);
+    const boven = glad(0.35, 0.75, nm.getY(i)) * glad(yt - 0.6, yt + 0.2, y);
+    c.lerp(mos, Math.max(boven, glad(0.5, -0.3, y) * 0.45));
+    kleur.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(kleur, 3));
+  return g;
+}
+
 /** Eén greepvorm per soort, in greepcoördinaten (de wand is z = 0, de greep steekt uit naar +z). Wit = route-kleur. */
 function maakGreepVorm(soort) {
   const b = new Bouwer();
@@ -148,6 +292,28 @@ function maakGreepVorm(soort) {
       b.voegToe(maakBol(1, 2), { matrix: matrix(0, 0, 0, 0, 0, 0, 0.12, 0.1, 0.06), kleur: wit });
       break;
     }
+    case 'zijgreep': {
+      // Een hoog, smal oor met een diepe gleuf aan één kant (die kant wijst naar waar je moet trekken).
+      b.voegToe(maakBol(1, 2), { matrix: matrix(0, 0.01, 0.035, 0, 0, 0, 0.065, 0.11, 0.07), kleur: wit });
+      b.voegToe(maakBol(1, 1), { matrix: matrix(0, 0.07, 0.06, -0.6, 0, 0, 0.05, 0.02, 0.035), kleur: holte });
+      break;
+    }
+    case 'ondergreep': {
+      // Een brede, platte "glimlach" met de gleuf aan de onderkant (de greep is omgedraaid): je pakt hem van onder.
+      b.voegToe(maakBol(1, 2), { matrix: matrix(0, -0.005, 0.03, 0, 0, 0, 0.15, 0.06, 0.065), kleur: wit });
+      b.voegToe(maakBol(1, 1), { matrix: matrix(0, 0.035, 0.055, -0.5, 0, 0, 0.11, 0.018, 0.035), kleur: holte });
+      break;
+    }
+    case 'knieklem': {
+      // Een groot volume in het dak: een bolle rots-"hoorn" om je knie achter te klemmen.
+      b.voegToe(maakBol(1, 2), { matrix: matrix(0, 0, 0.06, 0, 0, 0, 0.3, 0.16, 0.13), kleur: wit });
+      b.voegToe(maakBol(1, 2), { matrix: matrix(0, 0.06, 0.13, 0.3, 0, 0, 0.2, 0.1, 0.08), kleur: wit });
+      break;
+    }
+    case 'lip':
+      // Een plakkertje op de rand van de richel (de rand zelf is de greep).
+      b.voegToe(new THREE.CircleGeometry(0.045, 12), { matrix: matrix(0, 0, 0.004), kleur: wit });
+      break;
     case 'voet':
       b.voegToe(maakBol(1, 1), { matrix: matrix(0, 0, 0.012, 0, 0, 0, 0.042, 0.032, 0.03), kleur: wit });
       break;
@@ -217,7 +383,16 @@ export function maakOefenrotsbeeld(rots, K, kw) {
 
   const M = rots.maat;
   const routes = rots.routes;
-  const blok = new THREE.Mesh(maakBlok(M, kw.detail), gloeiMateriaal(M.gloed));
+  const P = rots.profiel;
+  const gevouwen = !!P && !P.recht;
+  const blok = new THREE.Mesh(gevouwen ? maakProfielBlok(M, P, kw.detail) : maakBlok(M, kw.detail), gloeiMateriaal(M.gloed));
+  /** Van de wandkaart (u, v, zoveel uit de wand) naar wandcoördinaten (langs het profiel gevouwen). */
+  const lok = (u, v, uit = 0, doel = new THREE.Vector3()) => {
+    if (!gevouwen) return doel.set(u, v, uit);
+    const a = THREE.MathUtils.degToRad(P.hoek(v));
+    return doel.set(u, P.y(v) - Math.sin(a) * uit, P.z(v) + Math.cos(a) * uit);
+  };
+  const kantel = (v) => (gevouwen ? THREE.MathUtils.degToRad(P.hoek(v)) : 0);
   blok.castShadow = kw.schaduw;
   blok.receiveShadow = kw.schaduw;
   groep.add(blok);
@@ -250,14 +425,15 @@ export function maakOefenrotsbeeld(rots, K, kw) {
   }
 
   // --- Grepen: één InstancedMesh per soort, kleur per route ---
-  const soorten = [...new Set(rots.grepen.map((g) => g.soort))];
+  const vormVan = (g) => (g.lip ? 'lip' : g.soort);
+  const soorten = [...new Set(rots.grepen.map(vormVan))];
   const greepMat = gloeiMateriaal(M.greepGloed);
   /** @type {Record<string, THREE.InstancedMesh>} */
   const lagen = {};
   /** per greep: [laag, index] */
   const plekVan = [];
   for (const s of soorten) {
-    const lijst = rots.grepen.filter((g) => g.soort === s);
+    const lijst = rots.grepen.filter((g) => vormVan(g) === s);
     const m = new THREE.InstancedMesh(maakGreepVorm(s), greepMat, lijst.length);
     m.castShadow = kw.schaduw;
     lijst.forEach((g, i) => (plekVan[g.id] = [s, i]));
@@ -269,13 +445,29 @@ export function maakOefenrotsbeeld(rots, K, kw) {
   const tmpC = new THREE.Color();
   const wit = new THREE.Color(0xffffff);
   const rood = new THREE.Color(0xff2a2a);
+  const X = new THREE.Vector3(1, 0, 0);
+  const Z = new THREE.Vector3(0, 0, 1);
+  const qK = new THREE.Quaternion();
+  const qD = new THREE.Quaternion();
+  const vG = new THREE.Vector3();
+  const vS = new THREE.Vector3();
   /** Zet greep id met schaal s en (opgelichte) kleur. */
   function zetGreep(id, s = 1, licht = 0, flits = 0) {
     const g = rots.grepen[id];
     const [laag, i] = plekVan[id];
-    // Een kleine draaiing per greep, zodat de rij er niet als een stempel uitziet.
-    const draai = (((id * 7919) % 100) / 100 - 0.5) * 0.5;
-    tmpM.compose(new THREE.Vector3(g.u, g.v, 0), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), draai), new THREE.Vector3(s, s, s));
+    // Een kleine draaiing per greep, zodat de rij er niet als een stempel uitziet; een zijgreep of ondergreep draait
+    // mee met haar goede trekrichting (stap 15a), en elke greep kantelt mee met de wand (onder een dak: ondersteboven).
+    const draai = g.lip ? 0 : (((id * 7919) % 100) / 100 - 0.5) * (g.soort === 'knieklem' ? 0.2 : 0.5);
+    const richting = THREE.MathUtils.degToRad(g.richting ?? 0);
+    qK.setFromAxisAngle(X, kantel(g.v));
+    qD.setFromAxisAngle(Z, draai + richting);
+    if (g.lip) {
+      // Het plakkertje zit op de voorkant van de richel, net onder de rand.
+      const q = rots.richels.find((r) => Math.abs(r.v - g.v) < 0.1);
+      lok(g.u, g.v, q ? q.diep + 0.005 : 0, vG);
+      vG.y -= 0.035;
+    } else lok(g.u, g.v, 0, vG);
+    tmpM.compose(vG, qK.multiply(qD), vS.set(s, s, s));
     lagen[laag].setMatrixAt(i, tmpM);
     tmpC.copy(kleurVan[id]).lerp(wit, licht * 0.55).lerp(rood, flits);
     lagen[laag].setColorAt(i, tmpC);
@@ -300,12 +492,13 @@ export function maakOefenrotsbeeld(rots, K, kw) {
       const g = rots.grepen[id];
       const p = plakker.clone();
       p.material = new THREE.MeshBasicMaterial({ color: route.kleur });
-      p.position.set(g.u, g.v - 0.11, 0.035);
+      lok(g.u, g.v - 0.11, 0.035, p.position);
+      p.rotation.x = kantel(g.v - 0.11);
       groep.add(p);
     }
     const [au, av] = rots.anker(ri);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.016, 8, 16), metaal);
-    ring.position.set(au, av, 0.06);
+    lok(au, av, 0.06, ring.position);
     groep.add(ring);
     ankers.push(ring);
     const t = rots.grepen[r.topGreep];
@@ -316,7 +509,7 @@ export function maakOefenrotsbeeld(rots, K, kw) {
     const houder = new THREE.Group();
     houder.add(bloem);
     bloem.rotation.x = Math.PI / 2; // het hart kijkt uit de wand
-    houder.position.set(t.u + 0.3, t.v + 0.12, 0.06);
+    lok(t.u + 0.3, t.v + 0.12, 0.06, houder.position);
     houder.scale.setScalar(0.55);
     groep.add(houder);
     topbloemen.push({ houder, open: 0, doel: 0, wip: 0 });
@@ -345,12 +538,33 @@ export function maakOefenrotsbeeld(rots, K, kw) {
   const hangtouwen = routes.map((_, ri) => {
     const [au, av] = rots.anker(ri);
     const t = new THREE.Mesh(new THREE.CylinderGeometry(K.touw.dikte, K.touw.dikte, 1, 6), touwMat);
-    const lengte = av - 0.4;
+    // Recht naar beneden vanaf het anker; bij een dak hangt het voor de dakrand langs (stap 15a).
+    const a = lok(au, av, 0.09);
+    const lengte = a.y - 0.4;
     t.scale.y = lengte;
-    t.position.set(au + 0.12, av - lengte / 2, 0.09);
+    t.position.set(au + 0.12, a.y - lengte / 2, a.z + (gevouwen ? 0.05 : 0));
     groep.add(t);
     return t;
   });
+
+  // --- De richels (stap 15a): een vlak stukje rots om op te staan, met een afgeronde voorkant ---
+  const richelMat = new THREE.MeshLambertMaterial({ color: M.kleurLaag, emissive: M.kleur, emissiveIntensity: M.gloed * 0.8 });
+  const mosMat = new THREE.MeshLambertMaterial({ color: M.mos, emissive: M.mos, emissiveIntensity: 0.25 });
+  for (const q of rots.richels ?? []) {
+    const breed = q.tot - q.van;
+    const plank = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, breed, 4, 14).rotateZ(Math.PI / 2), richelMat);
+    const p = lok((q.van + q.tot) / 2, q.v - 0.07, q.diep * 0.5);
+    plank.position.copy(p);
+    plank.scale.set(1, 1, (q.diep + 0.06) / 0.15);
+    plank.receiveShadow = kw.schaduw;
+    plank.castShadow = kw.schaduw;
+    groep.add(plank);
+    // Een randje mos achteraan op de richel.
+    const mosje = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, breed * 0.9, 3, 10).rotateZ(Math.PI / 2), mosMat);
+    mosje.position.copy(lok((q.van + q.tot) / 2, q.v + 0.01, 0.06));
+    mosje.scale.set(1, 0.6, 1.2);
+    groep.add(mosje);
+  }
 
   groep.updateMatrixWorld(true);
 

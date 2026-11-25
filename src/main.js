@@ -713,6 +713,59 @@ function klimGebeurtenis(g) {
       return true;
     case 'klimVoet':
       geluid.voetje(g.grond);
+      if (g.hak) geluid.hakhaak();
+      return true;
+    // --- Steil en ondersteboven (stap 15a) ---
+    case 'vleermuis': {
+      // In de knieklem: ondersteboven, handen los. Een opgeluchte "hihi" en wat glitter.
+      geluid.vleermuis();
+      const s = sim.speler(LOKAAL);
+      setTimeout(() => deeltjes.glinsters(s.pos[0], s.pos[1], s.pos[2], 0xfff3a0, 16), 500);
+      return true;
+    }
+    case 'vleermuisUit':
+      geluid.opklimmen();
+      return true;
+    case 'krijt': {
+      // Een hand in het pofzakje: een wolkje magnesium.
+      geluid.krijt();
+      const p = klimmer.zakPlek();
+      setTimeout(() => {
+        deeltjes.stof(p.x, p.y, p.z, KRIJT);
+        deeltjes.stof(p.x, p.y + 0.05, p.z, KRIJT);
+      }, 250);
+      return true;
+    }
+    case 'krijtKlaar': {
+      const h = klimmer.handPlek(g.lid);
+      deeltjes.stof(h.x, h.y, h.z, KRIJT);
+      deeltjes.glinsters(h.x, h.y, h.z, 0xffffff, 8);
+      klimbediening.krijt(g.beurten);
+      return true;
+    }
+    case 'geenKrijt':
+      geluid.teVer();
+      klimbediening.krijt(0, true);
+      return true;
+    case 'dynoLaad':
+      geluid.dynoLaad();
+      return true;
+    case 'dynoSprong':
+      geluid.dynoSprong();
+      return true;
+    case 'dynoVang': {
+      geluid.greep(g.greepSoort);
+      geluid.dynoVang();
+      const [x, y, z] = g.pos;
+      deeltjes.stof(x, y, z, KRIJT);
+      deeltjes.sterretjes(x, y, z, 5);
+      return true;
+    }
+    case 'dynoMis':
+      geluid.glijden();
+      return true;
+    case 'voetenLos':
+      geluid.voetenLos();
       return true;
     case 'teVer':
     case 'andereRoute':
@@ -1073,7 +1126,10 @@ let kringTijd = 0;
 let bosRond = 0;
 let ademTijd = 0;
 let klimMix = 0;
-const klimCam = { pos: new THREE.Vector3(), doel: new THREE.Vector3(), klaar: false };
+const klimCam = { pos: new THREE.Vector3(), doel: new THREE.Vector3(), norm: new THREE.Vector3(0, 0, 1), raak: new THREE.Vector3(0, 1, 0), klaar: false };
+const camNorm = new THREE.Vector3();
+const camRaak = new THREE.Vector3();
+const camA = [0, 0, 0];
 const camPos = new THREE.Vector3();
 const camDraai = new THREE.Quaternion();
 const kijker = new THREE.PerspectiveCamera(); // alleen om te richten (lookAt van een camera kijkt langs -z)
@@ -1128,9 +1184,13 @@ const lus = maakSpellus({
       }
       intentie.zakken = klimbediening.leesZakken();
       intentie.leun = [invoer.beweeg[0], invoer.beweeg[1]];
+      // Aan de wand: R (of het pofzakje) is magnesium, niet brullen; de springknop is de dyno (stap 15a).
+      intentie.magnesium = klimbediening.leesKrijt() || !!invoer.brul;
+      intentie.brul = false;
     } else {
       klimbediening.leesZet();
       klimbediening.leesZakken();
+      klimbediening.leesKrijt();
     }
     // Op het vlot: de joystick stuurt (links, rechts) en peddelt (vooruit, achteruit).
     if (sim.speler(LOKAAL).modus === 'varen') {
@@ -1402,12 +1462,35 @@ const lus = maakSpellus({
     const C = KLIMMEN.camera;
     klimMix = THREE.MathUtils.clamp(klimMix + (s.klim ? dt : -dt) / C.wissel, 0, 1);
     if (s.klim) {
-      // Een beetje van onder en opzij: zo zie je de handjes boven het grote hoofd reiken.
-      klimDoel.set(s.pos[0], s.pos[1] + C.kijkHoger, s.pos[2]);
+      // Een beetje van onder en opzij: zo zie je de handjes boven het grote hoofd reiken. De camera draait mee met de
+      // steilte (stap 15a): onder een dak zakt ze onder de klimster en kijkt ze schuin omhoog.
+      const k = s.klim;
       const t = klimCam.klaar ? 1 - Math.exp(-C.volgen * dt) : 1;
+      if (k.vrij || k.toestand === 'zakt') {
+        camNorm.copy(rotsN);
+        camRaak.set(0, 1, 0);
+      } else {
+        const v = k.P[1] + 0.25;
+        rots.normaal(v, camA);
+        camNorm.set(camA[0], camA[1], camA[2]);
+        rots.raak(v, camA);
+        camRaak.set(camA[0], camA[1], camA[2]);
+      }
+      const td = klimCam.klaar ? 1 - Math.exp(-C.draai * dt) : 1;
+      klimCam.norm.lerp(camNorm, td).normalize();
+      klimCam.raak.lerp(camRaak, td).normalize();
+      klimDoel.set(s.pos[0], s.pos[1], s.pos[2]).addScaledVector(klimCam.raak, C.kijkHoger);
       klimCam.doel.lerp(klimDoel, t);
-      klimDoel.set(s.pos[0], s.pos[1] + C.camHoger, s.pos[2]).addScaledVector(rotsN, C.afstand).addScaledVector(rotsR, C.opzij);
-      klimDoel.y = Math.max(klimDoel.y, rots.voetHoogte + C.minHoogte);
+      // Onder een dak (de wand kijkt naar beneden): minder recht eronder en meer opzij en naar buiten, zodat je de
+      // klimster van schuin onder echt ziet hangen (armen naar het dak, het lijf dat doorzakt).
+      const onder = THREE.MathUtils.clamp(-klimCam.norm.y, 0, 1);
+      klimDoel.set(s.pos[0], s.pos[1], s.pos[2]).addScaledVector(klimCam.raak, C.camHoger).addScaledVector(klimCam.norm, C.afstand * (1 - C.dakLager * onder)).addScaledVector(rotsR, C.opzij + C.dakOpzij * onder);
+      klimDoel.addScaledVector(rotsN, C.dakUit * onder);
+      const laagst = rots.voetHoogte + C.minHoogte;
+      if (klimDoel.y < laagst) {
+        klimDoel.addScaledVector(rotsN, (laagst - klimDoel.y) * 0.8);
+        klimDoel.y = laagst;
+      }
       klimCam.pos.lerp(klimDoel, t);
       klimCam.klaar = true;
     } else klimCam.klaar = false;
@@ -1512,7 +1595,8 @@ const lus = maakSpellus({
         `tijger         ${tg.modus}${tg.wacht ? ' (wacht)' : ''} ${tg.gang} ${tg.snelheid.toFixed(1)} m/s · brul ${Math.round(s.brulMeter * 100)}%` +
         (s.klim
           ? `
-klimmen        wand ${s.klim.wand} · ${rots.routes[s.klim.route].graad} ${s.klim.toestand} · arm ${s.klim.armBelasting.toFixed(2)} · kracht ${Math.round(s.klim.hand.lh.pomp * 100)}/${Math.round(s.klim.hand.rh.pomp * 100)}%`
+klimmen        wand ${s.klim.wand} · ${rots.routes[s.klim.route].graad} ${s.klim.toestand} · arm ${s.klim.armBelasting.toFixed(2)} · kracht ${Math.round(s.klim.hand.lh.pomp * 100)}/${Math.round(s.klim.hand.rh.pomp * 100)}%
+               steilte ${s.klim.steilte.toFixed(2)} ${rots.zone?.(s.klim.P[1]) ?? ''} · open ${s.klim.zwaaiOpen.toFixed(2)}${s.klim.staat ? ' · staat' : ''}${s.klim.vleermuis ? ' · vleermuis' : ''}${s.klim.dyno ? ' · dyno ' + s.klim.dyno.fase : ''}${!s.klim.op.lv && !s.klim.op.rv ? ' · voeten los' : ''} · krijt ${s.klim.krijtBeurten}`
           : '') +
         (s.bos.dek >= 0
           ? `
@@ -1675,6 +1759,23 @@ window.spel = {
   /** Meteen beginnen klimmen op route ri van wand wi (0 = de oefenrots), met besturing 'tikken' of 'handen'. */
   klim(ri = 0, besturing = klimbediening.besturing, wi = 0) {
     sim.klim(LOKAAL, ri, besturing, wi);
+  },
+  /** Zet de speler aan de voet van de dakroute op de dakvleugel van de oefenrots (stap 15a). */
+  naarDak() {
+    const d = sim.wereld.dakrots;
+    const v = d.routes[0].voet;
+    this.zet(v[0], v[2]);
+    const s = sim.speler(LOKAAL);
+    s.richting = s.vorigeRichting = Math.atan2(-d.N[0], -d.N[2]);
+    volgcamera.zet(Math.atan2(d.N[0], d.N[2]), CAMERA.kanteling);
+  },
+  /** Meteen beginnen klimmen op de dakroute (stap 15a). */
+  klimDak(besturing = klimbediening.besturing) {
+    sim.klim(LOKAAL, 0, besturing, sim.dakWand);
+  },
+  /** De dakvleugel: grepen, profiel en de wandkaart (stap 15a). */
+  get dakrots() {
+    return sim.wereld.dakrots;
   },
   /** Het bergplan (stap 13): plekken, scheidingen en doorgangen (met waar ze liggen). */
   get bergplan() {
@@ -1895,6 +1996,12 @@ if (INSTELLINGEN.plek === 'brug') {
 // ?plek=helling, ?plek=etage of ?plek=top: meteen op de berg (stap 12).
 if (['helling', 'etage', 'top'].includes(INSTELLINGEN.plek)) {
   window.spel.naarBerg(INSTELLINGEN.plek);
+  const s = sim.speler(LOKAAL);
+  wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
+}
+// ?plek=dak: meteen aan de voet van de dakroute op de dakvleugel van de oefenrots (stap 15a).
+if (INSTELLINGEN.plek === 'dak') {
+  window.spel.naarDak();
   const s = sim.speler(LOKAAL);
   wereldbeeld.werkBij(s.pos[0], s.pos[2], camera, true);
 }

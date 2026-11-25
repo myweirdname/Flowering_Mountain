@@ -2,6 +2,8 @@
 // linker- of rechterhand naar een greep). Werkt met touch en muis. Grepen binnen bereik lichten op; een greep die te
 // ver is, knippert rood. Knoppen: wisselen van besturing en laten zakken. Pc: T wisselt, B laat zakken,
 // E (ingedrukt) schudt uit, WASD leunt. Dit is invoer en uitleg: de simulatie beslist wat er echt gebeurt.
+// Stap 15a: het pofzakje (magnesium, R) met een bolletje per beurt; de springknop (spatie) blijft aan de wand: dat is
+// de dyno (ingedrukt houden, richten met de joystick of WASD, loslaten). Bij een knieklem is E vleermuisrust.
 import * as THREE from 'three';
 
 const TIK_ICOON = `<svg viewBox="0 0 100 100" aria-hidden="true">
@@ -15,6 +17,12 @@ const HANDEN_ICOON = `<svg viewBox="0 0 100 100" aria-hidden="true">
     <path d="M14 70 C10 58 12 40 18 30 C21 26 26 28 25 33 L24 44 L28 24 C29 19 36 20 35 26 L33 42 L38 22 C39 17 46 18 45 24 L42 44 L46 30 C47 26 53 27 52 32 L48 58 C46 68 38 76 28 78 Z"/>
     <path d="M86 70 C90 58 88 40 82 30 C79 26 74 28 75 33 L76 44 L72 24 C71 19 64 20 65 26 L67 42 L62 22 C61 17 54 18 55 24 L58 44 L54 30 C53 26 47 27 48 32 L52 58 C54 68 62 76 72 78 Z"/>
   </g>
+</svg>`;
+const KRIJT_ICOON = `<svg viewBox="0 0 100 100" aria-hidden="true">
+  <path d="M30 34 H70 L66 84 C66 88 62 90 58 90 H42 C38 90 34 88 34 84 Z" fill="#fff" stroke="#c2417a" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M26 30 H74" stroke="#c2417a" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="44" cy="18" r="6" fill="#fff" opacity="0.9"/><circle cx="58" cy="12" r="4" fill="#fff" opacity="0.75"/>
+  <circle cx="54" cy="24" r="5" fill="#fff" opacity="0.85"/>
 </svg>`;
 const ZAK_ICOON = `<svg viewBox="0 0 100 100" aria-hidden="true">
   <path d="M50 10 V58" stroke="#ff5fa2" stroke-width="8" stroke-linecap="round"/>
@@ -45,12 +53,15 @@ export function maakKlimbediening(canvas, ui, camera, rots, K, spel) {
   hud.innerHTML = `
     <button class="klimknop besturingknop" aria-label="besturing wisselen"></button>
     <button class="klimknop zakknop" aria-label="laten zakken">${ZAK_ICOON}</button>
+    <button class="klimknop krijtknop" aria-label="magnesium">${KRIJT_ICOON}<span class="krijtbolletjes"><i></i><i></i><i></i><i></i></span></button>
     <div class="routebadge"></div>
-    <div class="klimtoetsen"><span><kbd>E</kbd> uitschudden (ingedrukt)</span><span><kbd>B</kbd> laten zakken</span><span><kbd>T</kbd> tikken / handen</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> leunen</span></div>
+    <div class="klimtoetsen"><span><kbd>E</kbd> uitschudden (ingedrukt)</span><span><kbd>B</kbd> laten zakken</span><span><kbd>T</kbd> tikken / handen</span><span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> leunen</span><span><kbd>R</kbd> magnesium</span><span><kbd>spatie</kbd> dyno (ingedrukt)</span></div>
     <svg class="sleeplijn" width="100%" height="100%"><line x1="0" y1="0" x2="0" y2="0"/><circle r="0"/></svg>`;
   ui.appendChild(hud);
   const besturingKnop = /** @type {HTMLElement} */ (hud.querySelector('.besturingknop'));
   const zakKnop = /** @type {HTMLElement} */ (hud.querySelector('.zakknop'));
+  const krijtKnop = /** @type {HTMLElement} */ (hud.querySelector('.krijtknop'));
+  const bolletjes = [...hud.querySelectorAll('.krijtbolletjes i')];
   const badge = /** @type {HTMLElement} */ (hud.querySelector('.routebadge'));
   const lijn = /** @type {SVGLineElement} */ (hud.querySelector('.sleeplijn line'));
   const stip = /** @type {SVGCircleElement} */ (hud.querySelector('.sleeplijn circle'));
@@ -77,8 +88,15 @@ export function maakKlimbediening(canvas, ui, camera, rots, K, spel) {
       doe();
     });
   let zakGevraagd = false;
+  let krijtGevraagd = false;
   knop(besturingKnop, wissel);
   knop(zakKnop, () => (zakGevraagd = true));
+  knop(krijtKnop, () => (krijtGevraagd = true));
+  /** Toont hoeveel beurten magnesium er nog zijn (een bolletje per beurt). */
+  function toonKrijt(n) {
+    bolletjes.forEach((b, i) => b.classList.toggle('op', i >= n));
+    krijtKnop.classList.toggle('leeg', n <= 0);
+  }
   window.addEventListener('keydown', (e) => {
     if (!spel.speler()?.klim) return;
     if (e.code === 'KeyT') wissel();
@@ -209,9 +227,12 @@ export function maakKlimbediening(canvas, ui, camera, rots, K, spel) {
   const flitsen = new Map();
   let sleutel = '';
   let bereik = [];
+  let krijtNu = -1;
 
   return {
     neem,
+    /** Naar een andere klimwand: de grepen van die wand op het scherm (stap 13; ontbrak tot stap 15a). */
+    zetWand,
     get besturing() {
       return besturing;
     },
@@ -225,6 +246,21 @@ export function maakKlimbediening(canvas, ui, camera, rots, K, spel) {
       const z = zakGevraagd;
       zakGevraagd = false;
       return z;
+    },
+    /** Het pofzakje ingedrukt (magnesium, stap 15a). */
+    leesKrijt() {
+      const z = krijtGevraagd;
+      krijtGevraagd = false;
+      return z;
+    },
+    /** Een beurt magnesium is gebruikt (of het zakje is leeg: dan schudt het knopje even). */
+    krijt(beurten, leeg = false) {
+      toonKrijt(beurten);
+      if (leeg) {
+        krijtKnop.classList.remove('nee');
+        void krijtKnop.offsetWidth;
+        krijtKnop.classList.add('nee');
+      }
     },
     /** Een greep knippert rood (te ver of niet van jouw route). */
     flits(id) {
@@ -249,6 +285,10 @@ export function maakKlimbediening(canvas, ui, camera, rots, K, spel) {
         return { licht, flitsen };
       }
       badge.textContent = rots.routes[k.route].graad;
+      if (k.krijtBeurten !== krijtNu) {
+        krijtNu = k.krijtBeurten;
+        toonKrijt(krijtNu);
+      }
       badge.style.background = '#' + new THREE.Color(rots.routes[k.route].kleur).getHexString();
       // Bereikbare grepen: alleen opnieuw uitrekenen als de houding veranderd is.
       const lid = gebaar?.lid ?? null;

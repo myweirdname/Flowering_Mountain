@@ -91,6 +91,23 @@ export function maakWereldvorm(zaadje, W, waarom) {
     const dv = Math.max(0, voor - KR.open.voor, -KR.diepte - 0.5 - voor);
     return 1 - glad(Math.hypot(du, dv) / KR.open.rand);
   }
+  // De dakvleugel van de oefenrots (stap 15a): ernaast, aan de kant van de lagune, met een open plek ervoor (ook
+  // onder het dak, dat 3,5 m naar voren steekt). Zelfde ligging als in sim/klimmen/dakrots.js.
+  const KD = KLIMMEN.dakrots;
+  const rotsRx = rotsNz;
+  const rotsRz = -rotsNx;
+  const dakZij = kant * Math.sign(rotsRx || 1);
+  const dakX = rotsX + rotsRx * KD.opzij * dakZij + rotsNx * KD.voor;
+  const dakZ = rotsZ + rotsRz * KD.opzij * dakZij + rotsNz * KD.voor;
+  function dakOpen(x, z) {
+    const dx = x - dakX;
+    const dz = z - dakZ;
+    const u = dx * rotsRx + dz * rotsRz;
+    const voor = dx * rotsNx + dz * rotsNz;
+    const du = Math.max(0, Math.abs(u) - (KD.breedte / 2 + KD.open.opzij));
+    const dv = Math.max(0, voor - KD.open.voor, -KD.diepte - 0.5 - voor);
+    return 1 - glad(Math.hypot(du, dv) / KD.open.rand);
+  }
   const padX = (z) => W.kamp.x + W.pad.slinger * Math.sin(z * 0.09 + padFase);
   const geulX = (z) => lagX + 1.6 * Math.sin(z * 0.2 + geulFase);
   // De springweide ligt aan de andere kant van het kamp dan de lagune.
@@ -124,7 +141,7 @@ export function maakWereldvorm(zaadje, W, waarom) {
     // De open plek: vlak gemaakt.
     const kw0 = 1 - glad((Math.hypot(x - W.kamp.x, z - W.kamp.z) - W.kamp.straal) / W.kamp.rand);
     h += (kampH - h) * kw0;
-    const ow = rotsOpen(x, z);
+    const ow = Math.max(rotsOpen(x, z), dakOpen(x, z));
     h += (rotsH - h) * ow;
     const kw = Math.max(kw0, ow);
 
@@ -234,5 +251,7 @@ export function maakWereldvorm(zaadje, W, waarom) {
       return uit;
     },
     kamp: { x: W.kamp.x, z: W.kamp.z, straal: W.kamp.straal, h: kampH },
+    /** De kant van de lagune (-1 of 1): daar staat ook de dakvleugel van de oefenrots (stap 15a). */
+    kant,
   };
 }

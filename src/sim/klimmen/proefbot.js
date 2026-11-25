@@ -2,6 +2,8 @@
 // Hij kiest telkens de zet die hem het meest hoger brengt (de laagste hand eerst), nooit een zet waarbij
 // de andere hand zou wegglijden, en rust en schudt uit op een goede greep als zijn armen vollopen.
 // Dit is nog niet de klimbot uit KL 10 (die komt in stap 15b), maar wel het begin ervan.
+// Stap 15a: hij rust ook staand op een richel en ondersteboven in een knieklem (vleermuisrust), en telt de hakhaken,
+// de keren dat zijn voeten loskwamen en hoe ver hij openzwaaide.
 // Gebruik in de console: (await import('./src/sim/klimmen/proefbot.js')).klimProef(spel.sim, 2)
 
 const leeg = { beweeg: [0, 0], spring: false, actie: false };
@@ -21,12 +23,15 @@ export function klimProef(sim, ri, opties = {}) {
   const R = sim.wereld.wanden[wi];
   const G = R.grepen;
   const r = R.routes[ri];
-  const handGrepen = r.ids.filter((g) => !['voet', 'korrel'].includes(G[g].soort));
+  const handGrepen = r.ids.filter((g) => !['voet', 'korrel', 'knieklem'].includes(G[g].soort));
   sim.klim(id, ri, 'handen', wi);
   const tel = {};
   const zetten = [];
   let maxPomp = 0;
   let schudden = 0;
+  let staan = 0;
+  let maxOpen = 0;
+  let maxLast = 0;
   const stappen = Math.round((opties.maxTijd ?? 240) * 60);
   let uitkomst = 'tijd op';
   let i = 0;
@@ -43,7 +48,20 @@ export function klimProef(sim, ri, opties = {}) {
       break;
     }
     let actie = false;
-    if (k.toestand === 'klimt' && !k.zet && !k.rij.length && k.los.lh <= 0 && k.los.rh <= 0) {
+    maxOpen = Math.max(maxOpen, k.zwaaiOpen ?? 0);
+    maxLast = Math.max(maxLast, k.armBelasting ?? 0);
+    const pompNu = Math.max(k.hand.lh.pomp, k.hand.rh.pomp);
+    if (k.vleermuis) {
+      // Ondersteboven in de knieklem: blijven hangen tot beide armen fris zijn.
+      actie = k.vleermuis.fase !== 'uit' && pompNu > 0.04;
+    } else if (rusten && k.toestand === 'klimt' && k.staat && !k.zet && !k.rij.length && pompNu > 0.06) {
+      // Staand op een richel: gewoon wachten, de armen herstellen vanzelf.
+      if (!k.bot) staan++;
+      k.bot = 1;
+    } else if (rusten && k.toestand === 'klimt' && !k.zet && !k.rij.length && !k.schudt && pompNu > 0.35 && sim.knieklem?.(id) >= 0) {
+      actie = true;
+    } else if (k.toestand === 'klimt' && !k.zet && !k.rij.length && k.los.lh <= 0 && k.los.rh <= 0) {
+      k.bot = 0;
       // Uitschudden zolang een arm te vol zit en we op een goede greep hangen.
       const pomp = Math.max(k.hand.lh.pomp, k.hand.rh.pomp);
       // Uitschudden tot die hand weer fris is; daarna (als het nodig is) de andere hand.
@@ -76,7 +94,11 @@ export function klimProef(sim, ri, opties = {}) {
       }
     }
     sim.stap({ [id]: { ...leeg, actie } }, 1 / 60);
-    for (const e of sim.neemGebeurtenissen()) if (e.speler === id) tel[e.soort] = (tel[e.soort] ?? 0) + 1;
+    for (const e of sim.neemGebeurtenissen()) {
+      if (e.speler !== id) continue;
+      tel[e.soort] = (tel[e.soort] ?? 0) + 1;
+      if (e.soort === 'klimVoet' && e.hak) tel.hakhaak = (tel.hakhaak ?? 0) + 1;
+    }
   }
   const k = sim.speler(id).klim;
   return {
@@ -89,6 +111,12 @@ export function klimProef(sim, ri, opties = {}) {
     maxPomp: +maxPomp.toFixed(2),
     vallen: tel.val ?? 0,
     glijden: tel.handGlijdt ?? 0,
+    vleermuis: tel.vleermuis ?? 0,
+    staan,
+    hakhaak: tel.hakhaak ?? 0,
+    voetenLos: tel.voetenLos ?? 0,
+    maxOpen: +maxOpen.toFixed(2),
+    maxLast: +maxLast.toFixed(2),
     laatste: zetten.slice(-4),
   };
 }

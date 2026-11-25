@@ -3,6 +3,7 @@
 // (sim/klimmen/oefenrots.js), zodat het klimmen, het beeld en de bediening op elke wand werken. Bovenaan stap
 // je uit op de etage. In stap 15b komt er een echte wandgenerator met de klimbot; die vervangt deze wanden.
 // Geen Three.js.
+import { maakProfiel } from './profiel.js';
 
 /**
  * @param {typeof import('../../data/bergplan.js').BERGPLAN.klimwand} BW
@@ -80,7 +81,7 @@ export function maakBergwand(BW, plaats, K, w) {
       vk = -vk;
     }
     const ids = lijst.map(([u, vv, soort], i) => {
-      const g = { id: grepen.length, u, v: vv, soort, route: ri, top: i === top, start: i < 2 ? i : -1 };
+      const g = { id: grepen.length, u, v: vv, soort, route: ri, top: i === top, start: i < 2 ? i : -1, richting: 0, hak: false };
       grepen.push(g);
       return g.id;
     });
@@ -122,6 +123,14 @@ export function maakBergwand(BW, plaats, K, w) {
     naarKaart,
     blokOp,
     steilte: () => 0,
+    profiel: maakProfiel([{ soort: 'verticaal', lengte: H, hoek: 0 }]),
+    wandHoek: () => 0,
+    zone: () => 'verticaal',
+    normaal: (v, d = [0, 0, 0]) => ((d[0] = N[0]), (d[1] = 0), (d[2] = N[2]), d),
+    raak: (v, d = [0, 0, 0]) => ((d[0] = 0), (d[1] = 1), (d[2] = 0), d),
+    richels: [],
+    randV: null,
+    zekerVoor: K.zekeraar.zekerVoor,
     anker: (ri) => {
       const t = grepen[routes[ri].topGreep];
       return [t.u, H - 0.02];

@@ -27,7 +27,8 @@ import { maakWelp, maakTak } from './wezens/welp.js';
 import { stapWelpjes, aaiWelp } from './modi/welpjes.js';
 import { KLIMMEN } from '../data/klimmen.js';
 import { maakOefenrots } from './klimmen/oefenrots.js';
-import { beginKlimmen, stapKlimmen, stopKlimmen, bereikbaar, planVoor } from './modi/klimmen.js';
+import { maakDakrots } from './klimmen/dakrots.js';
+import { beginKlimmen, stapKlimmen, stopKlimmen, bereikbaar, planVoor, knieklemVoor } from './modi/klimmen.js';
 import { VLOT, ZWEMTIJGER } from '../data/rivier.js';
 import { maakVlot, zetKlaar, stukPlek, pakStukken, bijSteiger, beginBouwen, stapIn, stapVaren, aanlegPlek, legAan, stapVlotVrij } from './modi/varen.js';
 import { maakZwemtijger, stapZwemtijger } from './modi/zwemtijger.js';
@@ -51,8 +52,11 @@ export function maakSim(berg) {
   // Het speelbos (stap 11): platforms, bruggen en bladeren om op te staan.
   const speelbos = vorm.speelbos;
   // De berg (stap 13): klimwanden op de rotsrand en oversteken over de ravijnen.
-  // Alle klimwanden (de oefenrots eerst) en alle parcours (het speelbos eerst) werken met dezelfde regels.
-  const wanden = [oefenrots, ...vorm.bergwanden];
+  // De dakvleugel van de oefenrots (stap 15a): overhang, dak en kopwand, aan de kant van de lagune.
+  const dakrots = maakDakrots(KLIMMEN, oefenrots, vorm.kant);
+  // Alle klimwanden (de oefenrots eerst, de dakvleugel achteraan) en alle parcours (het speelbos eerst) werken met
+  // dezelfde regels.
+  const wanden = [oefenrots, ...vorm.bergwanden, dakrots];
   const parcours = [speelbos, ...vorm.oversteken];
   const blokOp = (x, z) => {
     let h = Math.max(rivier.blokOp(x, z), bergrivier.blokOp(x, z), speelbos.blokOp(x, z));
@@ -88,11 +92,12 @@ export function maakSim(berg) {
     rotsOp: grond.rotsOp,
     weide,        // de springweide: baan, hindernissen, water
     oefenrots,    // de klimwand met drie routes (stap 9)
+    dakrots,      // de dakvleugel van de oefenrots met de dakroute (stap 15a)
     rivier,       // de benedenrivier met het vlot (stap 10)
     bergrivier,   // de rivier over de berg (stap 14)
     rivieren,     // allebei: het vlot vaart van de berg tot in de lagune
     speelbos,     // het speelbos met de eerste doorgangen (stap 11)
-    wanden,       // alle klimwanden: de oefenrots (0) en de klimwanden van de berg (stap 13)
+    wanden,       // alle klimwanden: de oefenrots (0), de klimwanden van de berg (stap 13) en de dakvleugel (laatste)
     parcours,     // alle parcours: het speelbos (0) en de oversteken over de ravijnen (stap 13)
     bergplan: vorm.bergplan, // het netwerk van plekken en doorgangen (stap 13)
     waterOp: vorm.waterOp, // het waterpeil: 0 in zee en lagune, hoger in de rivier
@@ -385,6 +390,17 @@ export function maakSim(berg) {
     klimPlan(id, greep, lid) {
       const s = this.speler(id);
       return planVoor(s, wandVan(s), KLIMMEN, greep, lid);
+    },
+
+    /** Is er een knieklem binnen bereik (id), of -1 (klimbot, stap 15a)? */
+    knieklem(id) {
+      const s = this.speler(id);
+      return knieklemVoor(s, wandVan(s), KLIMMEN);
+    },
+
+    /** Welke wand is de dakvleugel (index in wereld.wanden)? */
+    get dakWand() {
+      return wanden.length - 1;
     },
 
     /** De grepen die de klimster nu kan bereiken (met hand `lid`, of met eender welke). */

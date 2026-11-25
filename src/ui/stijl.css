@@ -652,11 +652,63 @@ body.klimt .klimhud {
   stroke: #fff;
   stroke-width: 4;
 }
-/* Aan de wand: geen springknop, fluitknop of brulknop (de actieknop schudt uit). */
-body.klimt .springknop,
+/* Aan de wand: geen fluitknop of brulknop (de actieknop schudt uit); de springknop blijft voor de dyno (stap 15a). */
 body.klimt .fluitknop,
 body.klimt .brulknop {
   display: none;
+}
+/* Het pofzakje (magnesium, stap 15a): onder de zakknop, met een bolletje per beurt. */
+.krijtknop {
+  top: calc(116px + env(safe-area-inset-top));
+  right: calc(16px + env(safe-area-inset-right));
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffffff, #ffe3f0 70%, #ffc2dc);
+}
+.krijtknop svg {
+  width: 58%;
+  height: 58%;
+  margin-top: -10%;
+}
+.krijtbolletjes {
+  position: absolute;
+  bottom: 9%;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  pointer-events: none;
+}
+.krijtbolletjes i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff5fa2;
+  box-shadow: 0 1px 2px rgba(120, 30, 70, 0.4);
+}
+.krijtbolletjes i.op {
+  background: rgba(194, 65, 122, 0.22);
+  box-shadow: none;
+}
+.krijtknop.leeg {
+  filter: saturate(0.4);
+}
+.krijtknop.nee {
+  animation: krijtnee 0.4s;
+}
+@keyframes krijtnee {
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+body.touch .krijtknop {
+  top: calc(16px + 14vh + 12px + env(safe-area-inset-top));
+  width: 14vh;
+  height: 14vh;
+}
+body.touch .krijtbolletjes i {
+  width: 1.4vh;
+  height: 1.4vh;
 }
 body.touch .besturingknop {
   width: 15vh;

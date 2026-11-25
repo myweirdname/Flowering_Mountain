@@ -44,16 +44,25 @@ export const KLIMMEN = {
     kopSchaal: 0.75,
   },
 
-  // --- Grepen (KL 4). kegel: tot zo ver (graden) van de goede trekrichting houdt de greep volledig;
-  // daarbuiten zakt hij tot `dwars` (bij 90 graden). voet: hoe goed een voet erop staat (0..1).
-  // In de klimproef is de richting nog mild; strenger (zijgrepen, ondergrepen, leunen) komt in stap 15a. ---
+  // --- Grepen (KL 4). Elke greep heeft een goede trekrichting: de richting van de greep naar je schouder. Standaard is
+  // dat "naar beneden" (richting 0); een zijgreep trek je opzij (richting ±70: je lijf hangt aan de andere kant), een
+  // ondergreep naar boven (richting 180: je lijf moet erboven komen). Elke greep in een route kan een eigen richting
+  // krijgen (4de getal). De trekrichting is 3D: `uit` = hoeveel de greep verdraagt dat je ook van de wand af trekt
+  // (een bak veel, een rand bijna niets; onder een dak trek je bijna recht van de wand af).
+  // kegel: tot zo ver (graden) van de goede richting houdt de greep volledig; daarbuiten zakt hij tot `dwars` (bij 90°).
+  // hang: hoe gestrekt de arm hangt in de zuinigste houding. voet: hoe goed een voet erop staat (0..1).
+  // Stap 15a: strenger dan in de klimproef (toen bak 80°, richel 60°, rand 55°, alleen in 2D). ---
   grepen: {
-    bak: { kwaliteit: 1.0, kegel: 80, dwars: 0.8, voet: 1.0, bijpakken: true },
-    richel: { kwaliteit: 0.8, kegel: 60, dwars: 0.65, voet: 1.0, bijpakken: true },
-    rand: { kwaliteit: 0.5, kegel: 55, dwars: 0.55, voet: 0.75, bijpakken: false },
-    sloper: { kwaliteit: 0.55, kegel: 40, dwars: 0.4, voet: 0.6, bijpakken: false, gestrekt: 0.85 },
+    bak: { kwaliteit: 1.0, kegel: 70, dwars: 0.75, uit: 0.75, hang: 0.96, voet: 1.0, bijpakken: true },
+    richel: { kwaliteit: 0.8, kegel: 55, dwars: 0.5, uit: 0.45, hang: 0.96, voet: 1.0, bijpakken: true },
+    rand: { kwaliteit: 0.5, kegel: 48, dwars: 0.35, uit: 0.15, hang: 0.96, voet: 0.75, bijpakken: false },
+    sloper: { kwaliteit: 0.55, kegel: 38, dwars: 0.35, uit: 0.25, hang: 0.96, voet: 0.6, bijpakken: false, gestrekt: 0.85 },
+    zijgreep: { kwaliteit: 0.75, kegel: 38, dwars: 0.25, uit: 0.5, hang: 0.8, voet: 0.7, bijpakken: false, richting: 70 },
+    ondergreep: { kwaliteit: 0.75, kegel: 45, dwars: 0.2, uit: 0.8, hang: 0.55, voet: 0.5, bijpakken: false, richting: 180 },
     voet: { kwaliteit: 0, kegel: 0, dwars: 0, voet: 0.9, bijpakken: false, alleenVoet: true },
     korrel: { kwaliteit: 0, kegel: 0, dwars: 0, voet: 0.65, bijpakken: false, alleenVoet: true }, // een piepklein voetje
+    // Een knieklem (KL 4, 5): alleen in een overhang of dak. Klem je knie erachter, dan mag je beide handen loslaten.
+    knieklem: { kwaliteit: 0, kegel: 0, dwars: 0, voet: 0, bijpakken: false, alleenKnie: true },
   },
   grond: { voet: 1.0 },  // op de grond staan: een perfecte voetsteun
 
@@ -69,7 +78,31 @@ export const KLIMMEN = {
     herstelSchudden: 0.12,
     trillenVanaf: 0.7,    // vanaf hier begint de hand te trillen
     naVal: 0.35,          // na een val in het touw is elke arm zoveel hersteld
+    herstelRust: 0.15,    // staan op een richel of hangen in een knieklem: beide armen herstellen zoveel per seconde
   },
+
+  // --- Steil en ondersteboven (stap 15a, KL 5) ---
+  dak: {
+    hakVanaf: 35,         // vanaf deze wandhoek (graden) bij de voet kan een voet haken (dak, dakrand)
+    hakBovenHeup: 0.45,   // een hakhaak mag zo ver boven de heup staan (een gewone voet maar `voetBovenHeup`)
+    hak: 0.75,            // een hakhaak draagt zoveel als een goede voet op een verticale wand, ook in het dak
+    losVanaf: 0.35,       // de voeten loslaten (en uitzwaaien) kan pas vanaf deze steilte: in een overhang of dak
+    losBereik: 0.2,       // zoveel minder bereik met de voeten los, tot ze weer vastzitten
+    voetZoek: 0.3,        // met de voeten los zoeken ze om de zoveel seconden weer steun
+    vlagStraf: 0.6,       // de automatische voeten nemen liever twee voeten dan één (de andere vlagt opzij)
+  },
+  // Balans (KL 5): hangt je gewicht naast al je steunpunten, dan zwaait je lichaam open als een deur.
+  balans: { marge: 0.1, vol: 0.2, toeslag: 0.3 },
+  // Vleermuisrust (KL 5): in de knieklem hangen met beide handen los. bereik: zo dicht moet je heup bij de knieklem.
+  knieklem: { bereik: 0.62, inDuur: 0.85, uitDuur: 0.65, steil: 0.5 },
+  // Magnesium (KL 6): een hand in het pofzakje. beurten per route; zetten: zolang werkt het voor die hand.
+  magnesium: { beurten: 4, zetten: 6, plus: 0.15, plusSloper: 0.3, duur: 1.0 },
+  // Dyno (KL 7): springknop ingedrukt (inzakken), richten, loslaten. bereik: hoe ver de handen vliegen (zonder en met
+  // volledig opladen); grijp: zo dicht bij een greep moet een hand uitkomen; hap: de landing kost zoveel kracht
+  // (gedeeld door hoe goed de greep houdt).
+  // automatisch: tik je (of sleep je een hand) naar een greep die te ver is maar wel met een dyno lukt, dan springt ze;
+  // maar alleen naar een grote greep (kwaliteit vanaf autoMin), anders houdt de hand de landing niet.
+  dyno: { laadDuur: 0.6, inzakken: 0.16, bereik: [0.3, 0.95], vlucht: 0.42, grijp: 0.22, hap: 0.14, minLaad: 0.25, automatisch: { tikken: true, handen: true }, autoMin: 0.75 },
 
   // --- Zetten (KL 7) ---
   zet: {
@@ -105,8 +138,9 @@ export const KLIMMEN = {
 
   // --- Camera tijdens het klimmen (KL 11): recht op de wand, ±3 m wand rond de klimster ---
   // kijkHoger: zo ver boven de heupen kijkt ze; camHoger: zo hoog staat ze zelf (iets lager: je ziet de handjes boven
-  // het hoofd); minHoogte: nooit lager dan dit boven de wandvoet.
-  camera: { afstand: 3.3, opzij: 1.5, kijkHoger: 0.55, camHoger: -0.45, volgen: 4, wissel: 0.9, minHoogte: 1.4 },
+  // het hoofd); minHoogte: nooit lager dan dit boven de wandvoet. Ze draait mee met de steilte (stap 15a): onder een
+  // dak zakt ze onder de klimster en kijkt ze schuin omhoog; `dakUit` = dan zoveel extra naar buiten (van de wand weg).
+  camera: { afstand: 3.3, opzij: 1.5, kijkHoger: 0.55, camHoger: -0.45, volgen: 4, wissel: 0.9, minHoogte: 1.4, dakUit: 1.2, dakOpzij: 1.8, dakLager: 0.35, draai: 2.5 },
 
   // --- De drie routes (gekleurd, zoals in de klimhal). Elke greep: [u, v, soort] met u = meter vanaf de linkerrand
   // van de wand (zoals je ernaar kijkt) en v = meter boven de voet. `start` = de twee startgrepen (linker- en
@@ -168,4 +202,57 @@ export const KLIMMEN = {
     },
   ],
   startAfstand: 1.3,    // zo dicht bij de voet van een route kan je beginnen te klimmen
+
+  // --- De dakvleugel van de oefenrots (stap 15a): een lagere rots die tegen de oefenrots aan groeit, aan de kant van
+  // de lagune, met de wand ook naar het kamp. Ze heeft een profiel (KL 3): een plaat, een verticaal stuk met een richel,
+  // een overhang van 30°, een dak, de dakrand en een kopwand. Eén handgemaakte dakroute. ---
+  dakrots: {
+    opzij: 8.6,          // het midden van de wandvoet ligt zoveel opzij van het midden van de oefenrots (naar de lagune)
+    voor: 0,             // en zoveel voor de wandvoet van de oefenrots
+    breedte: 3.6,        // de wandkaart, links-rechts
+    rand: 1.1,           // zoveel loopt de rots links en rechts voorbij de klimwand door
+    diepte: 4.4,         // zo ver loopt de rots naar achter (achter de wandvoet)
+    // Het profiel van onder naar boven: lengte langs de wand (m) en hoek (graden: + = voorover, 90 = dak).
+    profiel: [
+      { soort: 'plaat', lengte: 1.0, hoek: -12 },
+      { soort: 'verticaal', lengte: 1.3, hoek: 0 },
+      { soort: 'overhang', lengte: 2.0, hoek: 30 },
+      { soort: 'dak', lengte: 2.2, hoek: 90 },
+      { soort: 'kopwand', lengte: 1.75, hoek: 0 },
+    ],
+    overgang: 0.5,       // zo lang (langs de wand) duurt een knik; de knik van het dak naar de kopwand is de dakrand
+    // Een richel (KL 3): een vlak stukje rots om op te staan, zonder handen te rusten. v = hoogte langs de wand,
+    // van/tot = links-rechts, diep = zo ver steekt hij uit. Zijn rand is een grote bak voor de handen.
+    richels: [{ v: 1.72, van: 0.95, tot: 2.7, diep: 0.3 }],
+    open: { opzij: 1.4, voor: 8.5, rand: 5 }, // de open plek ervoor (vlak gras, geen bomen; ook onder het dak)
+    zekerVoor: 5.0,      // de witte tijger zekert voor het dak (anders liep het touw door de rots)
+    kleur: 0xd2b8f0, kleurDonker: 0xa98bdc, kleurLaag: 0xf1d6ee, mos: 0x7fd96a,
+    // Bovenop (wandcoördinaten: x langs de wand, z naar achter is negatief, tot voorbij het dak): [x, z, schaal].
+    bosjes: [[0.2, -1.6, 1.2], [2.3, -3.0, 1.45], [3.9, -1.0, 1.05], [1.4, 1.8, 0.9]],
+    palmen: [[3.1, -3.4, 0.7]],
+    route: {
+      naam: 'paars', graad: '6b', kleur: 0xb46bff,
+      // [u, v, soort, richting?]. Plaat en verticaal tot 2,05; overhang 2,55 tot 4,05; dak 4,55 tot 6,25;
+      // dakrand 6,25 tot 6,75; kopwand tot 8,25. De richel op 1,72: zijn rand (lip) is een bak.
+      grepen: [
+        [1.5, 1.1, 'richel'], [2.1, 1.15, 'richel'],                 // start
+        [1.4, 1.73, 'bak', 0, 'lip'], [2.25, 1.73, 'bak', 0, 'lip'], // de rand van de richel
+        [1.55, 2.2, 'richel'], [2.15, 2.52, 'zijgreep', -70],         // een zijgreep rechts: hang naar links
+        [1.45, 2.88, 'richel'], [2.0, 3.22, 'ondergreep'],            // een ondergreep in de overhang: kom erboven
+        [1.55, 3.58, 'rand'], [2.15, 3.92, 'bak'],                    // rustbak voor het dak
+        [1.5, 4.3, 'bak'], [2.1, 4.66, 'bak'],                        // het dak in
+        [1.82, 4.98, 'knieklem'],                                     // de knieklem: vleermuisrust
+        [1.5, 5.15, 'richel'], [2.15, 5.5, 'bak'], [1.55, 5.86, 'richel'], [2.1, 6.2, 'bak'],
+        [1.45, 6.52, 'bak'], [2.6, 6.4, 'richel'],                     // de dakrand: bak, en rechts een greep voor een hakhaak
+        [2.05, 6.9, 'richel'], [1.55, 7.3, 'rand'], [2.1, 7.66, 'richel'],
+        [1.8, 8.02, 'bak'],                                           // top
+        // Voetjes: op de plaat en in de overhang. In het dak haken de voeten achter de handgrepen.
+        [1.62, 0.4, 'voet'], [2.0, 0.72, 'voet'], [1.7, 1.42, 'voet'],
+        [1.72, 2.4, 'voet'], [2.02, 2.78, 'voet'], [1.62, 3.12, 'voet'], [2.0, 3.45, 'voet'],
+        [1.9, 7.05, 'voet'],
+      ],
+      start: [0, 1],
+      top: 22,
+    },
+  },
 };

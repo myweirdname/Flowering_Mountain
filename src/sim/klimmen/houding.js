@@ -11,6 +11,7 @@ export const ANDERE = { lh: 'rh', rh: 'lh', lv: 'rv', rv: 'lv' };
 /**
  * @typedef {typeof import('../../data/klimmen.js').KLIMMEN.lichaam} Lichaam
  * @typedef {{ lh: number[] | null, rh: number[] | null, lv: number[] | null, rv: number[] | null }} Punten
+ *   Een voet kan een derde getal hebben: zo ver mag ze boven de heup staan (een hakhaak, stap 15a).
  */
 
 /** Schouder (hand) of heup (voet) van een ledemaat, bij romp P. */
@@ -46,7 +47,7 @@ export function fout(L, P, punten, max) {
     const d = Math.hypot(p[0] - w[0], p[1] - w[1]);
     const hand = isHand(lid);
     f = Math.max(f, d - (max?.[lid] ?? reik(L, lid)), (hand ? L.minArm : L.minBeen) - d);
-    if (!hand) f = Math.max(f, p[1] - (P[1] + L.voetBovenHeup));
+    if (!hand) f = Math.max(f, p[1] - (P[1] + (p[2] ?? L.voetBovenHeup)));
   }
   return f;
 }
@@ -79,9 +80,10 @@ export function schik(L, P, punten, max, keer = 40) {
         P[1] += dy * t;
         grootste = Math.max(grootste, lo - d);
       }
-      if (!hand && p[1] > P[1] + L.voetBovenHeup) {
-        grootste = Math.max(grootste, p[1] - P[1] - L.voetBovenHeup);
-        P[1] = p[1] - L.voetBovenHeup;
+      const boven = p[2] ?? L.voetBovenHeup; // een hakhaak mag hoger (stap 15a)
+      if (!hand && p[1] > P[1] + boven) {
+        grootste = Math.max(grootste, p[1] - P[1] - boven);
+        P[1] = p[1] - boven;
       }
     }
     if (P[1] < L.minHeup) {
@@ -95,9 +97,15 @@ export function schik(L, P, punten, max, keer = 40) {
 
 /**
  * De zuinigste houding (KL 5): armen gestrekt (je hangt), heupen boven de voeten, met wat leunen erbij.
+ * `ideaal` (stap 15a): per hand waar de schouder het best zit, ten opzichte van de greep (de goede trekrichting:
+ * onder een gewone greep, opzij van een zijgreep, boven een ondergreep; onder een dak bijna recht eronder, want daar
+ * hang je van de wand af). Zonder: recht onder de greep met een gestrekte arm.
  * @param {Lichaam} L @param {Punten} punten @param {number[]} [leun] [opzij, omhoog] in meter @param {number[]} [uit]
+ * @param {Partial<Record<string, number[]>>} [ideaal]
  */
-export function rustHouding(L, punten, leun = [0, 0], uit = [0, 0]) {
+export function rustHouding(L, punten, leun = [0, 0], uit = [0, 0], ideaal) {
+  // Elke hand telt mee naar hoe kieskeurig haar greep is (ideaal[lid][2]): een bak houdt bijna altijd, een
+  // ondergreep alleen met de schouder erboven. Voeten tellen gewoon mee voor links-rechts.
   let su = 0;
   let n = 0;
   let sv = 0;
@@ -109,15 +117,18 @@ export function rustHouding(L, punten, leun = [0, 0], uit = [0, 0]) {
     if (!p) continue;
     const k = KANT[lid];
     if (isHand(lid)) {
-      su += p[0] - k * L.schouder;
-      sv += p[1] - L.romp - L.arm * 0.96;
-      nh++;
+      const o = ideaal?.[lid];
+      const w = o?.[2] ?? 1;
+      su += (p[0] + (o ? o[0] : 0) - k * L.schouder) * w;
+      sv += (p[1] + (o ? o[1] : -L.arm * 0.96) - L.romp) * w;
+      nh += w;
+      n += w;
     } else {
       su += p[0] - k * L.heup;
       fv += p[1];
       nv++;
+      n++;
     }
-    n++;
   }
   uit[0] = (n ? su / n : 0) + leun[0];
   uit[1] = (nh ? sv / nh : nv ? fv / nv + L.been * 0.8 : L.minHeup) + leun[1];
@@ -129,10 +140,11 @@ export function rustHouding(L, punten, leun = [0, 0], uit = [0, 0]) {
  * Kan ledemaat `lid` naar punt T, terwijl de andere drie blijven waar ze zijn? Geeft de houding waarin dat lukt
  * (zo dicht mogelijk bij P), of null. De romp strekt zich zo ver uit als de andere ledematen toelaten (KL 5).
  * @param {Lichaam} L @param {number[]} P huidige romp @param {Punten} punten @param {string} lid @param {number[]} T
+ * @param {number} [minder] zoveel minder bereik (bv. met de voeten los, stap 15a)
  */
-export function kanNaar(L, P, punten, lid, T, kruist = false) {
+export function kanNaar(L, P, punten, lid, T, kruist = false, minder = 0) {
   const proef = { ...punten, [lid]: T };
-  const max = { [lid]: reik(L, lid, kruist) };
+  const max = { [lid]: reik(L, lid, kruist) * (1 - minder) };
   const Q = [P[0], P[1]];
   const f = schik(L, Q, proef, max, 80);
   return f < 0.006 ? Q : null;

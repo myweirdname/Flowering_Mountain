@@ -2,6 +2,7 @@
 // Hier staat de wandkaart (KL 2): de platte rekenlaag achter de 3D-wand. Een plek op de kaart is (u, v):
 // u = meter vanaf de linkerrand (zoals je naar de wand kijkt), v = meter boven de voet. De steilte is een
 // eigenschap van de plaats op de kaart; de oefenrots is overal verticaal (steilte 0). Geen Three.js.
+import { maakProfiel } from './profiel.js';
 
 /**
  * @typedef {{ id: number, u: number, v: number, soort: string, route: number, top: boolean, start: number }} Greep
@@ -39,8 +40,11 @@ export function maakOefenrots(K, kamp, voetHoogte) {
   /** @type {Greep[]} */
   const grepen = [];
   const routes = K.routes.map((r, ri) => {
-    const ids = r.grepen.map(([u, v, soort], i) => {
-      const g = { id: grepen.length, u, v, soort, route: ri, top: i === r.top, start: r.start.indexOf(i) };
+    const ids = r.grepen.map(([u, v, soort, richting], i) => {
+      const g = {
+        id: grepen.length, u, v, soort, route: ri, top: i === r.top, start: r.start.indexOf(i),
+        richting: richting ?? K.grepen[soort]?.richting ?? 0, hak: false,
+      };
       grepen.push(g);
       return g.id;
     });
@@ -93,6 +97,15 @@ export function maakOefenrots(K, kamp, voetHoogte) {
     blokOp,
     /** Steilte op hoogte v (KL 5): -0,3 plaat, 0 verticaal, 1 dak. De oefenrots is verticaal. */
     steilte: () => 0,
+    // Het profiel (stap 15a): hier overal verticaal. normaal = uit de wand, raak = langs de wand omhoog.
+    profiel: maakProfiel([{ soort: 'verticaal', lengte: R.hoogte, hoek: 0 }]),
+    wandHoek: () => 0,
+    zone: () => 'verticaal',
+    normaal: (v, d = [0, 0, 0]) => ((d[0] = N[0]), (d[1] = 0), (d[2] = N[2]), d),
+    raak: (v, d = [0, 0, 0]) => ((d[0] = 0), (d[1] = 1), (d[2] = 0), d),
+    richels: [],
+    randV: null,
+    zekerVoor: K.zekeraar.zekerVoor,
     /** De topankers: waar het touw van elke route bovenaan doorloopt. */
     anker: (ri) => {
       const t = grepen[routes[ri].topGreep];

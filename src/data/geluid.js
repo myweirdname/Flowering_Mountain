@@ -46,7 +46,9 @@ export const GELUID = {
   rivier: { gerommel: 0.16, ruisen: 0.07, waterval: 0.12, peddel: 0.12, bots: 0.3, zoef: 0.12, bamboe: 0.2 },
 
   // Klimmen (stap 9).
-  klim: { gordel: 0.16, greep: 0.2, voet: 0.1, teVer: 0.12, glijden: 0.2, val: 0.22, ruk: 0.3, zucht: 0.1, top: 0.2, zakken: 0.07, schud: 0.1, adem: 0.05 },
+  klim: { gordel: 0.16, greep: 0.2, voet: 0.1, teVer: 0.12, glijden: 0.2, val: 0.22, ruk: 0.3, zucht: 0.1, top: 0.2, zakken: 0.07, schud: 0.1, adem: 0.05,
+    // Steil en ondersteboven (stap 15a).
+    hak: 0.14, vleermuis: 0.16, krijt: 0.12, dynoLaad: 0.08, dynoSprong: 0.2, dynoVang: 0.22, voetenLos: 0.14 },
 
   // Het speelbos (stap 11).
   bos: { hout: 1.0, grijp: 0.2, zwaai: 0.07, boing: 0.2, indrukken: 0.12, blad: 0.18, lotus: 0.2, dek: 0.14, kraak: 0.06 },

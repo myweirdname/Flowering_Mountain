@@ -335,6 +335,63 @@ export function maakGeluid() {
       if (t < 0) return;
       for (let i = 0; i < 4; i++) ruisStoot(t + i * 0.09, { freq: 700, q: 1, piek: G.klim.schud, aanslag: 0.01, verval: 0.05 });
     },
+    // --- Steil en ondersteboven (stap 15a) ---
+    /** Een hakhaak: de hak klopt dof over de rand. */
+    hakhaak() {
+      const t = plek(0.3);
+      if (t < 0) return;
+      const v = G.klim.hak;
+      toon(t, { freq: 170, freqEind: 110, piek: v, aanslag: 0.003, verval: 0.08 });
+      ruisStoot(t, { soort: 'lowpass', freq: 900, piek: v * 0.5, verval: 0.05 });
+    },
+    /** Vleermuisrust: een zachte zoef (ondersteboven), een opgeluchte zucht en een giecheltje. */
+    vleermuis() {
+      const t = plek(1.4);
+      if (t < 0) return;
+      const v = G.klim.vleermuis;
+      ruisStoot(t, { freq: 700, freqEind: 1600, q: 1.2, piek: v * 0.6, aanslag: 0.1, verval: 0.3 });
+      ruisStoot(t + 0.5, { soort: 'lowpass', freq: 900, freqEind: 300, piek: G.klim.zucht, aanslag: 0.08, verval: 0.55 });
+      [1.0, 1.15, 1.0, 1.2].forEach((f, i) => toon(t + 0.75 + i * 0.09, { vorm: 'triangle', freq: 760 * f, freqEind: 690 * f, piek: v * 0.45, aanslag: 0.01, verval: 0.07 }));
+    },
+    /** Magnesium: een hand in het pofzakje (een zacht geritsel en een pufje). */
+    krijt() {
+      const t = plek(0.8);
+      if (t < 0) return;
+      const v = G.klim.krijt;
+      for (let i = 0; i < 3; i++) ruisStoot(t + i * 0.11, { soort: 'highpass', freq: 2600, piek: v * 0.5, aanslag: 0.01, verval: 0.06 });
+      ruisStoot(t + 0.38, { freq: 1500, freqEind: 700, q: 0.7, piek: v, aanslag: 0.01, verval: 0.25 });
+    },
+    /** De dyno opladen: een korte stijgende spanning. */
+    dynoLaad() {
+      const t = plek(0.6);
+      if (t < 0) return;
+      toon(t, { vorm: 'triangle', freq: 220, freqEind: 440, piek: G.klim.dynoLaad, aanslag: 0.15, verval: 0.4 });
+    },
+    /** De dyno: een zoef omhoog. */
+    dynoSprong() {
+      const t = plek(0.6);
+      if (t < 0) return;
+      const v = G.klim.dynoSprong;
+      ruisStoot(t, { freq: 600, freqEind: 2800, q: 1.4, piek: v, aanslag: 0.02, verval: 0.3 });
+      toon(t, { freq: 420, freqEind: 900, piek: v * 0.4, aanslag: 0.01, verval: 0.25 });
+    },
+    /** Gevangen! Een stevige klop en een blij "hup!". */
+    dynoVang() {
+      const t = plek(0.6);
+      if (t < 0) return;
+      const v = G.klim.dynoVang;
+      toon(t, { freq: 140, freqEind: 80, piek: v, aanslag: 0.002, verval: 0.12 });
+      toon(t + 0.06, { vorm: 'triangle', freq: 660, freqEind: 990, piek: v * 0.5, aanslag: 0.01, verval: 0.12 });
+      toon(t + 0.16, { vorm: 'triangle', freq: 990, piek: v * 0.4, aanslag: 0.01, verval: 0.18 });
+    },
+    /** De voeten komen los: een zwiep van het lijf dat uitzwaait. */
+    voetenLos() {
+      const t = plek(0.6);
+      if (t < 0) return;
+      const v = G.klim.voetenLos;
+      ruisStoot(t, { freq: 1200, freqEind: 500, q: 1.6, piek: v, aanslag: 0.04, verval: 0.35 });
+      toon(t + 0.05, { freq: 520, freqEind: 700, piek: v * 0.35, aanslag: 0.02, verval: 0.15 });
+    },
     /** Zwaar ademen als de armen vol zitten. */
     adem() {
       const t = plek(0.8);

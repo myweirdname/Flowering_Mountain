@@ -303,7 +303,9 @@
         await pauze();
         const sim = maakSim(code);
         sim.voegSpelerToe('speler1');
-        for (let wi = 1; wi < sim.wereld.wanden.length; wi++) {
+        // De klimwanden van de berg: niet de oefenrots (0) en niet de dakvleugel (de laatste, stap 15a: daar stap je
+        // bovenaan niet uit, de tijger laat je zakken).
+        for (let wi = 1; wi < sim.wereld.wanden.length - 1; wi++) {
           for (let ri = 0; ri < sim.wereld.wanden[wi].routes.length; ri++) {
             kr++;
             const r = klimProef(sim, ri, { wand: wi, maxTijd: 400 });
@@ -389,6 +391,43 @@
       ` ${R} bergcodes in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
     window.rivierUitslag = { fouten, n: R };
     window.rivierKlaar = true;
+  </script>
+
+  <h2>Klimmen: steil en ondersteboven (stap 15a)</h2>
+  <p>De dakvleugel van de oefenrots (plaat, richel, overhang, dak, dakrand, kopwand) met de dakroute, en de nieuwe regels:
+     greeprichting, haken en hakhaken, de knieklem, magnesium, vallen en zakken onder het dak, de dyno. Per bergcode: de drie routes
+     van de oefenrots (strengere greeprichting), de dakroute met de proefbot (met en zonder rusten), een kind dat telkens op de
+     hoogste greep tikt die oplicht (tikken en handen), en de losse proeven. <code>?daken=3</code> kiest het aantal codes.</p>
+  <table>
+    <thead><tr><th>bergcode</th><th>proef</th><th>goed</th><th>uitkomst</th></tr></thead>
+    <tbody id="dakRijen"></tbody>
+  </table>
+  <div id="dakKlaar">Bezig ...</div>
+  <script type="module">
+    import { maakSim } from './src/sim/spel.js';
+    import { steilProef } from './src/sim/klimmen/dakproef.js';
+    const ja = (b, tekst = b ? 'ja' : 'nee') => `<td class="${b ? 'ok' : 'fout'}">${tekst}</td>`;
+    const pauze = () => new Promise((r) => setTimeout(r, 0));
+    while (!window.rivierKlaar) await new Promise((r) => setTimeout(r, 200));
+    const D = +(new URLSearchParams(location.search).get('daken') ?? 3);
+    const codes = ['bloei', ...Array.from({ length: D - 1 }, (_, i) => `berg${i + 1}`)];
+    const rijen = document.getElementById('dakRijen');
+    const fouten = [];
+    const t0 = performance.now();
+    for (const code of codes) {
+      const sim = maakSim(code);
+      for (const p of steilProef(sim)) {
+        if (!p.goed) fouten.push(`${code}: ${p.naam}`);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${code}</td><td>${p.naam}</td>${ja(p.goed)}<td>${p.tekst}</td>`;
+        rijen.appendChild(tr);
+      }
+      await pauze();
+    }
+    document.getElementById('dakKlaar').innerHTML = (fouten.length ? `<span class="fout">Fout bij: ${fouten.join(', ')}.</span>` : '<span class="ok">Alle proeven van steil en ondersteboven in orde.</span>') +
+      ` ${D} bergcodes in ${((performance.now() - t0) / 1000).toFixed(1)} s.`;
+    window.dakUitslag = { fouten, n: D };
+    window.dakKlaar = true;
   </script>
 </body>
 </html>
